@@ -1,0 +1,229 @@
+// FPCTalk DB schema
+// Postgres on Supabase, accessed via Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =====================================================
+// 사용자
+// =====================================================
+model User {
+  id           String   @id @default(cuid())
+  // Supabase Auth와 연결: auth.users.id를 외부키로 사용
+  authId       String   @unique
+  username     String   @unique
+  name         String
+  role         Role     @default(STAFF)
+  level        Int      @default(0) // 0=일반, 1=리더, 2=부원장, 3=원장
+  language     String   @default("ko")
+  profileImage String?
+
+  annualLeaveTotal Int @default(15)
+  annualLeaveUsed  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 관계
+  messages         Message[]
+  chatMembers      ChatMember[]
+  attendances      Attendance[]
+  leaveRequests    LeaveRequest[]    @relation("LeaveRequester")
+  leaveApprovals   LeaveRequest[]    @relation("LeaveApprover")
+  signRequests     SignatureRequest[] @relation("SignRequester")
+  signs            SignatureRequest[] @relation("SignSigner")
+}
+
+enum Role {
+  PRINCIPAL  // 원장
+  VICE       // 부원장
+  TEACHER    // 강사
+  DRIVER     // 기사
+  ASSISTANT  // 동승
+  STAFF      // 일반 직원
+}
+
+// =====================================================
+// 채팅
+// =====================================================
+model Chat {
+  id        String   @id @default(cuid())
+  type      ChatType @default(GROUP)
+  name      String?  // 그룹 채팅의 이름. DM은 null.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  ChatMember[]
+  messages Message[]
+}
+
+enum ChatType {
+  DM
+  GROUP
+}
+
+model ChatMember {
+  id     String @id @default(cuid())
+  chatId String
+  userId String
+
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  chatId    String
+  userId    String?     // null이면 AI 답변 (또는 시스템 메시지)
+  type      MessageType @default(TEXT)
+  content   String      @db.Text
+  metadata  Json?       // AI 답변 메타데이터 (사용 모델 등) 또는 첨부파일 정보
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chat Chat  @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([chatId, createdAt])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  AI       // AI 비서 답변
+  SYSTEM   // 시스템 알림
+}
+
+// =====================================================
+// 근태 (출퇴근)
+// =====================================================
+model Attendance {
+  id     String         @id @default(cuid())
+  userId String
+  type   AttendanceType
+  at     DateTime       @default(now())
+  note   String?
+  // 위치 정보 (옵션)
+  latitude  Float?
+  longitude Float?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, at])
+}
+
+enum AttendanceType {
+  CHECK_IN   // 출근
+  CHECK_OUT  // 퇴근
+}
+
+// =====================================================
+// 연차/휴가
+// =====================================================
+model LeaveRequest {
+  id          String      @id @default(cuid())
+  requesterId String
+  approverId  String?
+  type        LeaveType
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?     @db.Text
+  status      LeaveStatus @default(PENDING)
+  decidedAt   DateTime?
+  decidedNote String?     @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requester User  @relation("LeaveRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  approver  User? @relation("LeaveApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  @@index([requesterId])
+  @@index([status])
+}
+
+enum LeaveType {
+  ANNUAL    // 연차
+  HALF_AM   // 오전 반차
+  HALF_PM   // 오후 반차
+  SICK      // 병가
+  OFFICIAL  // 공가
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// =====================================================
+// 디지털 사인
+// =====================================================
+model Document {
+  id          String   @id @default(cuid())
+  uploaderId  String
+  title       String
+  description String?  @db.Text
+  storagePath String   // Supabase Storage 경로
+  mimeType    String   @default("application/pdf")
+  pageCount   Int?
+
+  createdAt DateTime @default(now())
+
+  signatureRequests SignatureRequest[]
+
+  @@index([uploaderId])
+}
+
+model SignatureRequest {
+  id           String         @id @default(cuid())
+  documentId   String
+  requesterId  String
+  signerId     String
+  status       SignStatus     @default(PENDING)
+  // 사인 위치 (페이지 + 좌표)
+  pageNumber   Int            @default(1)
+  positionX    Float?
+  positionY    Float?
+  // 결과물
+  signaturePath String?       // 캔버스 사인 이미지
+  signedPdfPath String?       // 합성된 최종 PDF
+  // 법적 효력 (감사 로그)
+  signedAt     DateTime?
+  signerIp     String?
+  signerAgent  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  requester User     @relation("SignRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  signer    User     @relation("SignSigner", fields: [signerId], references: [id], onDelete: Cascade)
+
+  @@index([signerId, status])
+  @@index([requesterId])
+}
+
+enum SignStatus {
+  PENDING
+  SIGNED
+  REJECTED
+  CANCELLED
+}
