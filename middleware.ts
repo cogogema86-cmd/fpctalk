@@ -1,9 +1,13 @@
 /**
- * Supabase Auth 토큰 자동 갱신 미들웨어
- * - 모든 요청에서 세션 쿠키 갱신
+ * 인증 미들웨어
+ * - 모든 요청에서 Supabase 세션 쿠키 자동 갱신
+ * - 미인증 사용자가 보호된 라우트 접근 시 /login으로 리다이렉트
+ * - 인증된 사용자가 /login 접근 시 /dashboard로 리다이렉트
  */
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+
+const PUBLIC_PATHS = ["/login"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -17,7 +21,9 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value),
+          );
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
@@ -27,15 +33,32 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // 세션 갱신 (이 호출 자체로 쿠키가 자동 업데이트됨)
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const path = request.nextUrl.pathname;
+  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+
+  // 미인증 사용자가 보호된 라우트 접근 → /login
+  if (!user && !isPublic && path !== "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // 이미 로그인된 사용자가 /login 접근 → /dashboard
+  if (user && path === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
 
   return response;
 }
 
 export const config = {
   matcher: [
-    // 정적 파일/이미지 외 모든 경로
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
