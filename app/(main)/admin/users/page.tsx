@@ -82,9 +82,15 @@ export default async function AdminUsersPage() {
                 <td className="px-4 py-2 text-zinc-500">
                   {u.createdAt.toLocaleDateString("ko-KR")}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 space-x-2 whitespace-nowrap">
+                  <Link
+                    href={`/admin/users/${u.id}/edit`}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    편집
+                  </Link>
                   {u.id === me.id ? (
-                    <span className="text-xs text-zinc-400">(본인)</span>
+                    <span className="text-xs text-zinc-400">본인</span>
                   ) : (
                     <ResetPasswordButton
                       userId={u.id}

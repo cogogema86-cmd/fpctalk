@@ -10,23 +10,25 @@ import {
 } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
-/** 권한 확인: 호출자가 관리 권한 역할인지 */
-async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
+async function getCurrentUser() {
   const supabase = await createClient();
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
-  if (!authUser) return { ok: false, error: "로그인이 필요합니다." };
-
-  const me = await prisma.user.findUnique({
+  if (!authUser) return null;
+  return prisma.user.findUnique({
     where: { authId: authUser.id },
     include: { role: true },
   });
-  if (!me) return { ok: false, error: "사용자 정보를 찾을 수 없습니다." };
-  if (!me.role.isAdmin) {
-    return { ok: false, error: "관리자 권한이 필요합니다." };
-  }
-  return { ok: true };
+}
+
+async function requireAdmin(): Promise<
+  { ok: true; me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>> } | { ok: false; error: string }
+> {
+  const me = await getCurrentUser();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  if (!me.role.isAdmin) return { ok: false, error: "관리자 권한이 필요합니다." };
+  return { ok: true, me };
 }
 
 // =====================================================
@@ -108,6 +110,98 @@ export async function createStaffAction(
 
   revalidatePath("/admin/users");
   return { success: { username, name, password } };
+}
+
+// =====================================================
+// 직원 수정
+// =====================================================
+export type UpdateStaffState = {
+  error?: string;
+  success?: boolean;
+};
+
+export async function updateStaffAction(
+  _prev: UpdateStaffState,
+  formData: FormData,
+): Promise<UpdateStaffState> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { error: guard.error };
+  const me = guard.me;
+
+  const id = formData.get("id") as string;
+  const username = (formData.get("username") as string)?.trim();
+  const name = (formData.get("name") as string)?.trim();
+  const roleId = formData.get("roleId") as string;
+  const title = ((formData.get("title") as string) ?? "").trim() || null;
+
+  if (!id || !username || !name || !roleId) {
+    return { error: "필수 정보가 누락되었습니다." };
+  }
+  if (!isValidUsername(username)) {
+    return { error: "아이디는 영문/숫자/_/- 3~20자여야 합니다." };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id },
+    include: { role: true },
+  });
+  if (!target) return { error: "직원을 찾을 수 없습니다." };
+
+  const newRole = await prisma.staffRole.findUnique({ where: { id: roleId } });
+  if (!newRole) return { error: "유효하지 않은 역할입니다." };
+
+  // 락아웃 방지: 본인이 본인의 역할을 admin 없는 역할로 변경하려 함
+  if (target.id === me.id && target.role.isAdmin && !newRole.isAdmin) {
+    return {
+      error:
+        "본인을 관리권한 없는 역할로 변경할 수 없습니다. 다른 사람에게 관리권한을 먼저 주세요.",
+    };
+  }
+
+  // 락아웃 방지: 시스템에서 admin 사용자가 0명 되는 변경
+  if (target.role.isAdmin && !newRole.isAdmin) {
+    const otherAdmins = await prisma.user.count({
+      where: {
+        id: { not: target.id },
+        role: { isAdmin: true },
+      },
+    });
+    if (otherAdmins === 0) {
+      return {
+        error:
+          "이 직원의 역할을 변경하면 시스템에 관리자가 한 명도 남지 않습니다.",
+      };
+    }
+  }
+
+  // username 변경 시: 중복 검사 + Supabase Auth 이메일도 업데이트
+  if (username !== target.username) {
+    const dup = await prisma.user.findUnique({ where: { username } });
+    if (dup) return { error: `아이디 "${username}"는 이미 사용 중입니다.` };
+
+    const newEmail = usernameToEmail(username);
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.updateUserById(target.authId, {
+      email: newEmail,
+      email_confirm: true,
+    });
+    if (error) return { error: `Auth 이메일 업데이트 실패: ${error.message}` };
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: {
+      username,
+      name,
+      roleId,
+      title,
+      // level은 역할 바뀌어도 자동으로 안 바꿈 (수동 조정 가능하게)
+    },
+  });
+
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${id}/edit`);
+  return { success: true };
 }
 
 // =====================================================
