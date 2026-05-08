@@ -12,15 +12,20 @@ export default async function NewStaffPage() {
 
   const me = await prisma.user.findUnique({
     where: { authId: authUser.id },
-    select: { role: true },
+    include: { role: true },
   });
-  if (!me || (me.role !== "PRINCIPAL" && me.role !== "VICE")) {
+  if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
         관리자 전용 페이지입니다.
       </div>
     );
   }
+
+  const roles = await prisma.staffRole.findMany({
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, code: true, label: true, isAdmin: true },
+  });
 
   return (
     <div className="max-w-xl mx-auto p-6 space-y-4">
@@ -32,7 +37,7 @@ export default async function NewStaffPage() {
           신규 직원 정보를 입력하세요. 생성된 비밀번호는 한 번만 노출됩니다.
         </p>
       </div>
-      <CreateStaffForm />
+      <CreateStaffForm roles={roles} />
     </div>
   );
 }

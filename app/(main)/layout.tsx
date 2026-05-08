@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { LogoutButton } from "./_components/logout-button";
 import { Sidebar } from "./_components/sidebar";
 import { MobileNav } from "./_components/mobile-nav";
@@ -19,7 +20,7 @@ export default async function MainLayout({
 
   const user = await prisma.user.findUnique({
     where: { authId: authUser.id },
-    select: { id: true, username: true, name: true, role: true },
+    include: { role: true },
   });
 
   if (!user) {
@@ -34,31 +35,36 @@ export default async function MainLayout({
     );
   }
 
-  const isAdmin = user.role === "PRINCIPAL" || user.role === "VICE";
+  const isAdmin = user.role.isAdmin;
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-black">
-      {/* 헤더 */}
       <header className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center justify-between bg-white dark:bg-black shrink-0">
-        <div className="font-semibold text-zinc-900 dark:text-zinc-50">
+        <Link href="/dashboard" className="font-semibold text-zinc-900 dark:text-zinc-50">
           FPCTalk
-        </div>
+        </Link>
         <div className="flex items-center gap-3">
           <span className="text-sm text-zinc-600 dark:text-zinc-400">
             {user.name}{" "}
-            <span className="text-zinc-400">({user.username})</span>
+            <span className="text-zinc-400">
+              ({user.username} · {user.role.label})
+            </span>
           </span>
+          <Link
+            href="/settings/password"
+            className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            비번변경
+          </Link>
           <LogoutButton />
         </div>
       </header>
 
-      {/* 사이드바 + 본문 */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar isAdmin={isAdmin} />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
 
-      {/* 모바일 하단 네비 */}
       <MobileNav />
     </div>
   );

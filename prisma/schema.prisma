@@ -12,18 +12,52 @@ datasource db {
 }
 
 // =====================================================
+// 역할 (Role)
+// 시스템 기본 역할 + 관리자가 추가하는 커스텀 역할
+// =====================================================
+model StaffRole {
+  id           String   @id @default(cuid())
+  // 시스템 식별자 — 시스템 6개는 PRINCIPAL/VICE/TEACHER/ASSISTANT/DRIVER/STAFF, 커스텀은 cuid
+  code         String   @unique
+  // 화면 표시명 (예: "원장", "교무부장")
+  label        String
+  // 직급 레벨 (0~3, 권한 차등에 활용 가능)
+  defaultLevel Int      @default(0)
+  // 관리 권한 (직원 추가/비번 초기화/역할 관리 등 가능)
+  isAdmin      Boolean  @default(false)
+  // 시스템 기본 역할 (수정/삭제 불가)
+  isSystem     Boolean  @default(false)
+  // 정렬 순서 (오름차순)
+  sortOrder    Int      @default(100)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users User[]
+
+  @@map("staff_roles")
+}
+
+// =====================================================
 // 사용자
 // =====================================================
 model User {
-  id           String   @id @default(cuid())
+  id     String @id @default(cuid())
   // Supabase Auth와 연결: auth.users.id를 외부키로 사용
-  authId       String   @unique
-  username     String   @unique
+  authId String @unique
+
+  username     String  @unique
   name         String
-  role         Role     @default(STAFF)
-  level        Int      @default(0) // 0=일반, 1=리더, 2=부원장, 3=원장
-  language     String   @default("ko")
+  language     String  @default("ko")
   profileImage String?
+
+  // 역할 (관계)
+  roleId String
+  role   StaffRole @relation(fields: [roleId], references: [id])
+  // User-specific level (default는 role.defaultLevel에서 복사)
+  level  Int       @default(0)
+
+  // 직책/별명 (선택, 예: "수석강사")
+  title String?
 
   annualLeaveTotal Int @default(15)
   annualLeaveUsed  Int @default(0)
@@ -32,22 +66,15 @@ model User {
   updatedAt DateTime @updatedAt
 
   // 관계
-  messages         Message[]
-  chatMembers      ChatMember[]
-  attendances      Attendance[]
-  leaveRequests    LeaveRequest[]    @relation("LeaveRequester")
-  leaveApprovals   LeaveRequest[]    @relation("LeaveApprover")
-  signRequests     SignatureRequest[] @relation("SignRequester")
-  signs            SignatureRequest[] @relation("SignSigner")
-}
+  messages       Message[]
+  chatMembers    ChatMember[]
+  attendances    Attendance[]
+  leaveRequests  LeaveRequest[]     @relation("LeaveRequester")
+  leaveApprovals LeaveRequest[]     @relation("LeaveApprover")
+  signRequests   SignatureRequest[] @relation("SignRequester")
+  signs          SignatureRequest[] @relation("SignSigner")
 
-enum Role {
-  PRINCIPAL  // 원장
-  VICE       // 부원장
-  TEACHER    // 강사
-  DRIVER     // 기사
-  ASSISTANT  // 동승
-  STAFF      // 일반 직원
+  @@index([roleId])
 }
 
 // =====================================================
@@ -56,7 +83,7 @@ enum Role {
 model Chat {
   id        String   @id @default(cuid())
   type      ChatType @default(GROUP)
-  name      String?  // 그룹 채팅의 이름. DM은 null.
+  name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -85,12 +112,12 @@ model ChatMember {
 }
 
 model Message {
-  id        String      @id @default(cuid())
-  chatId    String
-  userId    String?     // null이면 AI 답변 (또는 시스템 메시지)
-  type      MessageType @default(TEXT)
-  content   String      @db.Text
-  metadata  Json?       // AI 답변 메타데이터 (사용 모델 등) 또는 첨부파일 정보
+  id       String      @id @default(cuid())
+  chatId   String
+  userId   String?
+  type     MessageType @default(TEXT)
+  content  String      @db.Text
+  metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -105,12 +132,12 @@ enum MessageType {
   TEXT
   IMAGE
   FILE
-  AI       // AI 비서 답변
-  SYSTEM   // 시스템 알림
+  AI
+  SYSTEM
 }
 
 // =====================================================
-// 근태 (출퇴근)
+// 근태
 // =====================================================
 model Attendance {
   id     String         @id @default(cuid())
@@ -118,7 +145,6 @@ model Attendance {
   type   AttendanceType
   at     DateTime       @default(now())
   note   String?
-  // 위치 정보 (옵션)
   latitude  Float?
   longitude Float?
 
@@ -128,8 +154,8 @@ model Attendance {
 }
 
 enum AttendanceType {
-  CHECK_IN   // 출근
-  CHECK_OUT  // 퇴근
+  CHECK_IN
+  CHECK_OUT
 }
 
 // =====================================================
@@ -158,11 +184,11 @@ model LeaveRequest {
 }
 
 enum LeaveType {
-  ANNUAL    // 연차
-  HALF_AM   // 오전 반차
-  HALF_PM   // 오후 반차
-  SICK      // 병가
-  OFFICIAL  // 공가
+  ANNUAL
+  HALF_AM
+  HALF_PM
+  SICK
+  OFFICIAL
   OTHER
 }
 
@@ -181,7 +207,7 @@ model Document {
   uploaderId  String
   title       String
   description String?  @db.Text
-  storagePath String   // Supabase Storage 경로
+  storagePath String
   mimeType    String   @default("application/pdf")
   pageCount   Int?
 
@@ -193,22 +219,19 @@ model Document {
 }
 
 model SignatureRequest {
-  id           String         @id @default(cuid())
-  documentId   String
-  requesterId  String
-  signerId     String
-  status       SignStatus     @default(PENDING)
-  // 사인 위치 (페이지 + 좌표)
-  pageNumber   Int            @default(1)
-  positionX    Float?
-  positionY    Float?
-  // 결과물
-  signaturePath String?       // 캔버스 사인 이미지
-  signedPdfPath String?       // 합성된 최종 PDF
-  // 법적 효력 (감사 로그)
-  signedAt     DateTime?
-  signerIp     String?
-  signerAgent  String?
+  id            String      @id @default(cuid())
+  documentId    String
+  requesterId   String
+  signerId      String
+  status        SignStatus  @default(PENDING)
+  pageNumber    Int         @default(1)
+  positionX     Float?
+  positionY     Float?
+  signaturePath String?
+  signedPdfPath String?
+  signedAt      DateTime?
+  signerIp      String?
+  signerAgent   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

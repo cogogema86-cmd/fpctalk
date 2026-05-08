@@ -13,10 +13,10 @@ export default async function AdminUsersPage() {
 
   const me = await prisma.user.findUnique({
     where: { authId: authUser.id },
-    select: { id: true, role: true },
+    include: { role: true },
   });
 
-  if (!me || (me.role !== "PRINCIPAL" && me.role !== "VICE")) {
+  if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
         관리자 전용 페이지입니다.
@@ -25,15 +25,11 @@ export default async function AdminUsersPage() {
   }
 
   const users = await prisma.user.findMany({
-    orderBy: [{ role: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      username: true,
-      name: true,
-      role: true,
-      level: true,
-      createdAt: true,
-    },
+    orderBy: [
+      { role: { sortOrder: "asc" } },
+      { name: "asc" },
+    ],
+    include: { role: true },
   });
 
   return (
@@ -62,7 +58,7 @@ export default async function AdminUsersPage() {
               <th className="text-left px-4 py-2 font-medium">아이디</th>
               <th className="text-left px-4 py-2 font-medium">이름</th>
               <th className="text-left px-4 py-2 font-medium">역할</th>
-              <th className="text-left px-4 py-2 font-medium">레벨</th>
+              <th className="text-left px-4 py-2 font-medium">직책</th>
               <th className="text-left px-4 py-2 font-medium">가입일</th>
               <th className="text-left px-4 py-2 font-medium">관리</th>
             </tr>
@@ -77,8 +73,12 @@ export default async function AdminUsersPage() {
                   {u.username}
                 </td>
                 <td className="px-4 py-2">{u.name}</td>
-                <td className="px-4 py-2">{roleLabel(u.role)}</td>
-                <td className="px-4 py-2">{u.level}</td>
+                <td className="px-4 py-2">
+                  <RoleBadge label={u.role.label} isAdmin={u.role.isAdmin} />
+                </td>
+                <td className="px-4 py-2 text-zinc-500">
+                  {u.title || "—"}
+                </td>
                 <td className="px-4 py-2 text-zinc-500">
                   {u.createdAt.toLocaleDateString("ko-KR")}
                 </td>
@@ -102,20 +102,17 @@ export default async function AdminUsersPage() {
   );
 }
 
-function roleLabel(role: string) {
-  switch (role) {
-    case "PRINCIPAL":
-      return "원장";
-    case "VICE":
-      return "부원장";
-    case "TEACHER":
-      return "강사";
-    case "DRIVER":
-      return "기사";
-    case "ASSISTANT":
-      return "동승";
-    case "STAFF":
-    default:
-      return "일반";
-  }
+function RoleBadge({ label, isAdmin }: { label: string; isAdmin: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+        isAdmin
+          ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+          : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+      }`}
+    >
+      {label}
+      {isAdmin && <span className="ml-1">⚙️</span>}
+    </span>
+  );
 }

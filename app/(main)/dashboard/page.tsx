@@ -10,7 +10,7 @@ export default async function DashboardPage() {
   const user = authUser
     ? await prisma.user.findUnique({
         where: { authId: authUser.id },
-        select: { name: true, role: true, annualLeaveTotal: true, annualLeaveUsed: true },
+        include: { role: true },
       })
     : null;
 
@@ -21,7 +21,8 @@ export default async function DashboardPage() {
           안녕하세요, {user?.name}님
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          오늘 학원에서 할 일을 확인하세요.
+          {user?.role.label}
+          {user?.title ? ` · ${user.title}` : ""} — 오늘도 학원 업무 화이팅!
         </p>
       </div>
 
@@ -48,7 +49,8 @@ export default async function DashboardPage() {
         <ul className="text-sm text-zinc-600 dark:text-zinc-400 space-y-1">
           <li>✅ STEP 1~2: 인프라 + 배포</li>
           <li>✅ STEP 3: 인증 (로그인/세션)</li>
-          <li>✅ STEP 4: 메인 레이아웃 + 사이드바 (← 지금)</li>
+          <li>✅ STEP 3-후속: 직원 추가/관리 + 비번 변경/초기화</li>
+          <li>✅ STEP 4: 메인 레이아웃 + 사이드바</li>
           <li>⏭ STEP 5: 채팅 (실시간)</li>
           <li>⏭ STEP 6: AI 비서 통합</li>
           <li>⏭ STEP 7: 근태 + 연차</li>

@@ -7,23 +7,20 @@ import { CredentialsCard } from "../_components/credentials-card";
 
 const initialState: CreateStaffState = {};
 
-const ROLES = [
-  { value: "TEACHER", label: "강사" },
-  { value: "ASSISTANT", label: "동승" },
-  { value: "DRIVER", label: "기사" },
-  { value: "STAFF", label: "일반 직원" },
-  { value: "VICE", label: "부원장" },
-  { value: "PRINCIPAL", label: "원장" },
-];
+type RoleOption = {
+  id: string;
+  code: string;
+  label: string;
+  isAdmin: boolean;
+};
 
-export function CreateStaffForm() {
+export function CreateStaffForm({ roles }: { roles: RoleOption[] }) {
   const [state, formAction, isPending] = useActionState(
     createStaffAction,
     initialState,
   );
   const [autoPw, setAutoPw] = useState(true);
 
-  // 성공 시 결과 표시
   if (state.success) {
     return (
       <div className="space-y-4">
@@ -60,7 +57,7 @@ export function CreateStaffForm() {
           autoComplete="off"
           required
           disabled={isPending}
-          placeholder="예: kim_teacher, parker"
+          placeholder="예: kim_teacher"
           className="input"
         />
       </Field>
@@ -78,18 +75,38 @@ export function CreateStaffForm() {
 
       <Field label="역할" required>
         <select
-          name="role"
-          defaultValue="TEACHER"
+          name="roleId"
+          defaultValue=""
           required
           disabled={isPending}
           className="input"
         >
-          {ROLES.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
+          <option value="" disabled>
+            선택하세요
+          </option>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.label} {r.isAdmin ? "(관리권한)" : ""}
             </option>
           ))}
         </select>
+        <p className="mt-1 text-xs text-zinc-500">
+          역할이 없거나 새 역할이 필요하면{" "}
+          <Link href="/admin/roles" className="underline">
+            역할 관리
+          </Link>{" "}
+          페이지에서 추가
+        </p>
+      </Field>
+
+      <Field label="직책 (선택)">
+        <input
+          name="title"
+          type="text"
+          disabled={isPending}
+          placeholder="예: 수석강사, 교무부장"
+          className="input"
+        />
       </Field>
 
       <div className="space-y-2">
