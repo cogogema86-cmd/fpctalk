@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ResetPasswordButton } from "./_components/reset-password-button";
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -11,7 +13,7 @@ export default async function AdminUsersPage() {
 
   const me = await prisma.user.findUnique({
     where: { authId: authUser.id },
-    select: { role: true },
+    select: { id: true, role: true },
   });
 
   if (!me || (me.role !== "PRINCIPAL" && me.role !== "VICE")) {
@@ -45,13 +47,12 @@ export default async function AdminUsersPage() {
             현재 등록된 직원 {users.length}명
           </p>
         </div>
-        <button
-          disabled
-          className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 opacity-50 cursor-not-allowed"
-          title="STEP 3 후속 작업에서 구현 예정"
+        <Link
+          href="/admin/users/new"
+          className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
         >
           + 직원 추가
-        </button>
+        </Link>
       </div>
 
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -63,6 +64,7 @@ export default async function AdminUsersPage() {
               <th className="text-left px-4 py-2 font-medium">역할</th>
               <th className="text-left px-4 py-2 font-medium">레벨</th>
               <th className="text-left px-4 py-2 font-medium">가입일</th>
+              <th className="text-left px-4 py-2 font-medium">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -79,6 +81,17 @@ export default async function AdminUsersPage() {
                 <td className="px-4 py-2">{u.level}</td>
                 <td className="px-4 py-2 text-zinc-500">
                   {u.createdAt.toLocaleDateString("ko-KR")}
+                </td>
+                <td className="px-4 py-2">
+                  {u.id === me.id ? (
+                    <span className="text-xs text-zinc-400">(본인)</span>
+                  ) : (
+                    <ResetPasswordButton
+                      userId={u.id}
+                      username={u.username}
+                      name={u.name}
+                    />
+                  )}
                 </td>
               </tr>
             ))}
