@@ -58,8 +58,13 @@ export default function LoginPage() {
         </div>
 
         {state.error && (
-          <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-            {state.error}
+          <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700 dark:text-red-300 space-y-1">
+            <div>{state.error}</div>
+            {state.debug && (
+              <div className="text-xs opacity-70 break-all">
+                debug: {state.debug}
+              </div>
+            )}
           </div>
         )}
 
