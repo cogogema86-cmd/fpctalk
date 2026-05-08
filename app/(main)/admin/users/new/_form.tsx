@@ -14,7 +14,29 @@ type RoleOption = {
   isAdmin: boolean;
 };
 
+/**
+ * 외부 컴포넌트 — 리셋용 key를 관리.
+ * "추가로 한 명 더 등록" 클릭 시 키를 증가시켜
+ * 자식의 useActionState가 새 인스턴스로 시작되게 함.
+ */
 export function CreateStaffForm({ roles }: { roles: RoleOption[] }) {
+  const [resetKey, setResetKey] = useState(0);
+  return (
+    <FormInstance
+      key={resetKey}
+      roles={roles}
+      onReset={() => setResetKey((k) => k + 1)}
+    />
+  );
+}
+
+function FormInstance({
+  roles,
+  onReset,
+}: {
+  roles: RoleOption[];
+  onReset: () => void;
+}) {
   const [state, formAction, isPending] = useActionState(
     createStaffAction,
     initialState,
@@ -37,12 +59,13 @@ export function CreateStaffForm({ roles }: { roles: RoleOption[] }) {
           >
             목록으로
           </Link>
-          <Link
-            href="/admin/users/new"
-            className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm"
+          <button
+            type="button"
+            onClick={onReset}
+            className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
           >
             추가로 한 명 더 등록
-          </Link>
+          </button>
         </div>
       </div>
     );

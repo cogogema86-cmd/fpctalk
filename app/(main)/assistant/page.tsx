@@ -14,7 +14,7 @@ export default async function AssistantPage() {
           AI 비서
         </h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          학원 업무 도우미 · Gemini 2.5 (자동: Flash🟢 일상 / Pro🔵 업무)
+          잊어버린 일 다시 알려주기 · 약속한 일정 정리 · 공지문/동의서 초안 작성
         </p>
       </div>
 
