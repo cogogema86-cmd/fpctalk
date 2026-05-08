@@ -34,17 +34,15 @@ export function CreateRoleForm() {
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">기본 레벨</label>
-          <select
+          <input
             name="defaultLevel"
-            defaultValue="0"
+            type="number"
+            min={0}
+            max={99}
+            defaultValue={0}
             disabled={isPending}
             className="role-input"
-          >
-            <option value="0">0 — 일반</option>
-            <option value="1">1 — 강사급</option>
-            <option value="2">2 — 부원장급</option>
-            <option value="3">3 — 원장급</option>
-          </select>
+          />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">정렬</label>

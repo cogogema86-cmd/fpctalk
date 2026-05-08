@@ -45,8 +45,8 @@ export async function createRoleAction(
 
   if (!label) return { error: "역할 이름을 입력해주세요." };
   if (label.length > 30) return { error: "역할 이름은 30자 이하로 입력해주세요." };
-  if (defaultLevel < 0 || defaultLevel > 3) {
-    return { error: "기본 레벨은 0~3 사이로 입력해주세요." };
+  if (!Number.isFinite(defaultLevel) || defaultLevel < 0 || defaultLevel > 99) {
+    return { error: "기본 레벨은 0~99 사이의 숫자로 입력해주세요." };
   }
 
   const existing = await prisma.staffRole.findFirst({ where: { label } });
@@ -90,8 +90,8 @@ export async function updateRoleAction(
 
   if (!id || !label) return { error: "필수 정보가 누락되었습니다." };
   if (label.length > 30) return { error: "역할 이름은 30자 이하로 입력해주세요." };
-  if (defaultLevel < 0 || defaultLevel > 3) {
-    return { error: "기본 레벨은 0~3 사이로 입력해주세요." };
+  if (!Number.isFinite(defaultLevel) || defaultLevel < 0 || defaultLevel > 99) {
+    return { error: "기본 레벨은 0~99 사이의 숫자로 입력해주세요." };
   }
 
   const role = await prisma.staffRole.findUnique({ where: { id } });
