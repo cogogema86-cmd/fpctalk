@@ -4,17 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
-async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
+async function getCurrentUser() {
   const supabase = await createClient();
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
-  if (!authUser) return { ok: false, error: "로그인이 필요합니다." };
-  const me = await prisma.user.findUnique({
+  if (!authUser) return null;
+  return prisma.user.findUnique({
     where: { authId: authUser.id },
     include: { role: true },
   });
-  if (!me) return { ok: false, error: "사용자 정보를 찾을 수 없습니다." };
+}
+
+async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const me = await getCurrentUser();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
   if (!me.role.isAdmin) return { ok: false, error: "관리자 권한이 필요합니다." };
   return { ok: true };
 }
@@ -45,11 +49,9 @@ export async function createRoleAction(
     return { error: "기본 레벨은 0~3 사이로 입력해주세요." };
   }
 
-  // 중복 라벨 체크
   const existing = await prisma.staffRole.findFirst({ where: { label } });
   if (existing) return { error: `이미 같은 이름의 역할이 있습니다: ${label}` };
 
-  // code는 자동 생성 (cuid 일부 사용)
   const code = `custom_${Math.random().toString(36).slice(2, 8)}`;
 
   await prisma.staffRole.create({
@@ -69,15 +71,16 @@ export async function createRoleAction(
 }
 
 // =====================================================
-// 역할 수정 (label, defaultLevel, isAdmin, sortOrder)
-// 시스템 역할은 라벨/정렬만 수정 가능, isAdmin/level은 잠김
+// 역할 수정 — 모든 필드 편집 가능 (시스템 역할 포함)
+// 단, 본인이 사용 중인 역할의 관리권한은 끌 수 없음 (lockout 방지)
 // =====================================================
 export async function updateRoleAction(
   _prev: RoleFormState,
   formData: FormData,
 ): Promise<RoleFormState> {
-  const guard = await requireAdmin();
-  if (!guard.ok) return { error: guard.error };
+  const me = await getCurrentUser();
+  if (!me) return { error: "로그인이 필요합니다." };
+  if (!me.role.isAdmin) return { error: "관리자 권한이 필요합니다." };
 
   const id = formData.get("id") as string;
   const label = (formData.get("label") as string)?.trim();
@@ -86,26 +89,53 @@ export async function updateRoleAction(
   const sortOrder = parseInt(formData.get("sortOrder") as string, 10) || 100;
 
   if (!id || !label) return { error: "필수 정보가 누락되었습니다." };
+  if (label.length > 30) return { error: "역할 이름은 30자 이하로 입력해주세요." };
+  if (defaultLevel < 0 || defaultLevel > 3) {
+    return { error: "기본 레벨은 0~3 사이로 입력해주세요." };
+  }
 
   const role = await prisma.staffRole.findUnique({ where: { id } });
   if (!role) return { error: "역할을 찾을 수 없습니다." };
 
-  if (role.isSystem) {
-    // 시스템 역할은 라벨/정렬만 변경 가능
-    await prisma.staffRole.update({
-      where: { id },
-      data: { label, sortOrder },
-    });
-  } else {
-    await prisma.staffRole.update({
-      where: { id },
-      data: { label, defaultLevel, isAdmin: isAdminFlag, sortOrder },
-    });
+  // 같은 라벨 중복 체크 (자기 자신 제외)
+  const dup = await prisma.staffRole.findFirst({
+    where: { label, NOT: { id } },
+  });
+  if (dup) return { error: `이미 같은 이름의 역할이 있습니다: ${label}` };
+
+  // 락아웃 방지 1: 본인이 쓰는 역할의 isAdmin을 끄려는 경우
+  if (me.roleId === id && role.isAdmin && !isAdminFlag) {
+    return {
+      error:
+        "본인이 사용 중인 역할의 관리권한은 끌 수 없습니다. 다른 사용자에게 관리권한 역할을 먼저 부여한 뒤 본인 역할을 변경하세요.",
+    };
   }
+
+  // 락아웃 방지 2: 어떤 역할이 isAdmin을 잃을 때, 시스템에 관리자 가진 다른 사용자가 1명 이상 남는지 확인
+  if (role.isAdmin && !isAdminFlag) {
+    const otherAdmins = await prisma.user.count({
+      where: {
+        roleId: { not: id },
+        role: { isAdmin: true },
+      },
+    });
+    if (otherAdmins === 0) {
+      return {
+        error:
+          "이 역할의 관리권한을 끄면 시스템에 관리자가 한 명도 남지 않습니다. 먼저 다른 역할에 관리권한을 부여하고 직원을 그 역할로 옮기세요.",
+      };
+    }
+  }
+
+  await prisma.staffRole.update({
+    where: { id },
+    data: { label, defaultLevel, isAdmin: isAdminFlag, sortOrder },
+  });
 
   revalidatePath("/admin/roles");
   revalidatePath("/admin/users/new");
   revalidatePath("/admin/users");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
