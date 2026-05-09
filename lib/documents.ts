@@ -11,7 +11,8 @@
  * Document.storageType 필드가 어디에 저장됐는지 표시.
  */
 import { prisma } from "@/lib/db";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, type PDFFont, StandardFonts, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import {
   type StorageType,
   deleteFiles,
@@ -20,6 +21,7 @@ import {
   getSupabaseSignedUrl,
   uploadFile,
 } from "@/lib/storage";
+import { loadKoreanFont } from "@/lib/fonts";
 
 // =====================================================
 // 권한 체크
@@ -284,9 +286,29 @@ export async function submitSignature(params: SubmitSignatureParams) {
     }
 
     const certPdf = await PDFDocument.create();
+    certPdf.registerFontkit(fontkit);
+
+    let certFont: PDFFont;
+    let certBoldFont: PDFFont;
+    let useUnicodeFont = false;
+    const koBytes = await loadKoreanFont();
+    if (koBytes) {
+      try {
+        const koFont = await certPdf.embedFont(koBytes, { subset: true });
+        certFont = koFont;
+        certBoldFont = koFont; // Noto Sans KR Regular only — size increase serves as "bold"
+        useUnicodeFont = true;
+      } catch {
+        certFont = await certPdf.embedFont(StandardFonts.Helvetica);
+        certBoldFont = await certPdf.embedFont(StandardFonts.HelveticaBold);
+      }
+    } else {
+      certFont = await certPdf.embedFont(StandardFonts.Helvetica);
+      certBoldFont = await certPdf.embedFont(StandardFonts.HelveticaBold);
+    }
+    const safeText = (s: string) => (useUnicodeFont ? s : helveticaSafe(s));
+
     const certPage = certPdf.addPage();
-    const certFont = await certPdf.embedFont(StandardFonts.Helvetica);
-    const certBoldFont = await certPdf.embedFont(StandardFonts.HelveticaBold);
     const certSig = await certPdf.embedPng(sigBuffer);
     const { width: pageW, height: pageH } = certPage.getSize();
 
@@ -308,7 +330,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
     });
     cy -= 18;
     certPage.drawText(
-      helveticaSafe(`Title: ${req.document.title}`).slice(0, 80),
+      safeText(`Title: ${req.document.title}`).slice(0, 80),
       {
         x: 50,
         y: cy,
@@ -343,7 +365,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
       color: rgb(0.3, 0.3, 0.3),
     });
     cy -= 18;
-    certPage.drawText(helveticaSafe(signerLabelCert).slice(0, 80), {
+    certPage.drawText(safeText(signerLabelCert).slice(0, 80), {
       x: 50,
       y: cy,
       size: 11,
@@ -369,7 +391,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
     }
     if (userAgent) {
       cy -= 14;
-      certPage.drawText(helveticaSafe(`Agent: ${userAgent.slice(0, 70)}`), {
+      certPage.drawText(safeText(`Agent: ${userAgent.slice(0, 70)}`), {
         x: 50,
         y: cy,
         size: 9,
@@ -452,9 +474,23 @@ export async function submitSignature(params: SubmitSignatureParams) {
 
   // 3) PDF에 사인 페이지 합성
   const pdfDoc = await PDFDocument.load(docBuffer);
+  pdfDoc.registerFontkit(fontkit);
   const sigImage = await pdfDoc.embedPng(sigBuffer);
 
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  let metaFont: PDFFont = helveticaFont;
+  let pdfUseUnicode = false;
+  const koBytesPdf = await loadKoreanFont();
+  if (koBytesPdf) {
+    try {
+      metaFont = await pdfDoc.embedFont(koBytesPdf, { subset: true });
+      pdfUseUnicode = true;
+    } catch {
+      // keep helvetica
+    }
+  }
+  const safeMeta = (s: string) => (pdfUseUnicode ? s : helveticaSafe(s));
+
   const newPage = pdfDoc.addPage();
   const { height } = newPage.getSize();
 
@@ -484,9 +520,11 @@ export async function submitSignature(params: SubmitSignatureParams) {
       where: { id: signerId },
       select: { username: true, name: true },
     });
-    signerLabel = signer?.username ?? signerId;
+    signerLabel = signer?.name
+      ? `${signer.name} (${signer.username ?? signerId})`
+      : (signer?.username ?? signerId);
   } else {
-    signerLabel = `external: ${req.externalName ?? "unknown"}`;
+    signerLabel = `External: ${req.externalName ?? "unknown"}`;
   }
   const now = new Date();
   const meta = [
@@ -498,11 +536,11 @@ export async function submitSignature(params: SubmitSignatureParams) {
 
   let metaY = height - 100 - sigH - 30;
   for (const line of meta) {
-    newPage.drawText(helveticaSafe(line as string), {
+    newPage.drawText(safeMeta(line as string), {
       x: 50,
       y: metaY,
       size: 9,
-      font: helveticaFont,
+      font: metaFont,
       color: rgb(0.3, 0.3, 0.3),
     });
     metaY -= 14;
