@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/i18n/client";
 
 export function PreviewButton({
   url,
   title,
-  label = "👁 미리보기",
+  label,
   compact,
 }: {
   url: string;
@@ -13,6 +14,8 @@ export function PreviewButton({
   label?: string;
   compact?: boolean;
 }) {
+  const t = useT();
+  const buttonLabel = label ?? t("documents.preview");
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -39,7 +42,7 @@ export function PreviewButton({
             : "text-sm rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         }
       >
-        {label}
+        {buttonLabel}
       </button>
 
       {open && (
@@ -61,14 +64,14 @@ export function PreviewButton({
                   rel="noopener noreferrer"
                   className="text-xs rounded border border-zinc-300 dark:border-zinc-700 px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
-                  새 창
+                  {t("preview.openNewTab")}
                 </a>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   className="text-xs rounded border border-zinc-300 dark:border-zinc-700 px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 >
-                  닫기 (Esc)
+                  {t("preview.closeEsc")}
                 </button>
               </div>
             </div>

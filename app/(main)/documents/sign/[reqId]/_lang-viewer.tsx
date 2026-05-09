@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/client";
 
 export function LangViewer({
   koUrl,
@@ -17,6 +18,7 @@ export function LangViewer({
   koFileName: string;
   enFileName: string;
 }) {
+  const t = useT();
   const hasBoth = koUrl && enUrl;
   const [lang, setLang] = useState<"ko" | "en">("ko");
 
@@ -27,7 +29,7 @@ export function LangViewer({
   if (!url) {
     return (
       <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700">
-        문서 링크 발급에 실패했습니다. 새로고침 후 다시 시도해주세요.
+        {t("common.error")}
       </div>
     );
   }
@@ -45,7 +47,7 @@ export function LangViewer({
                 : "text-zinc-600 dark:text-zinc-400"
             }`}
           >
-            🇰🇷 한국어
+            {t("sign.korean")}
           </button>
           <button
             type="button"
@@ -56,7 +58,7 @@ export function LangViewer({
                 : "text-zinc-600 dark:text-zinc-400"
             }`}
           >
-            🇺🇸 English
+            {t("sign.english")}
           </button>
         </div>
       )}
@@ -67,21 +69,21 @@ export function LangViewer({
         rel="noopener noreferrer"
         className="inline-block rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium"
       >
-        📥 새 창에서 열기 / 다운로드
+        {t("sign.openInNewTab")}
       </a>
 
       {isPdf ? (
         <iframe
           src={url}
           className="w-full h-72 md:h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
-          title="문서 미리보기"
+          title={fileName}
         />
       ) : (
         <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-900">
           <div className="text-3xl mb-2">📎</div>
-          PDF가 아닌 파일입니다 ({fileName}).
+          {t("sign.notPdfHint")} ({fileName}).
           <br />
-          위 "📥 새 창에서 열기 / 다운로드" 버튼을 눌러 파일을 확인 후 사인해주세요.
+          {t("sign.notPdfBody")}
         </div>
       )}
     </div>

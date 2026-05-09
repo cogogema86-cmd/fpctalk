@@ -8,11 +8,13 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { submitSignatureAction, type SignSubmitState } from "../../actions";
+import { useT } from "@/lib/i18n/client";
 
 const initialState: SignSubmitState = {};
 
 export function SignCanvas({ requestId }: { requestId: string }) {
   const router = useRouter();
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [state, formAction, isPending] = useActionState(
@@ -109,10 +111,10 @@ export function SignCanvas({ requestId }: { requestId: string }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (!hasDrawn) {
-      alert("사인을 그려주세요.");
+      alert(t("sign.alertEmpty"));
       return;
     }
-    if (!confirm("이 사인으로 제출하시겠습니까? 제출 후엔 수정할 수 없습니다.")) {
+    if (!confirm(t("sign.confirmSubmit"))) {
       return;
     }
     const dataUrl = canvas.toDataURL("image/png");
@@ -125,7 +127,7 @@ export function SignCanvas({ requestId }: { requestId: string }) {
   if (state.ok) {
     return (
       <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 p-4 text-sm text-green-800 dark:text-green-200">
-        🎉 사인이 완료되었습니다. 잠시 후 목록으로 이동합니다.
+        {t("sign.successRedirect")}
       </div>
     );
   }
@@ -155,14 +157,14 @@ export function SignCanvas({ requestId }: { requestId: string }) {
           disabled={isPending}
           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50"
         >
-          🗑 지우기
+          {t("sign.clear")}
         </button>
         <button
           type="submit"
           disabled={isPending || !hasDrawn}
           className="rounded-md bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50"
         >
-          {isPending ? "처리 중..." : "✍️ 사인 제출"}
+          {isPending ? t("sign.processing") : t("sign.submit")}
         </button>
       </div>
 

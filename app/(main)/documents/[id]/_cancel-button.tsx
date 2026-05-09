@@ -6,6 +6,7 @@ import {
   cancelSignatureRequestAction,
   type CancelSignState,
 } from "../actions";
+import { useT } from "@/lib/i18n/client";
 
 const initial: CancelSignState = {};
 
@@ -19,6 +20,7 @@ export function CancelSignButton({
   signerLabel: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     cancelSignatureRequestAction,
     initial,
@@ -29,11 +31,7 @@ export function CancelSignButton({
   }, [state.ok, router]);
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    if (
-      !confirm(
-        `${signerLabel} 님의 사인 요청을 취소하시겠습니까?\n취소 후에는 되돌릴 수 없습니다.`,
-      )
-    ) {
+    if (!confirm(`${signerLabel} ${t("docDetail.cancelConfirm")}`)) {
       e.preventDefault();
     }
   };
@@ -45,10 +43,10 @@ export function CancelSignButton({
       <button
         type="submit"
         disabled={isPending}
-        title={state.error || "사인 요청 취소"}
+        title={state.error || t("docDetail.cancel")}
         className="text-xs rounded border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 px-2 py-1 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50"
       >
-        {isPending ? "취소 중..." : "취소"}
+        {isPending ? t("docDetail.cancelling") : t("docDetail.cancel")}
       </button>
     </form>
   );

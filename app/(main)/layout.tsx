@@ -5,6 +5,8 @@ import Link from "next/link";
 import { LogoutButton } from "./_components/logout-button";
 import { Sidebar } from "./_components/sidebar";
 import { MobileNav } from "./_components/mobile-nav";
+import { LocaleToggle } from "./_components/locale-toggle";
+import { getLocale, getT } from "@/lib/i18n/server";
 
 export default async function MainLayout({
   children,
@@ -23,12 +25,23 @@ export default async function MainLayout({
     include: { role: true },
   });
 
+  const locale = await getLocale();
+  const t = await getT();
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-sm text-center space-y-4">
-          <h2 className="text-lg font-semibold">계정 설정이 완료되지 않았습니다</h2>
-          <p className="text-sm text-zinc-500">관리자에게 문의해주세요.</p>
+          <h2 className="text-lg font-semibold">
+            {locale === "en"
+              ? "Account setup is incomplete"
+              : "계정 설정이 완료되지 않았습니다"}
+          </h2>
+          <p className="text-sm text-zinc-500">
+            {locale === "en"
+              ? "Please contact your administrator."
+              : "관리자에게 문의해주세요."}
+          </p>
           <LogoutButton />
         </div>
       </div>
@@ -38,7 +51,6 @@ export default async function MainLayout({
   const isAdmin = user.role.isAdmin;
   const userLevel = user.role.defaultLevel;
 
-  // 본인이 사인해야 할 미서명 카운트 (사이드바 배지용)
   const pendingSignsCount = await prisma.signatureRequest.count({
     where: { signerId: user.id, status: "PENDING" },
   });
@@ -46,21 +58,25 @@ export default async function MainLayout({
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-black">
       <header className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center justify-between bg-white dark:bg-black shrink-0">
-        <Link href="/dashboard" className="font-semibold text-zinc-900 dark:text-zinc-50">
+        <Link
+          href="/dashboard"
+          className="font-semibold text-zinc-900 dark:text-zinc-50"
+        >
           FPCTalk
         </Link>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="hidden sm:inline text-sm text-zinc-600 dark:text-zinc-400">
             {user.name}{" "}
             <span className="text-zinc-400">
               ({user.username} · {user.role.label})
             </span>
           </span>
+          <LocaleToggle current={locale} />
           <Link
             href="/settings/password"
             className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
-            비번변경
+            {t("header.changePassword")}
           </Link>
           <LogoutButton />
         </div>

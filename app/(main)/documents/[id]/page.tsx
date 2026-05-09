@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { getDocumentDetailForAdmin } from "@/lib/documents";
+import { getLocale, getT } from "@/lib/i18n/server";
 import { DownloadButton } from "./_download-button";
 import { CopyLinkButton } from "./_copy-link-button";
 import { CancelSignButton } from "./_cancel-button";
@@ -25,10 +26,21 @@ export default async function DocumentDetailPage({
     where: { authId: authUser.id },
     include: { role: true },
   });
+  const t = await getT();
+  const locale = await getLocale();
+  const dateLocale = locale === "en" ? "en-US" : "ko-KR";
+
+  const statusLabels = {
+    PENDING: t("status.pending"),
+    SIGNED: t("status.signed"),
+    REJECTED: t("status.rejected"),
+    CANCELLED: t("status.cancelled"),
+  };
+
   if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자 전용 페이지입니다.
+        {t("docDetail.adminOnly")}
       </div>
     );
   }
@@ -70,7 +82,7 @@ export default async function DocumentDetailPage({
         href="/documents"
         className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
       >
-        ← 문서 목록
+        {t("docDetail.backToList")}
       </Link>
 
       <div>
@@ -83,37 +95,49 @@ export default async function DocumentDetailPage({
           </p>
         )}
         <div className="mt-1 text-xs text-zinc-400">
-          업로드 {doc.createdAt.toLocaleDateString("ko-KR")} · 페이지{" "}
-          {doc.pageCount ?? "?"}
+          {t("docDetail.uploadDate")} {doc.createdAt.toLocaleDateString(dateLocale)} ·{" "}
+          {t("docDetail.pages")} {doc.pageCount ?? "?"}
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="전체 요청" value={`${total}명`} />
-        <Stat label="사인 완료" value={`${signed}명`} highlight={signed > 0} />
-        <Stat label="대기" value={`${pending}명`} />
+        <Stat
+          label={t("docDetail.totalRequests")}
+          value={`${total}${t("docDetail.peopleUnit")}`}
+        />
+        <Stat
+          label={t("docDetail.signed")}
+          value={`${signed}${t("docDetail.peopleUnit")}`}
+          highlight={signed > 0}
+        />
+        <Stat
+          label={t("docDetail.pending")}
+          value={`${pending}${t("docDetail.peopleUnit")}`}
+        />
       </div>
 
       <section className="space-y-2">
-        <h2 className="font-semibold">원본 문서</h2>
+        <h2 className="font-semibold">{t("docDetail.original")}</h2>
         <DownloadButton
           documentId={doc.id}
           type="primary"
-          label="📄 한국어 원본 다운로드"
+          label={t("docDetail.downloadKo")}
         />
         {doc.storagePathEn && (
           <DownloadButton
             documentId={doc.id}
             type="en"
-            label="📄 English 원본 다운로드"
+            label={t("docDetail.downloadEn")}
           />
         )}
       </section>
 
-      {/* 직원 사인 진행 */}
+      {/* Staff signatures */}
       {internal.length > 0 && (
         <section className="space-y-2">
-          <h2 className="font-semibold">🧑‍💼 직원 사인 ({internal.length})</h2>
+          <h2 className="font-semibold">
+            {t("docDetail.staffSection")} ({internal.length})
+          </h2>
           <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
             {internal.map((r) => {
               const s = signerMap.get(r.signerId!);
@@ -132,31 +156,33 @@ export default async function DocumentDetailPage({
                     {r.status === "SIGNED" ? (
                       <div className="text-xs text-zinc-500 mt-0.5 space-y-0.5">
                         <div>
-                          ✓ 사인 완료
+                          {t("docDetail.signedAt")}
                           {r.signedAt &&
-                            ` · ${new Date(r.signedAt).toLocaleString("ko-KR")}`}
+                            ` · ${new Date(r.signedAt).toLocaleString(dateLocale)}`}
                         </div>
                         {r.signerIp && <div>IP: {r.signerIp}</div>}
                       </div>
                     ) : (
-                      <div className="text-xs text-zinc-400 mt-0.5">대기 중</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {t("docDetail.waiting")}
+                      </div>
                     )}
                   </div>
                   <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-                    <Status status={r.status} />
+                    <Status status={r.status} labels={statusLabels} />
                     {r.signedPdfPath && (
                       <>
                         <PreviewButton
                           url={`/api/files/${doc.id}?type=signed&signRequestId=${r.id}`}
-                          title={`${doc.title} — ${s?.name ?? "사인"}`}
-                          label="👁 미리보기"
+                          title={`${doc.title} — ${s?.name ?? ""}`}
+                          label={t("documents.preview")}
                           compact
                         />
                         <DownloadButton
                           documentId={doc.id}
                           type="signed"
                           signRequestId={r.id}
-                          label="📥 사인본"
+                          label={t("documents.downloadSigned")}
                           compact
                         />
                       </>
@@ -176,14 +202,14 @@ export default async function DocumentDetailPage({
         </section>
       )}
 
-      {/* 외부 사인자 */}
+      {/* External signers */}
       {external.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold">
-            👨‍👩‍👧 외부 사인자 ({external.length})
+            {t("docDetail.externalSection")} ({external.length})
           </h2>
           <p className="text-xs text-zinc-500">
-            아래 링크를 카톡/메시지/이메일로 학부모에게 전달하면 회원가입 없이 사인할 수 있습니다.
+            {t("docDetail.externalHint")}
           </p>
           <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
             {external.map((r) => {
@@ -199,45 +225,49 @@ export default async function DocumentDetailPage({
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">{r.externalName}</div>
                       <div className="text-xs text-zinc-500 mt-0.5">
-                        {r.externalEmail || r.externalPhone || "연락처 없음"}
+                        {r.externalEmail ||
+                          r.externalPhone ||
+                          t("docDetail.noContact")}
                       </div>
                       {r.status === "SIGNED" ? (
                         <div className="text-xs text-zinc-500 mt-0.5 space-y-0.5">
                           <div>
-                            ✓ 사인 완료
+                            {t("docDetail.signedAt")}
                             {r.signedAt &&
-                              ` · ${new Date(r.signedAt).toLocaleString("ko-KR")}`}
+                              ` · ${new Date(r.signedAt).toLocaleString(dateLocale)}`}
                           </div>
                           {r.signerIp && <div>IP: {r.signerIp}</div>}
                         </div>
                       ) : r.tokenExpiresAt &&
                         r.tokenExpiresAt < new Date() ? (
                         <div className="text-xs text-red-500 mt-0.5">
-                          링크 만료됨
+                          {t("docDetail.linkExpired")}
                         </div>
                       ) : (
                         <div className="text-xs text-zinc-400 mt-0.5">
-                          만료일{" "}
+                          {t("docDetail.expiresAt")}{" "}
                           {r.tokenExpiresAt &&
-                            new Date(r.tokenExpiresAt).toLocaleDateString("ko-KR")}
+                            new Date(r.tokenExpiresAt).toLocaleDateString(
+                              dateLocale,
+                            )}
                         </div>
                       )}
                     </div>
                     <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-                      <Status status={r.status} />
+                      <Status status={r.status} labels={statusLabels} />
                       {r.signedPdfPath && (
                         <>
                           <PreviewButton
                             url={`/api/files/${doc.id}?type=signed&signRequestId=${r.id}`}
-                            title={`${doc.title} — ${r.externalName ?? "외부"}`}
-                            label="👁 미리보기"
+                            title={`${doc.title} — ${r.externalName ?? ""}`}
+                            label={t("documents.preview")}
                             compact
                           />
                           <DownloadButton
                             documentId={doc.id}
                             type="signed"
                             signRequestId={r.id}
-                            label="📥 사인본"
+                            label={t("documents.downloadSigned")}
                             compact
                           />
                         </>
@@ -246,7 +276,7 @@ export default async function DocumentDetailPage({
                         <CancelSignButton
                           requestId={r.id}
                           documentId={doc.id}
-                          signerLabel={r.externalName ?? "외부"}
+                          signerLabel={r.externalName ?? ""}
                         />
                       )}
                     </div>
@@ -292,27 +322,28 @@ function Stat({
   );
 }
 
-function Status({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    PENDING: {
-      label: "대기",
-      cls: "bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-200",
-    },
-    SIGNED: {
-      label: "완료",
-      cls: "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200",
-    },
-    REJECTED: {
-      label: "거부",
-      cls: "bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200",
-    },
-    CANCELLED: {
-      label: "취소",
-      cls: "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400",
-    },
+function Status({
+  status,
+  labels,
+}: {
+  status: string;
+  labels: {
+    PENDING: string;
+    SIGNED: string;
+    REJECTED: string;
+    CANCELLED: string;
   };
-  const s = map[status] ?? map.PENDING;
-  return (
-    <span className={`text-xs rounded px-1.5 py-0.5 ${s.cls}`}>{s.label}</span>
-  );
+}) {
+  const cls: Record<string, string> = {
+    PENDING:
+      "bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-200",
+    SIGNED:
+      "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200",
+    REJECTED: "bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200",
+    CANCELLED:
+      "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400",
+  };
+  const label = labels[status as keyof typeof labels] ?? labels.PENDING;
+  const c = cls[status] ?? cls.PENDING;
+  return <span className={`text-xs rounded px-1.5 py-0.5 ${c}`}>{label}</span>;
 }

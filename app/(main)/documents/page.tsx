@@ -8,6 +8,7 @@ import {
   getMyPendingSignatures,
   listTemplates,
 } from "@/lib/documents";
+import { getLocale, getT } from "@/lib/i18n/server";
 import { DeleteTemplateButton } from "./_delete-template-button";
 import { PreviewButton } from "./[id]/_preview-button";
 import { DownloadButton } from "./[id]/_download-button";
@@ -28,15 +29,19 @@ export default async function DocumentsPage() {
   const templates = isAdmin ? await listTemplates(me.id) : [];
   const myDocuments = isAdmin ? await getDocumentsByUploader(me.id) : [];
 
+  const t = await getT();
+  const locale = await getLocale();
+  const dateLocale = locale === "en" ? "en-US" : "ko-KR";
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            문서 + 사인
+            {t("documents.title")}
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            동의서·안내장 양식 관리 + 사인 요청
+            {t("documents.subtitle")}
           </p>
         </div>
         {isAdmin && (
@@ -44,16 +49,15 @@ export default async function DocumentsPage() {
             href="/documents/upload"
             className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900"
           >
-            + 새 양식 업로드
+            {t("documents.newTemplate")}
           </Link>
         )}
       </div>
 
-      {/* 내 사인 요청 (모든 사용자) */}
       {pending.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            ✍️ 내 사인 요청 ({pending.length})
+            {t("documents.myPending")} ({pending.length})
           </h2>
           <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
             {pending.map((p) => (
@@ -69,14 +73,14 @@ export default async function DocumentsPage() {
                     </div>
                   )}
                   <div className="text-xs text-zinc-400 mt-0.5">
-                    요청자: {p.requester.name}
+                    {t("documents.requester")}: {p.requester.name}
                   </div>
                 </div>
                 <Link
                   href={`/documents/sign/${p.id}`}
                   className="rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-4 py-2 shrink-0"
                 >
-                  사인하기 →
+                  {t("documents.signNow")}
                 </Link>
               </li>
             ))}
@@ -84,56 +88,55 @@ export default async function DocumentsPage() {
         </section>
       )}
 
-      {/* 관리자: 양식 보관함 */}
       {isAdmin && (
         <section className="space-y-2">
           <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            📁 양식 보관함 ({templates.length})
+            {t("documents.templateBox")} ({templates.length})
           </h2>
           {templates.length === 0 ? (
             <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
-              저장된 양식이 없습니다.{" "}
+              {t("documents.templateEmpty")}{" "}
               <Link
                 href="/documents/upload"
                 className="text-blue-600 dark:text-blue-400 underline"
               >
-                + 새 양식 업로드
+                {t("documents.newTemplate")}
               </Link>
             </div>
           ) : (
             <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
-              {templates.map((t) => (
+              {templates.map((tpl) => (
                 <li
-                  key={t.id}
+                  key={tpl.id}
                   className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3 flex-wrap"
                 >
                   <div className="min-w-0 flex-1">
                     <Link
-                      href={`/documents/templates/${t.id}`}
+                      href={`/documents/templates/${tpl.id}`}
                       className="font-medium hover:underline"
                     >
-                      {t.name}
+                      {tpl.name}
                     </Link>
-                    {t.description && (
+                    {tpl.description && (
                       <div className="text-xs text-zinc-500 truncate mt-0.5">
-                        {t.description}
+                        {tpl.description}
                       </div>
                     )}
                     <div className="text-[10px] text-zinc-400 mt-1 space-x-2">
-                      <span>🇰🇷 {t.koFileName}</span>
-                      {t.enFileName && <span>🇺🇸 {t.enFileName}</span>}
+                      <span>🇰🇷 {tpl.koFileName}</span>
+                      {tpl.enFileName && <span>🇺🇸 {tpl.enFileName}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Link
-                      href={`/documents/templates/${t.id}/request`}
+                      href={`/documents/templates/${tpl.id}/request`}
                       className="text-xs rounded-md bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 font-medium"
                     >
-                      ✍️ 사인 요청
+                      {t("documents.requestSignatures")}
                     </Link>
                     <DeleteTemplateButton
-                      templateId={t.id}
-                      templateName={t.name}
+                      templateId={tpl.id}
+                      templateName={tpl.name}
                     />
                   </div>
                 </li>
@@ -143,11 +146,10 @@ export default async function DocumentsPage() {
         </section>
       )}
 
-      {/* 관리자: 진행 중인 캠페인 */}
       {isAdmin && myDocuments.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            📋 진행 중인 사인 캠페인 ({myDocuments.length})
+            {t("documents.activeCampaigns")} ({myDocuments.length})
           </h2>
           <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
             {myDocuments.map((d) => {
@@ -169,20 +171,22 @@ export default async function DocumentsPage() {
                       <div className="min-w-0 flex-1">
                         <div className="font-medium truncate">{d.title}</div>
                         <div className="text-xs text-zinc-400 mt-0.5">
-                          {d.createdAt.toLocaleDateString("ko-KR")}
+                          {d.createdAt.toLocaleDateString(dateLocale)}
                         </div>
                       </div>
                       <div className="text-right shrink-0 flex items-center gap-2">
                         {isComplete && (
                           <span className="text-xs text-green-600 dark:text-green-400">
-                            ✓ 완료
+                            {t("documents.completed")}
                           </span>
                         )}
                         <div>
                           <div className="text-sm font-semibold">
                             {signed} / {total}
                           </div>
-                          <div className="text-xs text-zinc-400">사인 완료</div>
+                          <div className="text-xs text-zinc-400">
+                            {t("documents.signedCount")}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -194,11 +198,10 @@ export default async function DocumentsPage() {
         </section>
       )}
 
-      {/* 직원: 사인 완료한 문서 */}
       {!isAdmin && completed.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            ✓ 내가 사인한 문서
+            {t("documents.mySigned")}
           </h2>
           <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden text-sm">
             {completed.map((c) => (
@@ -211,20 +214,20 @@ export default async function DocumentsPage() {
                   <div className="text-xs text-zinc-400 mt-0.5">
                     ✓{" "}
                     {c.signedAt &&
-                      new Date(c.signedAt).toLocaleString("ko-KR")}
+                      new Date(c.signedAt).toLocaleString(dateLocale)}
                   </div>
                 </div>
                 <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
                   <PreviewButton
                     url={`/api/files/${c.document.id}?type=signed`}
                     title={c.document.title}
-                    label="👁 미리보기"
+                    label={t("documents.preview")}
                     compact
                   />
                   <DownloadButton
                     documentId={c.document.id}
                     type="signed"
-                    label="📥 사인본"
+                    label={t("documents.downloadSigned")}
                     compact
                   />
                 </div>
@@ -234,11 +237,10 @@ export default async function DocumentsPage() {
         </section>
       )}
 
-      {/* 빈 상태 (직원이 사인할 거 없을 때) */}
       {!isAdmin && pending.length === 0 && completed.length === 0 && (
         <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-12 text-center text-zinc-500">
           <div className="text-4xl mb-2">📄</div>
-          <div>아직 사인할 문서가 없습니다.</div>
+          <div>{t("documents.empty")}</div>
         </div>
       )}
     </div>

@@ -2,18 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/lib/i18n/client";
 
 type Item = {
   href: string;
   label: string;
   icon: string;
   badge?: number;
-};
-
-const ASSISTANT_ITEM: Item = {
-  href: "/assistant",
-  label: "AI",
-  icon: "🤖",
 };
 
 export function MobileNav({
@@ -24,19 +19,26 @@ export function MobileNav({
   pendingSignsCount: number;
 }) {
   const pathname = usePathname();
+  const t = useT();
 
   const baseItems: Item[] = [
-    { href: "/chat", label: "채팅", icon: "💬" },
+    { href: "/chat", label: t("nav.chat"), icon: "💬" },
     {
       href: "/documents",
-      label: "문서",
+      label: t("nav.documents"),
       icon: "📄",
       badge: pendingSignsCount > 0 ? pendingSignsCount : undefined,
     },
-    { href: "/dashboard", label: "홈", icon: "🏠" },
+    { href: "/dashboard", label: t("nav.home"), icon: "🏠" },
   ];
 
-  const ITEMS = userLevel >= 3 ? [...baseItems, ASSISTANT_ITEM] : baseItems;
+  const assistantItem: Item = {
+    href: "/assistant",
+    label: t("nav.assistantShort"),
+    icon: "🤖",
+  };
+
+  const ITEMS = userLevel >= 3 ? [...baseItems, assistantItem] : baseItems;
 
   return (
     <nav className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black flex justify-around">
