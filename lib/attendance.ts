@@ -127,3 +127,33 @@ export async function getRecentLeaveRequests(limit = 30) {
     },
   });
 }
+
+/**
+ * 캘린더 표시용 — 특정 월에 걸치는 승인된 휴가 목록.
+ * scope:
+ *   "mine" → 본인 것만 (직원용)
+ *   "all"  → 전 직원 (관리자용)
+ */
+export async function getMonthlyApprovedLeaves(
+  year: number,
+  monthIdx: number,
+  scope: "mine" | "all",
+  userId?: string,
+) {
+  const start = new Date(year, monthIdx, 1, 0, 0, 0, 0);
+  const end = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
+
+  return prisma.leaveRequest.findMany({
+    where: {
+      status: "APPROVED",
+      ...(scope === "mine" && userId ? { requesterId: userId } : {}),
+      // 이 월과 겹치는 모든 휴가 (start <= monthEnd && end >= monthStart)
+      startDate: { lte: end },
+      endDate: { gte: start },
+    },
+    include: {
+      requester: { select: { id: true, name: true } },
+    },
+    orderBy: { startDate: "asc" },
+  });
+}

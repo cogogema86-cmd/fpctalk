@@ -42,6 +42,7 @@ export function Sidebar({
       icon: "📄",
       badge: pendingSignsCount > 0 ? pendingSignsCount : undefined,
     },
+    { href: "/attendance", label: t("nav.attendance"), icon: "📅" },
     {
       href: "/install",
       label: t("nav.install"),
@@ -58,7 +59,6 @@ export function Sidebar({
   const adminNav: NavItem[] = [
     { href: "/admin/users", label: t("nav.adminUsers"), icon: "👥" },
     { href: "/admin/roles", label: t("nav.adminRoles"), icon: "🏷️" },
-    { href: "/attendance", label: t("nav.attendance"), icon: "📅" },
     { href: "/admin/leave", label: t("nav.adminLeave"), icon: "✅" },
   ];
 

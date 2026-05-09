@@ -38,10 +38,10 @@ export function MobileNav({
       icon: "📄",
       badge: pendingSignsCount > 0 ? pendingSignsCount : undefined,
     },
+    { href: "/attendance", label: t("nav.attendance"), icon: "📅" },
     ...(isAdmin
       ? [{ href: "/dashboard", label: t("nav.home"), icon: "🏠" }]
       : []),
-    { href: "/install", label: t("nav.install"), icon: "📲" },
   ];
 
   const assistantItem: Item = {

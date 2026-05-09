@@ -4,18 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import {
   calcLeaveDays,
   dayKey,
-  getMonthlyAttendance,
+  getMonthlyApprovedLeaves,
   getMyLeaveRequests,
-  getTodayAttendance,
 } from "@/lib/attendance";
-import { CheckCard } from "./_check-card";
 import { MonthCalendar } from "./_calendar";
 import { LeaveForm } from "./_leave-form";
 import { LeaveList } from "./_leave-list";
-import { getT } from "@/lib/i18n/server";
+import { getLocale, getT } from "@/lib/i18n/server";
 
 export default async function AttendancePage() {
-  // 관리자 전용 페이지
   const supabase = await createClient();
   const {
     data: { user: authUser },
@@ -27,30 +24,56 @@ export default async function AttendancePage() {
     include: { role: true },
   });
   if (!me) redirect("/login");
-  if (!me.role.isAdmin) {
-    // 일반 직원은 대시보드로
-    redirect("/dashboard");
-  }
 
-  const today = await getTodayAttendance(me.id);
-  const checkInRow = today.find((a) => a.type === "CHECK_IN");
-  const checkOutRow = today.find((a) => a.type === "CHECK_OUT");
+  const isAdmin = me.role.isAdmin;
+
+  const t = await getT();
+  const locale = await getLocale();
 
   const now = new Date();
   const year = now.getFullYear();
   const monthIdx = now.getMonth();
-  const monthly = await getMonthlyAttendance(me.id, year, monthIdx);
 
-  // byDay 빌드
-  const byDay: Record<string, { in: string | null; out: string | null }> = {};
-  for (const a of monthly) {
-    const k = dayKey(a.at);
-    if (!byDay[k]) byDay[k] = { in: null, out: null };
-    if (a.type === "CHECK_IN") byDay[k].in = a.at.toISOString();
-    if (a.type === "CHECK_OUT") byDay[k].out = a.at.toISOString();
+  // 캘린더용 휴가: 관리자=전체, 직원=본인
+  const monthlyLeaves = await getMonthlyApprovedLeaves(
+    year,
+    monthIdx,
+    isAdmin ? "all" : "mine",
+    me.id,
+  );
+
+  // 일자별 휴가 매핑 — 휴가 기간 모든 날짜에 entry 추가
+  const leavesByDay: Record<
+    string,
+    Array<{ id: string; name: string; type: string; isMine: boolean }>
+  > = {};
+  for (const lv of monthlyLeaves) {
+    const start = new Date(
+      Math.max(lv.startDate.getTime(), new Date(year, monthIdx, 1).getTime()),
+    );
+    const end = new Date(
+      Math.min(
+        lv.endDate.getTime(),
+        new Date(year, monthIdx + 1, 0, 23, 59, 59, 999).getTime(),
+      ),
+    );
+    for (
+      let d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      d <= end;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const k = dayKey(d);
+      if (!leavesByDay[k]) leavesByDay[k] = [];
+      leavesByDay[k].push({
+        id: lv.id,
+        name: lv.requester.name,
+        type: lv.type,
+        isMine: lv.requesterId === me.id,
+      });
+    }
   }
 
-  // 연차 정보
+  // 본인 연차 잔여 (휴가 신청 폼에 표시)
   const userInfo = await prisma.user.findUnique({
     where: { id: me.id },
     select: { annualLeaveTotal: true, annualLeaveUsed: true },
@@ -72,7 +95,7 @@ export default async function AttendancePage() {
     (userInfo?.annualLeaveUsed ?? 0) -
     reservedDays;
 
-  const t = await getT();
+  // 본인 휴가 신청 내역
   const leaveRequests = await getMyLeaveRequests(me.id);
   const leaveItems = leaveRequests.map((r) => ({
     id: r.id,
@@ -88,30 +111,41 @@ export default async function AttendancePage() {
   }));
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          {t("att.title")}
+          📅 {t("att.title")}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {t("att.subtitle")}
+          {isAdmin ? t("att.adminSubtitle") : t("att.staffSubtitle")}
         </p>
       </div>
 
-      {/* 출퇴근 + 캘린더 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1">
-          <CheckCard
-            checkInTime={checkInRow?.at.toISOString() ?? null}
-            checkOutTime={checkOutRow?.at.toISOString() ?? null}
-          />
+      {/* 범례 */}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded bg-blue-500" />
+          {t("att.calendarLegend.mine")}
         </div>
-        <div className="lg:col-span-2">
-          <MonthCalendar year={year} monthIdx={monthIdx} byDay={byDay} />
+        {isAdmin && (
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded bg-zinc-300 dark:bg-zinc-700" />
+            {t("att.calendarLegend.others")}
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded bg-amber-300" />
+          {t("att.calendarLegend.event")}
         </div>
       </div>
 
-      {/* 휴가 */}
+      <MonthCalendar
+        year={year}
+        monthIdx={monthIdx}
+        leavesByDay={leavesByDay}
+        locale={locale}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 space-y-3">
           <h2 className="font-semibold">{t("att.leaveRequest")}</h2>
