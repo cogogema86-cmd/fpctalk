@@ -15,16 +15,23 @@ export function MobileNav({
   isAdmin,
   userLevel,
   pendingSignsCount,
+  chatUnreadCount,
 }: {
   isAdmin: boolean;
   userLevel: number;
   pendingSignsCount: number;
+  chatUnreadCount: number;
 }) {
   const pathname = usePathname();
   const t = useT();
 
   const baseItems: Item[] = [
-    { href: "/chat", label: t("nav.chat"), icon: "💬" },
+    {
+      href: "/chat",
+      label: t("nav.chat"),
+      icon: "💬",
+      badge: chatUnreadCount > 0 ? chatUnreadCount : undefined,
+    },
     {
       href: "/documents",
       label: t("nav.documents"),

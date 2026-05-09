@@ -66,16 +66,36 @@ model User {
   updatedAt DateTime @updatedAt
 
   // 관계
-  messages       Message[]
-  chatMembers    ChatMember[]
-  attendances    Attendance[]
-  leaveRequests  LeaveRequest[]     @relation("LeaveRequester")
-  leaveApprovals LeaveRequest[]     @relation("LeaveApprover")
-  signRequests   SignatureRequest[] @relation("SignRequester")
-  signs          SignatureRequest[] @relation("SignSigner")
-  templates      DocumentTemplate[] @relation("TemplateUploader")
+  messages          Message[]
+  chatMembers       ChatMember[]
+  attendances       Attendance[]
+  leaveRequests     LeaveRequest[]     @relation("LeaveRequester")
+  leaveApprovals    LeaveRequest[]     @relation("LeaveApprover")
+  signRequests      SignatureRequest[] @relation("SignRequester")
+  signs             SignatureRequest[] @relation("SignSigner")
+  templates         DocumentTemplate[] @relation("TemplateUploader")
+  pushSubscriptions PushSubscription[]
 
   @@index([roleId])
+}
+
+// =====================================================
+// Web Push 구독 (브라우저별 endpoint)
+// =====================================================
+model PushSubscription {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint  String @unique
+  p256dh    String // 암호화 키 (base64url)
+  auth      String // 인증 secret (base64url)
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  lastUsed  DateTime?
+
+  @@index([userId])
 }
 
 // =====================================================

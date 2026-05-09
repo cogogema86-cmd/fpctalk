@@ -456,6 +456,21 @@ export const dictKo = {
   "ai.welcomeBody": "학원의 모든 채팅을 알고 있는 비서입니다. 누가 언제 무슨 말을 했는지 기억하고, 일정·약속·정보를 인용해 답변합니다.",
   "ai.welcomeNote": "한국어 / English 모두 OK · 질문 언어로 답변",
   "ai.thinkingDots": "생각 중...",
+
+  // ----- Install / PWA -----
+  "nav.install": "앱 설치",
+  "install.title": "앱 설치 / 알림",
+  "install.subtitle": "홈 화면에 FPCTalk을 추가하면 카카오톡처럼 아이콘으로 바로 진입하고, 새 메시지 / 사인 요청이 있을 때 빨간 숫자 배지가 표시됩니다.",
+  "install.tapHint": "홈 화면 추가 후 아이콘을 누르면 채팅 화면으로 바로 이동합니다.",
+  "install.step1Title": "1️⃣ 홈 화면에 추가",
+  "install.step1Body": "Android는 한 번 클릭, iPhone은 Safari의 공유 메뉴를 통해 추가합니다.",
+  "install.step2Title": "2️⃣ 알림 허용 (선택)",
+  "install.step2Body": "허용하면 앱이 닫혀 있어도 새 메시지·사인 요청 시 OS 알림이 뜨고, 홈 화면 아이콘에 카카오톡처럼 빨간 숫자가 표시됩니다.",
+  "install.step3Title": "3️⃣ 아이콘 다운로드 (선택)",
+  "install.step3Item1": "위 절차로 자동 설치되지 않을 경우, 아이콘 PNG 파일을 직접 받아 저장할 수 있습니다.",
+  "install.step3Item2": "다운로드한 아이콘을 사진/이미지로 저장 → 단축어/홈 화면 도구로 등록 가능.",
+  "install.step3Item3": "아이콘은 학원 로고로 언제든 교체 가능합니다.",
+  "install.note": "💡 iPhone(iOS 16.4 이상)은 반드시 Safari → '홈 화면에 추가' 한 후에만 푸시 알림과 아이콘 배지가 동작합니다. Android Chrome은 설치 즉시 동작합니다.",
 } as const;
 
 export type DictKey = keyof typeof dictKo;
@@ -885,6 +900,20 @@ export const dictEn: Record<DictKey, string> = {
   "ai.welcomeBody": "I'm an assistant aware of every conversation in the academy. I remember who said what and when, and cite schedules, appointments and info in my answers.",
   "ai.welcomeNote": "Korean / English both supported · I reply in the language you asked in",
   "ai.thinkingDots": "Thinking...",
+
+  "nav.install": "Install",
+  "install.title": "Install app / Notifications",
+  "install.subtitle": "Add FPCTalk to your home screen and you'll launch directly like KakaoTalk, with a red badge count for new messages and signature requests.",
+  "install.tapHint": "Tap the icon after adding to home screen to jump straight to chat.",
+  "install.step1Title": "1️⃣ Add to home screen",
+  "install.step1Body": "Android: one tap. iPhone: use Safari's share menu.",
+  "install.step2Title": "2️⃣ Allow notifications (optional)",
+  "install.step2Body": "Allow to receive OS notifications for new messages / signature requests even when the app is closed, with a red number badge on the home screen icon.",
+  "install.step3Title": "3️⃣ Download icon (optional)",
+  "install.step3Item1": "If automatic install isn't available, you can download the icon PNGs.",
+  "install.step3Item2": "Save the downloaded icon and register it via shortcut/home tools.",
+  "install.step3Item3": "The icon can be swapped for the academy logo any time.",
+  "install.note": "💡 iPhone (iOS 16.4+) requires installing via Safari → 'Add to Home Screen' before push notifications and icon badge work. Android Chrome works as soon as installed.",
 };
 
 export const dict = { ko: dictKo, en: dictEn } as const;

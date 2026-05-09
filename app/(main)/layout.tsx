@@ -6,7 +6,10 @@ import { LogoutButton } from "./_components/logout-button";
 import { Sidebar } from "./_components/sidebar";
 import { MobileNav } from "./_components/mobile-nav";
 import { LocaleToggle } from "./_components/locale-toggle";
+import { BadgeSync } from "./_components/badge-sync";
+import { ServiceWorkerRegister } from "./_components/sw-register";
 import { getLocale, getT } from "@/lib/i18n/server";
+import { countChatUnread } from "@/lib/chat";
 
 export default async function MainLayout({
   children,
@@ -51,9 +54,12 @@ export default async function MainLayout({
   const isAdmin = user.role.isAdmin;
   const userLevel = user.role.defaultLevel;
 
-  const pendingSignsCount = await prisma.signatureRequest.count({
-    where: { signerId: user.id, status: "PENDING" },
-  });
+  const [pendingSignsCount, chatUnreadCount] = await Promise.all([
+    prisma.signatureRequest.count({
+      where: { signerId: user.id, status: "PENDING" },
+    }),
+    countChatUnread(user.id),
+  ]);
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-black">
@@ -87,6 +93,7 @@ export default async function MainLayout({
           isAdmin={isAdmin}
           userLevel={userLevel}
           pendingSignsCount={pendingSignsCount}
+          chatUnreadCount={chatUnreadCount}
         />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
@@ -95,7 +102,14 @@ export default async function MainLayout({
         isAdmin={isAdmin}
         userLevel={userLevel}
         pendingSignsCount={pendingSignsCount}
+        chatUnreadCount={chatUnreadCount}
       />
+
+      <BadgeSync
+        chatUnread={chatUnreadCount}
+        pendingSigns={pendingSignsCount}
+      />
+      <ServiceWorkerRegister />
     </div>
   );
 }

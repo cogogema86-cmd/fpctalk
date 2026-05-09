@@ -12,6 +12,7 @@ import {
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
 import { askAI } from "@/lib/ai";
+import { sendPushToUsers } from "@/lib/push";
 
 // =====================================================
 // 직원 선택 → 1:1 채팅 시작
@@ -94,13 +95,45 @@ export async function sendMessageAction(
   const content = formData.get("content") as string;
   if (!chatId || !content?.trim()) return {};
 
+  let chatTitle = "FPCTalk";
   try {
     await sendMessage(chatId, me.id, content);
     await markAsRead(chatId, me.id);
+
+    // 채팅 정보 (제목 + 멤버 수신자 목록)
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        name: true,
+        type: true,
+        levelRequired: true,
+        members: {
+          select: { userId: true },
+        },
+      },
+    });
+    if (chat) {
+      chatTitle = chat.name ?? chatTitle;
+      // 멤버십이 명시된 사람들 + 본인 제외
+      const recipients = chat.members
+        .map((m) => m.userId)
+        .filter((id) => id !== me.id);
+      if (recipients.length > 0) {
+        const preview = content.trim().slice(0, 100);
+        // fire-and-forget — 응답 지연 방지
+        void sendPushToUsers(recipients, {
+          title: chat.name ?? me.name,
+          body: `${me.name}: ${preview}`,
+          url: `/chat/${chatId}`,
+          tag: `chat-${chatId}`,
+        });
+      }
+    }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "전송 실패" };
   }
 
+  void chatTitle;
   // Realtime이 알아서 새 메시지를 푸시할 거지만, fallback으로 revalidate
   revalidatePath(`/chat/${chatId}`);
   revalidatePath("/chat");

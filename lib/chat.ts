@@ -228,6 +228,12 @@ export async function getMyChats(userId: string) {
   return items;
 }
 
+/** 본인 unread 메시지 총합 (사이드바 배지/탭 title용) */
+export async function countChatUnread(userId: string): Promise<number> {
+  const items = await getMyChats(userId);
+  return items.reduce((s, c) => s + c.unread, 0);
+}
+
 // =====================================================
 // 그룹 채팅 생성 (명시 멤버 또는 레벨 기반)
 // =====================================================

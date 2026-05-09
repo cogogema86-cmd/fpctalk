@@ -16,7 +16,33 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "FPCTalk",
-  description: "Francis Parker Academy staff messenger + AI assistant",
+  description: "Francis Parker Collegiate 학원 메신저",
+  applicationName: "FPCTalk",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "FPCTalk",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180" },
+    ],
+  },
+};
+
+export const viewport: import("next").Viewport = {
+  themeColor: "#0F4D3A",
+  initialScale: 1,
+  width: "device-width",
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({

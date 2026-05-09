@@ -15,10 +15,12 @@ export function Sidebar({
   isAdmin,
   userLevel,
   pendingSignsCount,
+  chatUnreadCount,
 }: {
   isAdmin: boolean;
   userLevel: number;
   pendingSignsCount: number;
+  chatUnreadCount: number;
 }) {
   const pathname = usePathname();
   const t = useT();
@@ -28,12 +30,22 @@ export function Sidebar({
     ...(isAdmin
       ? [{ href: "/dashboard", label: t("nav.dashboard"), icon: "🏠" }]
       : []),
-    { href: "/chat", label: t("nav.chat"), icon: "💬" },
+    {
+      href: "/chat",
+      label: t("nav.chat"),
+      icon: "💬",
+      badge: chatUnreadCount > 0 ? chatUnreadCount : undefined,
+    },
     {
       href: "/documents",
       label: t("nav.documents"),
       icon: "📄",
       badge: pendingSignsCount > 0 ? pendingSignsCount : undefined,
+    },
+    {
+      href: "/install",
+      label: t("nav.install"),
+      icon: "📲",
     },
   ];
 

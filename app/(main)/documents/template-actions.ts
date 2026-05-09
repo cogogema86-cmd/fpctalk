@@ -11,6 +11,7 @@ import {
   saveTemplate,
   type ExternalSignerInput,
 } from "@/lib/documents";
+import { sendPushToUsers } from "@/lib/push";
 
 async function requireAdmin(): Promise<
   { ok: true; meId: string } | { ok: false; error: string }
@@ -170,6 +171,13 @@ export async function requestSignaturesFromTemplateAction(
   // 직원 사인 요청
   if (signerIdsRaw.length > 0) {
     await createSignatureRequests(doc.id, guard.meId, signerIdsRaw);
+    // 푸시 알림 (직원만 — 외부 사인자는 토큰 링크라 별도)
+    void sendPushToUsers(signerIdsRaw, {
+      title: "✍️ 새 사인 요청",
+      body: tpl.name,
+      url: "/documents",
+      tag: `sign-${doc.id}`,
+    });
   }
 
   // 외부 사인 요청
