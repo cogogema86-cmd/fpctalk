@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ResetPasswordButton } from "./_components/reset-password-button";
+import { getLocale, getT } from "@/lib/i18n/server";
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -15,11 +16,14 @@ export default async function AdminUsersPage() {
     where: { authId: authUser.id },
     include: { role: true },
   });
+  const t = await getT();
+  const locale = await getLocale();
+  const dateLocale = locale === "en" ? "en-US" : "ko-KR";
 
   if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자 전용 페이지입니다.
+        {t("docDetail.adminOnly")}
       </div>
     );
   }
@@ -37,17 +41,17 @@ export default async function AdminUsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            직원 관리
+            {t("adm.users.title")}
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            현재 등록된 직원 {users.length}명
+            {t("adm.users.totalUnit")} {users.length}
           </p>
         </div>
         <Link
           href="/admin/users/new"
           className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
         >
-          + 직원 추가
+          {t("adm.users.add")}
         </Link>
       </div>
 
@@ -55,12 +59,24 @@ export default async function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">아이디</th>
-              <th className="text-left px-4 py-2 font-medium">이름</th>
-              <th className="text-left px-4 py-2 font-medium">역할</th>
-              <th className="text-left px-4 py-2 font-medium">직책</th>
-              <th className="text-left px-4 py-2 font-medium">가입일</th>
-              <th className="text-left px-4 py-2 font-medium">관리</th>
+              <th className="text-left px-4 py-2 font-medium">
+                {t("adm.users.username")}
+              </th>
+              <th className="text-left px-4 py-2 font-medium">
+                {t("adm.users.name")}
+              </th>
+              <th className="text-left px-4 py-2 font-medium">
+                {t("adm.users.role")}
+              </th>
+              <th className="text-left px-4 py-2 font-medium">
+                {t("adm.users.title2")}
+              </th>
+              <th className="text-left px-4 py-2 font-medium">
+                {t("adm.users.joined")}
+              </th>
+              <th className="text-left px-4 py-2 font-medium">
+                {t("adm.users.manage")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -80,17 +96,19 @@ export default async function AdminUsersPage() {
                   {u.title || "—"}
                 </td>
                 <td className="px-4 py-2 text-zinc-500">
-                  {u.createdAt.toLocaleDateString("ko-KR")}
+                  {u.createdAt.toLocaleDateString(dateLocale)}
                 </td>
                 <td className="px-4 py-2 space-x-2 whitespace-nowrap">
                   <Link
                     href={`/admin/users/${u.id}/edit`}
                     className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    편집
+                    {t("adm.users.edit")}
                   </Link>
                   {u.id === me.id ? (
-                    <span className="text-xs text-zinc-400">본인</span>
+                    <span className="text-xs text-zinc-400">
+                      {t("adm.users.self")}
+                    </span>
                   ) : (
                     <ResetPasswordButton
                       userId={u.id}
