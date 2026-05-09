@@ -1,0 +1,199 @@
+# FPCTalk 작업 로그 (2026-05-10 세션)
+
+다음 세션에서 이어 작업할 때 참고하세요. 모든 변경은 main 브랜치에 푸시되어 Vercel(www.fpctalk.com)에 자동 배포됨.
+
+---
+
+## 🚀 이번 세션에서 끝낸 큰 줄기
+
+### 1. 디지털 사인 보강
+- **비-PDF 파일 사인 시 별도 "Signature Certificate" PDF 생성** — 한글 파일·HWP·DOCX 등에 사인하면 원본은 보존하고 사인자/시간/IP/사인 이미지가 담긴 증명 PDF가 만들어짐
+- **사인 요청 취소 기능** — 관리자가 PENDING 상태 요청을 취소 가능 (직원/외부 모두)
+- **사인본 미리보기 모달** — 다운로드 외에 iframe으로 즉시 PDF 확인. 관리자 캠페인 페이지 + 직원 본인 사인본
+- **한글 폰트 임베딩 (Noto Sans KR)** — `lib/fonts.ts`가 jsDelivr CDN에서 OTF를 fetch + 모듈 캐시. `pdf-lib + @pdf-lib/fontkit` + subset 임베드라 PDF 용량 작게 유지. fetch 실패 시 ASCII 치환 fallback.
+
+### 2. 다국어 (KO/EN)
+- **lib/i18n** 인프라 — flat dictionary + 서버 `getT()`/`getLocale()` + 클라이언트 `useT()`/`LocaleProvider` + `setLocaleAction` cookie
+- **우측 상단 KO/EN 토글** — 모든 페이지 헤더 + 외부 사인 페이지 + 로그인 페이지
+- **번역 적용 페이지**: 사이드바·모바일nav·헤더, 대시보드, /documents 일체, /chat 일체, /attendance, /assistant, /settings/password, /admin/users(목록), /admin/leave, /install, /sign/[token]
+- **HTML lang 속성 + 날짜 포맷** locale에 따라 자동 전환
+- **남은 폴리시**: `/admin/users/new`+`/[id]/edit` 폼, `/admin/roles`, attendance 서브 컴포넌트 (LeaveForm/LeaveList/Calendar 라벨), `/admin/leave _pending-row`, 채팅 그룹 폼 일부 inline 텍스트 — 전부 admin이 한국어로 쓰는 화면이라 후순위
+
+### 3. 일반 직원 대시보드 제거
+- 사이드바·모바일 nav에서 admin 아니면 대시보드 메뉴 숨김
+- `/dashboard` 직접 접근 시 admin 아니면 `/chat`으로 redirect
+- 헤더 로고: admin이면 `/dashboard`, 아니면 `/chat`
+
+### 4. 카카오톡 같은 PWA + 푸시 + 배지
+- **인앱 배지** — 사이드바 채팅·문서 메뉴, 브라우저 탭 title (N) FPCTalk, favicon에 빨간 숫자 dot, 10초 폴링 + visibilitychange 즉시 갱신, 카운트 변경 시 router.refresh로 사이드바 SSR 동기화
+- **PWA 인프라** — `app/manifest.ts` (start_url=/chat, theme=#0F4D3A), `public/sw.js` (install/activate/fetch/push/notificationclick), `public/icons/*` 자동 생성 (`scripts/generate-icons.ts` + sharp)
+- **Web Push** — `web-push` + `@pdf-lib/fontkit`/`@fontsource/noto-sans-kr` 패키지, prisma `PushSubscription` 모델, VAPID 키 발급, `lib/push.ts` (`sendPushToUser` + stale prune), 메시지 전송/사인 요청 시 자동 발송
+- **App Badge** — `navigator.setAppBadge(n)` — Android Chrome / iOS 16.4+ / Edge / Safari macOS 16.4+
+- **/install 3카드** — 🍏 iPhone / 🤖 Android / 💻 Windows·macOS 자동 OS 감지 + 추천 카드 강조
+  - Android/Desktop: `beforeinstallprompt` → 1탭 설치
+  - iOS: 4단계 가이드 + 인앱 브라우저 감지 + 알림 차단 시 iOS 설정 안내 (자동 이동 불가 명시)
+  - 카드 안에서 알림 허용 결과 ✅/❌ 메시지 표시
+- **🔍 시스템 진단 패널** — HTTPS, SW 등록·active, Push API, Notification API, 알림 권한, 푸시 구독, **VAPID env 등록 여부**, setAppBadge 지원, installable, standalone — 사용자가 어디서 막혔는지 즉시 진단 가능
+- **자동 설치 배너** — 진입 시 화면 하단 카드 자동 노출, 1일 dismiss, /install 페이지에선 표시 안 함
+
+### 5. 근태 → 캘린더 전환
+- 메뉴 라벨 "근태" → **"📅 캘린더"** (모든 직원 접근 가능)
+- 출퇴근 체크 카드 제거
+- 직원: 본인 휴가 신청 + 본인 승인된 휴가 캘린더 표시
+- 관리자: 전 직원 승인된 휴가 + 학원 행사 모두 캘린더 표시 (다른 사람은 회색, 본인은 파란색, 학원 행사는 amber)
+- `/admin/leave`는 그대로 — 관리자가 승인하는 화면
+
+### 6. AI 학원 행사 자동 등록
+- **prisma**: `Event`, `EventAcknowledgement`, `MessageType.EVENT_PROPOSAL`, `EventSource(MANUAL/CHAT_AI)`
+- **`lib/event-extract.ts`** — Gemini Flash JSON 모드로 메시지에서 일정 추출
+  - 짧거나 날짜·행사 키워드 없으면 즉시 false (비용 절감 prefilter)
+  - KST 타임존 ISO, 1년 미래/24h 과거 거부
+- **흐름**: 관리자가 채팅에 일정 메시지 → AI 자동 추출 → 같은 채팅에 amber `EVENT_PROPOSAL` 메시지 추가 → 작성자만 [✓ 등록]/[취소] 보임 → 등록 시 채팅 멤버 전원에게 푸시 + 캘린더 amber로 표시
+- **대시보드 D-7 행사 카드** + 미확인 카운트 강조 ("🔔 놓치지 마세요" 빨간 카드) + [확인] 버튼 (EventAcknowledgement)
+
+### 7. 자동 로그인
+- 로그인 폼에 **자동 로그인** 체크박스 (기본 ON) + 안내
+- 체크 ON → `fpctalk-rememberMe=1` cookie + Supabase auth cookie maxAge **30일**
+- 체크 OFF → cookie 삭제 + Supabase auth cookie를 **session cookie**로 강제 (브라우저 닫으면 로그아웃, 공용 PC 안전)
+- 마지막 username을 localStorage에 저장 → 다음 방문 시 자동 입력 (rememberMe ON일 때만)
+- 로그아웃 시 rememberMe 쿠키 명시적 제거
+- 구현: `lib/supabase/server.ts` `applyRememberMe` 헬퍼, middleware도 동일 처리
+
+### 8. 모바일 nav 가로 스크롤
+- 항목 6개일 때 (학원장: 채팅·문서·캘린더·홈·설치·AI) 화면 초과 시 가로 스와이프
+- 페이지 진입 시 활성 메뉴 자동 가운데 스크롤
+- 우측 페이드 그라디언트로 "더 있음" 시각 힌트
+- iOS Safari `touch-pan-x` 보장
+
+---
+
+## ⚠️ 사용자 작업 필요
+
+### Vercel 환경변수 (필수 — 푸시 알림 동작 조건)
+Vercel → 프로젝트 → Settings → Environment Variables → 4개 추가 + Redeploy:
+
+```
+VAPID_PUBLIC_KEY=BJ11WgnItGMN9gay4jQqkhe3wy8LzFJlIiJhmOkTlGO88xTexSZfADD5OOvUTioIt95ylLqnZGdinL6x0723nz0
+VAPID_PRIVATE_KEY=k7ALaTJNTTr-gQeNkf_9GUvvWtnSPLc8L-k9uxfokR4
+VAPID_SUBJECT=mailto:cogogema86@gmail.com
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=BJ11WgnItGMN9gay4jQqkhe3wy8LzFJlIiJhmOkTlGO88xTexSZfADD5OOvUTioIt95ylLqnZGdinL6x0723nz0
+```
+
+검증: `https://www.fpctalk.com/install` → 🔍 시스템 진단 펼치기 → "VAPID 공개키 (env): 🟢 configured"
+
+### 학원 로고로 아이콘 교체 (선택)
+현재는 단순 "FPC" 녹색 배경 + 흰 글자. Francis Parker Collegiate 로고로 바꾸려면:
+1. 사용자 컴퓨터의 `Z:\HDD1\K\bi\동그라미로고.png`를 프로젝트의 `public/icons/source.png`로 복사
+2. 터미널: `npx tsx scripts/generate-icons.ts`
+3. `git add public/ && git commit -m "chore: update icons" && git push`
+
+---
+
+## 🟢 현재 시스템 상태 (커밋 1d2c399 기준)
+
+| 카테고리 | 상태 |
+|---|---|
+| 인증 | username 합성 이메일 + Supabase Auth + 자동 로그인 체크박스 |
+| 채팅 | 1:1, 그룹, 레벨 자동 채팅, AI 호출(@AI/@비서), 번역, 미서명 배지 |
+| AI 비서 | 학원장(level≥3) 전용, Flash/Pro 자동 라우팅, 30일 채팅 메모리 |
+| 디지털 사인 | PDF 합성 + 비-PDF 증명서, 한글 폰트, 미리보기, 취소, 외부 사인 토큰 |
+| 캘린더 | 모든 직원 접근, 휴가 + 행사, AI 자동 일정 등록 |
+| 근태/연차 | 신청 (모두) + 승인 (관리자) — 출퇴근은 제거 |
+| 다국어 | KO/EN 토글, 핵심 화면 완성, 일부 admin 폼 폴리시 남음 |
+| PWA | manifest, SW, 아이콘, 자동 설치 배너, 3-OS 카드 |
+| 푸시 알림 | VAPID, 메시지·사인 자동 발송, setAppBadge — Vercel env 4개 등록 필요 |
+| 인앱 배지 | 사이드바·탭·favicon·홈 아이콘 모두 10초 폴링 + 즉시 router.refresh |
+| 다국어 외부 사인 | 학부모용 페이지에 KO/EN 토글 |
+
+---
+
+## 🛣️ 다음 작업 후보 (우선순위 순)
+
+### 가치 큼
+1. **직원에게도 D-7 행사 알림** — 지금 대시보드는 admin 전용이라 직원이 못 봄. /chat 또는 /attendance 상단에 배너 또는 별도 위치
+2. **외부 사인자 자동 알림** — 학부모 링크를 카톡/문자/이메일 자동 발송 (현재는 관리자가 수동 복사)
+3. **행사 수정/삭제** — 등록한 학원 행사를 나중에 편집할 수 있는 화면
+4. **AI 추출 정확도 튜닝** — 한국어 메시지에서 false positive/negative 모니터링하면서 prompt 조정
+5. **HWP/Word → PDF 자동 변환** — CloudConvert/ConvertAPI 외부 서비스로 본문에 사인 박힌 PDF 생성
+
+### 폴리시
+6. 남은 i18n: `/admin/users/new+edit`, `/admin/roles`, attendance 서브, `/admin/leave _pending-row`
+7. 관리자가 다른 직원 출근 직접 입력 (현재 출근 기능 자체가 제거됨 — 필요하면 다시 추가)
+8. 메시지 검색
+9. 정확한 unread 카운트 (지금은 polling)
+10. 그룹 멤버 추가/삭제
+11. PDF 안 특정 위치에 사인 배치
+12. 직원 비활성화/삭제
+13. 메시지 첨부 (이미지/파일)
+
+---
+
+## 📁 주요 파일 위치
+
+```
+fpctalk/
+├── lib/
+│   ├── i18n/                        # 다국어 인프라
+│   │   ├── dictionary.ts            # KO/EN 사전 (수정 시 양쪽 모두)
+│   │   ├── server.ts                # 서버용 getT, getLocale
+│   │   └── client.tsx               # 클라이언트 useT, LocaleProvider
+│   ├── push.ts                      # web-push 발송 헬퍼 (sendPushToUser)
+│   ├── fonts.ts                     # Noto Sans KR fetch + 캐시
+│   ├── event-extract.ts             # Gemini로 메시지 → 일정 추출
+│   ├── events.ts                    # 다가오는 행사 + ack
+│   ├── supabase/server.ts           # applyRememberMe + REMEMBER_ME_COOKIE
+│   ├── documents.ts                 # 사인 + 증명 PDF + 한글 폰트
+│   ├── attendance.ts                # 휴가 + getMonthlyApprovedLeaves
+│   └── chat.ts                      # 채팅 + countChatUnread
+├── app/
+│   ├── manifest.ts                  # PWA manifest
+│   ├── (auth)/login/                # 자동 로그인 체크박스 추가됨
+│   ├── (main)/
+│   │   ├── _components/
+│   │   │   ├── badge-sync.tsx       # 탭 title + favicon + setAppBadge
+│   │   │   ├── install-banner.tsx   # 자동 노출 설치 배너
+│   │   │   ├── locale-toggle.tsx
+│   │   │   ├── mobile-nav.tsx       # 가로 스크롤 + scrollIntoView
+│   │   │   ├── sidebar.tsx
+│   │   │   └── sw-register.tsx
+│   │   ├── attendance/              # 캘린더 (출퇴근 제거)
+│   │   ├── chat/                    # EventProposalBubble 추가됨
+│   │   ├── dashboard/_upcoming-events.tsx
+│   │   ├── documents/[id]/_preview-button.tsx, _cancel-button.tsx
+│   │   ├── events/actions.ts        # 행사 ack/approve/cancel
+│   │   └── install/                 # 3카드 + 진단 패널
+│   ├── _actions/
+│   │   ├── locale.ts
+│   │   └── push.ts                  # subscribePushAction
+│   └── api/
+│       ├── badges/route.ts          # /api/badges 폴링 엔드포인트
+│       └── files/[id]/route.ts      # 다운로드 프록시
+├── public/
+│   ├── sw.js                        # service worker (fetch + push)
+│   ├── icons/                       # 자동 생성된 PWA 아이콘
+│   └── favicon.ico, favicon-16/32.png
+├── scripts/
+│   ├── generate-icons.ts            # PWA 아이콘 빌더 (sharp)
+│   └── generate-vapid.ts            # VAPID 키 발급 (1회)
+└── prisma/schema.prisma             # PushSubscription, Event, EventAcknowledgement 추가됨
+```
+
+## 🔑 첫 관리자 계정
+```
+아이디: admin
+비밀번호: Fpctalk2026
+이름: 김태규
+역할: 원장 (PRINCIPAL, level 3, isAdmin)
+```
+
+## 🔗 핵심 URL
+- 프로덕션: https://www.fpctalk.com
+- 백업: https://fpctalk.vercel.app
+- 진단: https://www.fpctalk.com/install (🔍 시스템 진단 펼치기)
+- GitHub: https://github.com/cogogema86-cmd/fpctalk
+
+## 📝 메모
+- DB 비번: 영문+숫자만 (URL 파싱 이슈 주의)
+- Supabase Realtime publication에 Message 테이블 등록되어 있음
+- R2 버킷: `fpctalk` (Asia-Pacific) — `STORAGE_PROVIDER=r2`
+- VAPID 키 분실 시 `npx tsx scripts/generate-vapid.ts` 새로 발급 (단 모든 클라이언트 푸시 구독은 무효화됨)
