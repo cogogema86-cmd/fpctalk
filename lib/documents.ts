@@ -259,21 +259,175 @@ export async function submitSignature(params: SubmitSignatureParams) {
     req.document.storagePath,
   );
 
-  // 비-PDF: 합성 없이 원본 그대로 사용
+  // 비-PDF: 원본은 보존하고 별도 "사인 증명 PDF" 생성
   if (!isPdf) {
+    let signerLabelCert: string;
+    if (signerId) {
+      const signer = await prisma.user.findUnique({
+        where: { id: signerId },
+        select: { username: true, name: true },
+      });
+      signerLabelCert = signer?.name
+        ? `${signer.name} (${signer.username ?? signerId})`
+        : (signer?.username ?? signerId);
+    } else {
+      signerLabelCert = `External: ${req.externalName ?? "unknown"}`;
+    }
+
+    const certPdf = await PDFDocument.create();
+    const certPage = certPdf.addPage();
+    const certFont = await certPdf.embedFont(StandardFonts.Helvetica);
+    const certBoldFont = await certPdf.embedFont(StandardFonts.HelveticaBold);
+    const certSig = await certPdf.embedPng(sigBuffer);
+    const { width: pageW, height: pageH } = certPage.getSize();
+
+    certPage.drawText("Signature Certificate", {
+      x: 50,
+      y: pageH - 80,
+      size: 24,
+      font: certBoldFont,
+      color: rgb(0, 0, 0),
+    });
+
+    let cy = pageH - 130;
+    certPage.drawText("Document", {
+      x: 50,
+      y: cy,
+      size: 11,
+      font: certBoldFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    cy -= 18;
+    certPage.drawText(`Title: ${req.document.title}`.slice(0, 80), {
+      x: 50,
+      y: cy,
+      size: 11,
+      font: certFont,
+    });
+    cy -= 16;
+    certPage.drawText(`Original type: ${req.document.mimeType}`, {
+      x: 50,
+      y: cy,
+      size: 9,
+      font: certFont,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    const nowCert = new Date();
+    cy -= 32;
+    certPage.drawText("Signer", {
+      x: 50,
+      y: cy,
+      size: 11,
+      font: certBoldFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    cy -= 18;
+    certPage.drawText(signerLabelCert.slice(0, 80), {
+      x: 50,
+      y: cy,
+      size: 11,
+      font: certFont,
+    });
+    cy -= 16;
+    certPage.drawText(`Signed at: ${nowCert.toISOString()}`, {
+      x: 50,
+      y: cy,
+      size: 9,
+      font: certFont,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    if (ip) {
+      cy -= 14;
+      certPage.drawText(`IP: ${ip}`, {
+        x: 50,
+        y: cy,
+        size: 9,
+        font: certFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    }
+    if (userAgent) {
+      cy -= 14;
+      certPage.drawText(`Agent: ${userAgent.slice(0, 70)}`, {
+        x: 50,
+        y: cy,
+        size: 9,
+        font: certFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    }
+
+    cy -= 36;
+    certPage.drawText("Signature", {
+      x: 50,
+      y: cy,
+      size: 11,
+      font: certBoldFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    const certDims = certSig.scale(1);
+    const certMaxW = 300;
+    const certScale =
+      certDims.width > certMaxW ? certMaxW / certDims.width : 1;
+    const cw = certDims.width * certScale;
+    const ch = certDims.height * certScale;
+    cy -= ch + 20;
+    certPage.drawImage(certSig, { x: 50, y: cy, width: cw, height: ch });
+    certPage.drawRectangle({
+      x: 45,
+      y: cy - 10,
+      width: pageW - 90,
+      height: ch + 30,
+      borderColor: rgb(0.7, 0.7, 0.7),
+      borderWidth: 1,
+    });
+
+    certPage.drawText(
+      "This certificate confirms electronic signature of the referenced document.",
+      {
+        x: 50,
+        y: 60,
+        size: 9,
+        font: certFont,
+        color: rgb(0.5, 0.5, 0.5),
+      },
+    );
+    certPage.drawText(
+      "The original file is stored separately and remains unchanged.",
+      {
+        x: 50,
+        y: 46,
+        size: 9,
+        font: certFont,
+        color: rgb(0.5, 0.5, 0.5),
+      },
+    );
+
+    const certBytes = await certPdf.save();
+    const certBuffer = Buffer.from(certBytes);
+    const certKey = `signed/${signerId ?? `ext_${requestId}`}/${Date.now()}_certificate.pdf`;
+    const { storagePath: certPath } = await uploadFile({
+      storageType: docStorageType,
+      path: certKey,
+      fileName: `cert_${requestId}.pdf`,
+      buffer: certBuffer,
+      mimeType: "application/pdf",
+    });
+
     await prisma.signatureRequest.update({
       where: { id: requestId },
       data: {
         status: "SIGNED",
         signaturePath: storedSigPath,
-        signedPdfPath: req.document.storagePath, // 원본 그대로
-        signedAt: new Date(),
+        signedPdfPath: certPath,
+        signedAt: nowCert,
         signerIp: ip ?? null,
         signerAgent: userAgent ?? null,
         ...(signerId === null ? { accessToken: null } : {}),
       },
     });
-    return { signedPath: req.document.storagePath };
+    return { signedPath: certPath };
   }
 
   // 3) PDF에 사인 페이지 합성
@@ -637,6 +791,33 @@ export async function getSignatureRequestForSigner(
     include: {
       document: true,
       requester: { select: { name: true, username: true } },
+    },
+  });
+}
+
+export async function cancelSignatureRequest(
+  requestId: string,
+  adminId: string,
+): Promise<void> {
+  if (!(await isUserAdmin(adminId))) {
+    throw new Error("관리자만 사인 요청을 취소할 수 있습니다.");
+  }
+  const req = await prisma.signatureRequest.findUnique({
+    where: { id: requestId },
+    include: { document: { select: { uploaderId: true } } },
+  });
+  if (!req) throw new Error("요청을 찾을 수 없습니다.");
+  if (req.document.uploaderId !== adminId) {
+    throw new Error("본인이 보낸 요청만 취소할 수 있습니다.");
+  }
+  if (req.status !== "PENDING") {
+    throw new Error("이미 처리된 요청은 취소할 수 없습니다.");
+  }
+  await prisma.signatureRequest.update({
+    where: { id: requestId },
+    data: {
+      status: "CANCELLED",
+      accessToken: null,
     },
   });
 }

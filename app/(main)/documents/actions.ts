@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getMe } from "@/lib/chat";
-import { submitSignature } from "@/lib/documents";
+import { cancelSignatureRequest, submitSignature } from "@/lib/documents";
 
 // =====================================================
 // 직원: 사인 제출
@@ -50,5 +50,34 @@ export async function submitSignatureAction(
     return { error: e instanceof Error ? e.message : "사인 처리 실패" };
   }
 
+  return { ok: true };
+}
+
+// =====================================================
+// 관리자: PENDING 사인 요청 취소
+// =====================================================
+export type CancelSignState = {
+  error?: string;
+  ok?: boolean;
+};
+
+export async function cancelSignatureRequestAction(
+  _prev: CancelSignState,
+  formData: FormData,
+): Promise<CancelSignState> {
+  const me = await getMe();
+  if (!me) return { error: "로그인이 필요합니다." };
+
+  const requestId = formData.get("requestId") as string;
+  const documentId = formData.get("documentId") as string | null;
+  if (!requestId) return { error: "요청 ID가 없습니다." };
+
+  try {
+    await cancelSignatureRequest(requestId, me.id);
+    revalidatePath("/documents");
+    if (documentId) revalidatePath(`/documents/${documentId}`);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "취소 실패" };
+  }
   return { ok: true };
 }

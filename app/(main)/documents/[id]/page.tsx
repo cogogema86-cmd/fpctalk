@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getDocumentDetailForAdmin } from "@/lib/documents";
 import { DownloadButton } from "./_download-button";
 import { CopyLinkButton } from "./_copy-link-button";
+import { CancelSignButton } from "./_cancel-button";
 
 export default async function DocumentDetailPage({
   params,
@@ -151,6 +152,13 @@ export default async function DocumentDetailPage({
                         compact
                       />
                     )}
+                    {r.status === "PENDING" && (
+                      <CancelSignButton
+                        requestId={r.id}
+                        documentId={doc.id}
+                        signerLabel={s?.name ?? r.signerId ?? ""}
+                      />
+                    )}
                   </div>
                 </li>
               );
@@ -215,6 +223,13 @@ export default async function DocumentDetailPage({
                           signRequestId={r.id}
                           label="📥 사인본"
                           compact
+                        />
+                      )}
+                      {r.status === "PENDING" && (
+                        <CancelSignButton
+                          requestId={r.id}
+                          documentId={doc.id}
+                          signerLabel={r.externalName ?? "외부"}
                         />
                       )}
                     </div>
