@@ -90,7 +90,20 @@ export function Diagnostics() {
     );
   }
 
+  const isIos = /iphone|ipad|ipod/i.test(d.ua);
+  const iosNeedsInstall = isIos && !d.standalone;
+
   return (
+    <>
+      {iosNeedsInstall && (
+        <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-3 text-sm text-amber-900 dark:text-amber-100 mb-2">
+          <div className="font-semibold">⚠️ iOS는 PWA 설치 후에만 푸시 알림 동작</div>
+          <div className="text-xs mt-1">
+            아래 진단의 빨간 항목들(PushManager / Notification / 알림 권한 / setAppBadge)은
+            현재 일반 Safari 탭이라서 표시되는 것입니다. <strong>홈 화면에 추가 → 그 아이콘으로 실행</strong>하시면 모두 🟢 supported로 바뀌고 알림 허용 버튼도 동작합니다.
+          </div>
+        </div>
+      )}
     <details
       open={open}
       onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
@@ -115,36 +128,76 @@ export function Diagnostics() {
         <Row ok={d.swActive} label="SW active">
           {d.swActive ? "active" : "not active — 새로고침 필요"}
         </Row>
-        <Row ok={d.pushSupported} label="PushManager API">
-          {d.pushSupported ? "supported" : "unsupported"}
+        <Row
+          ok={d.pushSupported}
+          warn={iosNeedsInstall && !d.pushSupported}
+          label="PushManager API"
+        >
+          {d.pushSupported
+            ? "supported"
+            : iosNeedsInstall
+              ? "iOS standalone 모드에서만 (홈 화면 추가 후 그 아이콘으로 실행해야 활성화)"
+              : "unsupported"}
         </Row>
-        <Row ok={d.notificationApi} label="Notification API">
-          {d.notificationApi ? "supported" : "unsupported"}
+        <Row
+          ok={d.notificationApi}
+          warn={iosNeedsInstall && !d.notificationApi}
+          label="Notification API"
+        >
+          {d.notificationApi
+            ? "supported"
+            : iosNeedsInstall
+              ? "iOS standalone 모드에서만"
+              : "unsupported"}
         </Row>
         <Row
           ok={d.notifPermission === "granted"}
-          warn={d.notifPermission === "denied"}
+          warn={d.notifPermission === "denied" || iosNeedsInstall}
           label="알림 권한"
         >
-          {d.notifPermission}
+          {iosNeedsInstall && d.notifPermission === "unsupported"
+            ? "iOS standalone에서만 요청 가능"
+            : d.notifPermission}
         </Row>
-        <Row ok={d.pushSubscribed} label="푸시 구독">
-          {d.pushSubscribed ? "subscribed" : "not subscribed"}
+        <Row
+          ok={d.pushSubscribed}
+          warn={iosNeedsInstall}
+          label="푸시 구독"
+        >
+          {d.pushSubscribed
+            ? "subscribed"
+            : iosNeedsInstall
+              ? "PWA 설치 후 가능"
+              : "not subscribed"}
         </Row>
         <Row ok={d.vapidConfigured} label="VAPID 공개키 (env)">
           {d.vapidConfigured
             ? "configured"
             : "❌ 미설정 — Vercel Environment Variables에 NEXT_PUBLIC_VAPID_PUBLIC_KEY 등록 필요"}
         </Row>
-        <Row ok={d.setAppBadgeSupported} label="setAppBadge API">
-          {d.setAppBadgeSupported ? "supported" : "unsupported (Firefox 등)"}
+        <Row
+          ok={d.setAppBadgeSupported}
+          warn={iosNeedsInstall && !d.setAppBadgeSupported}
+          label="setAppBadge API"
+        >
+          {d.setAppBadgeSupported
+            ? "supported"
+            : iosNeedsInstall
+              ? "iOS standalone에서만"
+              : "unsupported (Firefox 등)"}
         </Row>
-        <Row ok={d.installable} label="설치 가능 (beforeinstallprompt)">
+        <Row
+          ok={d.installable || isIos}
+          warn={isIos}
+          label="설치 가능 (beforeinstallprompt)"
+        >
           {d.standalone
             ? "이미 설치됨"
-            : d.installable
-              ? "yes — 1탭 설치 가능"
-              : "no — 이미 설치/거부됐거나 PWA 조건 미충족 (수동 설치 필요)"}
+            : isIos
+              ? "iOS는 영구히 미지원 — Safari 공유 → 홈 화면에 추가로 진행 (정상)"
+              : d.installable
+                ? "yes — 1탭 설치 가능"
+                : "no — 이미 설치/거부됐거나 PWA 조건 미충족 (수동 설치 필요)"}
         </Row>
         <Row ok={d.standalone} label="standalone 모드">
           {d.standalone ? "yes (PWA로 실행 중)" : "no (브라우저에서 실행 중)"}
@@ -154,6 +207,7 @@ export function Diagnostics() {
         </div>
       </div>
     </details>
+    </>
   );
 }
 
