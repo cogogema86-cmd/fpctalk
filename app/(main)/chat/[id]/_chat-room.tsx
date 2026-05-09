@@ -16,6 +16,8 @@ type Message = {
   type: string;
   createdAt: string;
   user: { id: string; username: string; name: string } | null;
+  /** 낙관적 UI: 전송 클릭 직후 임시 메시지 (Realtime 도착 시 교체) */
+  pending?: boolean;
 };
 
 type Member = {
@@ -123,7 +125,9 @@ export function ChatRoom({
             createdAt: string;
           };
           setMessages((prev) => {
+            // 이미 있으면 무시 (중복 방지)
             if (prev.some((m) => m.id === row.id)) return prev;
+
             let user: { id: string; username: string; name: string } | null =
               null;
             if (row.userId === meId) {
@@ -132,8 +136,17 @@ export function ChatRoom({
               const m = memberMap.get(row.userId);
               if (m) user = m;
             }
+
+            // 본인 메시지가 도착하면 같은 내용의 pending 임시 메시지 제거 (교체)
+            const filtered =
+              row.userId === meId
+                ? prev.filter(
+                    (m) => !(m.pending && m.content === row.content),
+                  )
+                : prev;
+
             return [
-              ...prev,
+              ...filtered,
               {
                 id: row.id,
                 chatId: row.chatId,
@@ -161,11 +174,36 @@ export function ChatRoom({
   }, [chatId, meId, meName, members]);
 
   const handleSubmit = (formData: FormData) => {
-    const content = formData.get("content") as string;
-    if (!content?.trim()) return;
+    const raw = formData.get("content") as string;
+    const content = raw?.trim();
+    if (!content) return;
+
+    // 낙관적 UI: 임시 메시지 즉시 추가 (Realtime 도착 시 교체됨)
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        chatId,
+        userId: meId,
+        content,
+        type: "TEXT",
+        createdAt: new Date().toISOString(),
+        user: { id: meId, username: "", name: meName },
+        pending: true,
+      },
+    ]);
+
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  // 서버 액션 실패 시 pending 임시 메시지 정리
+  useEffect(() => {
+    if (state.error) {
+      setMessages((prev) => prev.filter((m) => !m.pending));
+    }
+  }, [state.error]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -262,10 +300,13 @@ function MessageBubble({
   isMine: boolean;
   showAuthor: boolean;
 }) {
+  const isPending = !!message.pending;
   return (
     <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[70%] ${isMine ? "items-end" : "items-start"} flex flex-col`}
+        className={`max-w-[70%] ${isMine ? "items-end" : "items-start"} flex flex-col transition-opacity ${
+          isPending ? "opacity-60" : ""
+        }`}
       >
         {showAuthor && message.user && (
           <div className="text-xs text-zinc-500 mb-0.5 px-1">
@@ -281,11 +322,13 @@ function MessageBubble({
         >
           {message.content}
         </div>
-        <div className="text-[10px] text-zinc-400 mt-0.5 px-1">
-          {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+        <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-1">
+          {isPending && <span className="text-zinc-400">전송 중...</span>}
+          {!isPending &&
+            new Date(message.createdAt).toLocaleTimeString("ko-KR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
         </div>
       </div>
     </div>
