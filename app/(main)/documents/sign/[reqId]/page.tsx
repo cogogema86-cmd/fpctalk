@@ -6,6 +6,7 @@ import {
   getSignatureRequestForSigner,
 } from "@/lib/documents";
 import { SignCanvas } from "./_canvas";
+import { LangViewer } from "./_lang-viewer";
 
 export default async function SignPage({
   params,
@@ -19,17 +20,21 @@ export default async function SignPage({
   const req = await getSignatureRequestForSigner(reqId, me.id);
   if (!req) notFound();
 
-  // 원본 PDF signed URL (5분 유효)
-  let pdfUrl: string | null = null;
+  // 한국어/영어 파일 signed URL (5분 유효)
+  let koUrl: string | null = null;
+  let enUrl: string | null = null;
   try {
-    pdfUrl = await getDocumentSignedUrl(req.document.storagePath, 300);
-  } catch {
-    // 무시
+    koUrl = await getDocumentSignedUrl(req.document.storagePath, 300);
+  } catch {}
+  if (req.document.storagePathEn) {
+    try {
+      enUrl = await getDocumentSignedUrl(req.document.storagePathEn, 300);
+    } catch {}
   }
 
   if (req.status !== "PENDING") {
     return (
-      <div className="max-w-2xl mx-auto p-6 space-y-4">
+      <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
         <Link
           href="/documents"
           className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -43,8 +48,11 @@ export default async function SignPage({
     );
   }
 
+  const isPdfKo = req.document.mimeType === "application/pdf";
+  const isPdfEn = req.document.mimeTypeEn === "application/pdf";
+
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-4">
+    <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
       <Link
         href="/documents"
         className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -53,7 +61,7 @@ export default async function SignPage({
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-zinc-50">
           {req.document.title}
         </h1>
         {req.document.description && (
@@ -62,34 +70,21 @@ export default async function SignPage({
           </p>
         )}
         <div className="mt-1 text-xs text-zinc-400">
-          요청자: {req.requester.name} · 페이지 {req.document.pageCount ?? "?"}
+          요청자: {req.requester.name}
         </div>
       </div>
 
-      {/* 문서 보기 */}
+      {/* 문서 보기 (한국어/영어 토글) */}
       <section className="space-y-2">
         <h2 className="font-semibold text-sm">📄 문서 확인</h2>
-        {pdfUrl ? (
-          <>
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium"
-            >
-              📥 PDF 새 창에서 열기
-            </a>
-            <iframe
-              src={pdfUrl}
-              className="w-full h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
-              title="문서 미리보기"
-            />
-          </>
-        ) : (
-          <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700">
-            PDF 링크 발급에 실패했습니다. 새로고침 후 다시 시도해주세요.
-          </div>
-        )}
+        <LangViewer
+          koUrl={koUrl}
+          enUrl={enUrl}
+          isPdfKo={isPdfKo}
+          isPdfEn={isPdfEn}
+          koFileName={req.document.title}
+          enFileName={req.document.title}
+        />
       </section>
 
       {/* 사인 캔버스 */}

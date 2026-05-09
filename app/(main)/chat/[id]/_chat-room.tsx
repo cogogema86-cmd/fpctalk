@@ -289,10 +289,56 @@ export function ChatRoom({
   }, [state.error]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 픽커 열려있을 때 Esc로 닫기
+    if (showMentionPicker && e.key === "Escape") {
+      e.preventDefault();
+      setShowMentionPicker(false);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       formRef.current?.requestSubmit();
     }
+  };
+
+  // @ 입력 감지: 시작 또는 공백 다음의 "@" → 픽커
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const ta = e.target;
+    const cursor = ta.selectionStart;
+    const before = ta.value.slice(0, cursor);
+    if (before.length === 0) {
+      setShowMentionPicker(false);
+      return;
+    }
+    const lastChar = before[before.length - 1];
+    if (lastChar !== "@") {
+      setShowMentionPicker(false);
+      return;
+    }
+    // @ 앞이 비어있거나 공백/줄바꿈이어야 함
+    const beforeAt = before[before.length - 2];
+    const isAtStart =
+      before.length === 1 ||
+      beforeAt === " " ||
+      beforeAt === "\n" ||
+      beforeAt === "\t";
+    setShowMentionPicker(isAtStart);
+  };
+
+  const insertMention = (mention: "AI" | "비서") => {
+    const ta = inputRef.current;
+    if (!ta) return;
+    const cursor = ta.selectionStart;
+    const before = ta.value.slice(0, cursor);
+    const after = ta.value.slice(cursor);
+    // 마지막 @ 를 제거하고 @{mention} 삽입
+    const newBefore = before.slice(0, -1) + `@${mention} `;
+    ta.value = newBefore + after;
+    ta.setSelectionRange(newBefore.length, newBefore.length);
+    ta.focus();
+    setShowMentionPicker(false);
   };
 
   return (
@@ -329,9 +375,35 @@ export function ChatRoom({
       <form
         ref={formRef}
         action={handleSubmit}
-        className="border-t border-zinc-200 dark:border-zinc-800 p-3 bg-white dark:bg-black"
+        className="relative border-t border-zinc-200 dark:border-zinc-800 p-3 bg-white dark:bg-black"
       >
         <input type="hidden" name="chatId" value={chatId} />
+
+        {/* @ 자동완성 픽커 */}
+        {showMentionPicker && (
+          <div className="absolute bottom-full left-3 mb-1 z-10 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-1 min-w-[200px]">
+            <div className="text-[10px] text-zinc-400 px-2 py-1">
+              AI 비서 호출
+            </div>
+            <button
+              type="button"
+              onClick={() => insertMention("AI")}
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm"
+            >
+              <span className="font-mono">@AI</span>{" "}
+              <span className="text-zinc-400 text-xs">— 영어로 호출</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => insertMention("비서")}
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm"
+            >
+              <span className="font-mono">@비서</span>{" "}
+              <span className="text-zinc-400 text-xs">— 한국어로 호출</span>
+            </button>
+          </div>
+        )}
+
         {state.error && (
           <div className="mb-2 text-xs text-red-600 dark:text-red-400">
             {state.error}
@@ -341,11 +413,16 @@ export function ChatRoom({
           <textarea
             ref={inputRef}
             name="content"
-            placeholder="메시지를 입력하세요... (Enter 전송 / Shift+Enter 줄바꿈 / @비서 질문 으로 AI 비서 호출)"
+            placeholder="메시지 입력 (Enter 전송 / @ 입력 시 비서 호출)"
             rows={1}
             disabled={isPending}
             onKeyDown={handleKeyDown}
-            className="flex-1 resize-none rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50 max-h-32"
+            onChange={handleInputChange}
+            onBlur={() => {
+              // 픽커 클릭 처리 시간을 두고 닫기
+              setTimeout(() => setShowMentionPicker(false), 150);
+            }}
+            className="flex-1 resize-none rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50 max-h-32"
           />
           <button
             type="submit"

@@ -52,7 +52,7 @@ export async function uploadDocumentAction(
     }
   }
 
-  if (!file || file.size === 0) return { error: "PDF 파일을 선택해주세요." };
+  if (!file || file.size === 0) return { error: "파일을 선택해주세요." };
   if (!title) return { error: "제목을 입력해주세요." };
   if (signerIdsRaw.length === 0 && externals.length === 0) {
     return { error: "사인 대상자를 직원 또는 외부 1명 이상 추가해주세요." };

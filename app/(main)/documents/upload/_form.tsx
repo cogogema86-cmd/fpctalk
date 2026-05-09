@@ -78,16 +78,19 @@ export function UploadForm({ candidates }: { candidates: Candidate[] }) {
 
   return (
     <form action={formAction} className="space-y-4">
-      <Field label="PDF 파일" required>
+      <Field label="문서 파일" required>
         <input
           name="file"
           type="file"
-          accept="application/pdf"
           required
           disabled={isPending}
           className="block w-full text-sm border border-zinc-300 dark:border-zinc-700 rounded-md p-2 bg-white dark:bg-zinc-900"
         />
-        <p className="mt-1 text-xs text-zinc-500">최대 10MB · PDF만</p>
+        <p className="mt-1 text-xs text-zinc-500">
+          최대 20MB · PDF / HWP / DOCX / XLSX / 이미지 등 모든 포맷 가능
+          <br />
+          (PDF만 사인이 자동 합성됨, 그 외는 원본 + 사인 별도 보관)
+        </p>
       </Field>
 
       <Field label="제목" required>

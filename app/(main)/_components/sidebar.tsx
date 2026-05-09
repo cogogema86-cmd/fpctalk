@@ -7,13 +7,9 @@ type NavItem = {
   href: string;
   label: string;
   icon: string;
+  /** 우측에 빨간 배지로 표시할 카운트 (있을 때만) */
+  badge?: number;
 };
-
-const BASE_NAV: NavItem[] = [
-  { href: "/dashboard", label: "대시보드", icon: "🏠" },
-  { href: "/chat", label: "채팅", icon: "💬" },
-  { href: "/documents", label: "문서", icon: "📄" },
-];
 
 // 레벨 3+ 만 보임 (학원장급)
 const ASSISTANT_NAV: NavItem = {
@@ -22,7 +18,7 @@ const ASSISTANT_NAV: NavItem = {
   icon: "🤖",
 };
 
-const ADMIN_NAV: NavItem[] = [
+const ADMIN_NAV_BASE: NavItem[] = [
   { href: "/admin/users", label: "직원 관리", icon: "👥" },
   { href: "/admin/roles", label: "역할 관리", icon: "🏷️" },
   { href: "/attendance", label: "근태", icon: "📅" },
@@ -32,17 +28,30 @@ const ADMIN_NAV: NavItem[] = [
 export function Sidebar({
   isAdmin,
   userLevel,
+  pendingSignsCount,
 }: {
   isAdmin: boolean;
   userLevel: number;
+  pendingSignsCount: number;
 }) {
   const pathname = usePathname();
   const showAssistant = userLevel >= 3;
 
+  const baseNav: NavItem[] = [
+    { href: "/dashboard", label: "대시보드", icon: "🏠" },
+    { href: "/chat", label: "채팅", icon: "💬" },
+    {
+      href: "/documents",
+      label: "문서",
+      icon: "📄",
+      badge: pendingSignsCount > 0 ? pendingSignsCount : undefined,
+    },
+  ];
+
   return (
     <nav className="hidden md:flex w-56 shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
       <ul className="flex-1 py-3 space-y-0.5 px-2">
-        {BASE_NAV.map((item) => (
+        {baseNav.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
 
@@ -64,7 +73,7 @@ export function Sidebar({
             <li className="pt-4 pb-1 px-3 text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               관리
             </li>
-            {ADMIN_NAV.map((item) => (
+            {ADMIN_NAV_BASE.map((item) => (
               <NavLink key={item.href} item={item} pathname={pathname} />
             ))}
           </>
@@ -93,7 +102,12 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         }`}
       >
         <span className="text-base">{item.icon}</span>
-        <span>{item.label}</span>
+        <span className="flex-1">{item.label}</span>
+        {item.badge !== undefined && item.badge > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-red-500 text-white text-[11px] font-semibold px-1.5">
+            {item.badge > 99 ? "99+" : item.badge}
+          </span>
+        )}
       </Link>
     </li>
   );

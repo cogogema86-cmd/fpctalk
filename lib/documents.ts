@@ -26,8 +26,20 @@ async function isUserAdmin(userId: string): Promise<boolean> {
 }
 
 // =====================================================
-// 1. 문서 업로드 (관리자)
+// 1. 문서 업로드 (관리자) — 다중 포맷 지원
+// PDF는 페이지 수 자동 추출, 그 외는 원본 그대로
 // =====================================================
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+function safeFileName(s: string): string {
+  return s.replace(/[^a-zA-Z0-9가-힣_-]/g, "_").slice(0, 30);
+}
+
+function extFromName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
 export async function uploadDocument(
   uploaderId: string,
   file: File,
@@ -37,44 +49,218 @@ export async function uploadDocument(
   if (!(await isUserAdmin(uploaderId))) {
     throw new Error("관리자만 문서를 업로드할 수 있습니다.");
   }
-  if (file.type !== "application/pdf") {
-    throw new Error("PDF 파일만 업로드할 수 있습니다.");
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error("파일 크기는 20MB 이하여야 합니다.");
   }
-  if (file.size > 10 * 1024 * 1024) {
-    throw new Error("파일 크기는 10MB 이하여야 합니다.");
+  if (file.size === 0) {
+    throw new Error("파일이 비어있습니다.");
   }
 
-  // PDF 페이지 수 추출
-  const arrayBuffer = await file.arrayBuffer();
-  const pdfDoc = await PDFDocument.load(arrayBuffer);
-  const pageCount = pdfDoc.getPageCount();
+  const isPdf = file.type === "application/pdf";
 
-  // Storage 업로드
+  let pageCount: number | null = null;
+  if (isPdf) {
+    const arrayBuffer = await file.arrayBuffer();
+    try {
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      pageCount = pdfDoc.getPageCount();
+    } catch {
+      // PDF 파싱 실패 — 그래도 업로드는 진행
+    }
+  }
+
   const ts = Date.now();
-  const safe = title.replace(/[^a-zA-Z0-9가-힣_-]/g, "_").slice(0, 30);
-  const storagePath = `${uploaderId}/${ts}_${safe}.pdf`;
+  const ext = extFromName(file.name) || (isPdf ? "pdf" : "bin");
+  const storagePath = `${uploaderId}/${ts}_${safeFileName(title)}.${ext}`;
 
   const admin = createAdminClient();
   const { error: uploadError } = await admin.storage
     .from(DOC_BUCKET)
-    .upload(storagePath, file, { contentType: "application/pdf" });
+    .upload(storagePath, file, {
+      contentType: file.type || "application/octet-stream",
+    });
   if (uploadError) {
     throw new Error(`업로드 실패: ${uploadError.message}`);
   }
 
-  // DB row
   const doc = await prisma.document.create({
     data: {
       uploaderId,
       title,
       description: description?.trim() || null,
       storagePath,
-      mimeType: "application/pdf",
+      mimeType: file.type || "application/octet-stream",
       pageCount,
     },
   });
 
   return { id: doc.id, storagePath };
+}
+
+// =====================================================
+// 1-B. 양식 템플릿 업로드 (한국어 + 영어 옵션)
+// =====================================================
+export type SaveTemplateInput = {
+  uploaderId: string;
+  name: string;
+  description?: string;
+  koFile: File;
+  enFile?: File | null;
+};
+
+async function uploadOneFile(
+  uploaderId: string,
+  file: File,
+  prefix: string,
+): Promise<{ path: string; mime: string; fileName: string }> {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`${prefix} 파일이 20MB를 초과합니다.`);
+  }
+  if (file.size === 0) {
+    throw new Error(`${prefix} 파일이 비어있습니다.`);
+  }
+  const ts = Date.now() + Math.floor(Math.random() * 1000);
+  const ext = extFromName(file.name) || "bin";
+  const safeBase = safeFileName(file.name.slice(0, file.name.lastIndexOf(".") || file.name.length));
+  const path = `templates/${uploaderId}/${ts}_${prefix}_${safeBase}.${ext}`;
+  const admin = createAdminClient();
+  const { error } = await admin.storage
+    .from(DOC_BUCKET)
+    .upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+  if (error) throw new Error(`${prefix} 업로드 실패: ${error.message}`);
+  return {
+    path,
+    mime: file.type || "application/octet-stream",
+    fileName: file.name,
+  };
+}
+
+export async function saveTemplate(input: SaveTemplateInput) {
+  if (!(await isUserAdmin(input.uploaderId))) {
+    throw new Error("관리자만 양식을 저장할 수 있습니다.");
+  }
+  if (!input.name?.trim()) throw new Error("양식 이름을 입력해주세요.");
+
+  const ko = await uploadOneFile(input.uploaderId, input.koFile, "ko");
+  const en = input.enFile
+    ? await uploadOneFile(input.uploaderId, input.enFile, "en")
+    : null;
+
+  const tpl = await prisma.documentTemplate.create({
+    data: {
+      uploaderId: input.uploaderId,
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      koPath: ko.path,
+      koMime: ko.mime,
+      koFileName: ko.fileName,
+      enPath: en?.path,
+      enMime: en?.mime,
+      enFileName: en?.fileName,
+    },
+  });
+  return tpl;
+}
+
+export async function listTemplates(uploaderId: string) {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 양식 목록을 볼 수 있습니다.");
+  }
+  return prisma.documentTemplate.findMany({
+    where: { uploaderId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function deleteTemplate(uploaderId: string, templateId: string) {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 양식을 삭제할 수 있습니다.");
+  }
+  const tpl = await prisma.documentTemplate.findUnique({
+    where: { id: templateId },
+  });
+  if (!tpl || tpl.uploaderId !== uploaderId) {
+    throw new Error("양식을 찾을 수 없습니다.");
+  }
+  // Storage 파일 삭제 (실패해도 DB는 진행)
+  const admin = createAdminClient();
+  const paths = [tpl.koPath, tpl.enPath].filter(Boolean) as string[];
+  if (paths.length > 0) {
+    await admin.storage.from(DOC_BUCKET).remove(paths).catch(() => {});
+  }
+  await prisma.documentTemplate.delete({ where: { id: templateId } });
+}
+
+// =====================================================
+// 1-C. 양식으로 전 직원 사인 요청
+// 양식 파일을 Document로 복사 + 본인 제외 모든 직원에게 SignatureRequest 생성
+// =====================================================
+export async function requestSignaturesFromTemplate(
+  uploaderId: string,
+  templateId: string,
+): Promise<{ documentId: string; signersCount: number }> {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 사인 요청을 보낼 수 있습니다.");
+  }
+  const tpl = await prisma.documentTemplate.findUnique({
+    where: { id: templateId },
+  });
+  if (!tpl || tpl.uploaderId !== uploaderId) {
+    throw new Error("양식을 찾을 수 없습니다.");
+  }
+
+  // PDF면 페이지 수 추출 시도
+  let pageCount: number | null = null;
+  if (tpl.koMime === "application/pdf") {
+    const admin = createAdminClient();
+    const { data: file } = await admin.storage
+      .from(DOC_BUCKET)
+      .download(tpl.koPath);
+    if (file) {
+      try {
+        const buf = Buffer.from(await file.arrayBuffer());
+        pageCount = (await PDFDocument.load(buf)).getPageCount();
+      } catch {}
+    }
+  }
+
+  // Document 생성 (양식 파일을 그대로 참조)
+  const doc = await prisma.document.create({
+    data: {
+      uploaderId,
+      title: tpl.name,
+      description: tpl.description,
+      storagePath: tpl.koPath,
+      mimeType: tpl.koMime,
+      pageCount,
+      storagePathEn: tpl.enPath,
+      mimeTypeEn: tpl.enMime,
+      templateId: tpl.id,
+    },
+  });
+
+  // 본인 제외 모든 직원
+  const others = await prisma.user.findMany({
+    where: { id: { not: uploaderId } },
+    select: { id: true },
+  });
+
+  if (others.length > 0) {
+    await prisma.signatureRequest.createMany({
+      data: others.map((u) => ({
+        documentId: doc.id,
+        requesterId: uploaderId,
+        signerId: u.id,
+        status: "PENDING" as const,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  return { documentId: doc.id, signersCount: others.length };
 }
 
 // =====================================================
@@ -234,14 +420,33 @@ export async function submitSignature(params: SubmitSignatureParams) {
     });
   if (sigErr) throw new Error(`사인 저장 실패: ${sigErr.message}`);
 
-  // 2) 원본 PDF 다운로드
+  // 2) 원본 파일 다운로드
+  // PDF는 사인 합성, 그 외 포맷은 원본 그대로 사용 (사인 PNG는 별도 보관)
+  const isPdf = req.document.mimeType === "application/pdf";
   const { data: docFile, error: docErr } = await admin.storage
     .from(DOC_BUCKET)
     .download(req.document.storagePath);
   if (docErr || !docFile) {
-    throw new Error(`원본 PDF 다운로드 실패: ${docErr?.message}`);
+    throw new Error(`원본 파일 다운로드 실패: ${docErr?.message}`);
   }
   const docBuffer = Buffer.from(await docFile.arrayBuffer());
+
+  // 비-PDF 처리: 합성 없이 원본 경로 그대로 사용 + 사인은 별도로 저장
+  if (!isPdf) {
+    await prisma.signatureRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "SIGNED",
+        signaturePath: sigPath,
+        signedPdfPath: req.document.storagePath, // 원본을 그대로
+        signedAt: new Date(),
+        signerIp: ip ?? null,
+        signerAgent: userAgent ?? null,
+        ...(signerId === null ? { accessToken: null } : {}),
+      },
+    });
+    return { signedPath: req.document.storagePath };
+  }
 
   // 3) PDF에 사인 + 메타 페이지 합성
   const pdfDoc = await PDFDocument.load(docBuffer);

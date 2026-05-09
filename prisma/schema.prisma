@@ -73,6 +73,7 @@ model User {
   leaveApprovals LeaveRequest[]     @relation("LeaveApprover")
   signRequests   SignatureRequest[] @relation("SignRequester")
   signs          SignatureRequest[] @relation("SignSigner")
+  templates      DocumentTemplate[] @relation("TemplateUploader")
 
   @@index([roleId])
 }
@@ -218,15 +219,54 @@ model Document {
   uploaderId  String
   title       String
   description String?  @db.Text
+  // 한국어(또는 단일 언어) 파일 — 기존 호환성 유지
   storagePath String
   mimeType    String   @default("application/pdf")
   pageCount   Int?
 
+  // 영어 버전 (선택, 바이링구얼 문서용)
+  storagePathEn String?
+  mimeTypeEn    String?
+
+  // 어떤 양식 템플릿에서 만들어졌는지 (옵션)
+  templateId String?
+
   createdAt DateTime @default(now())
 
   signatureRequests SignatureRequest[]
+  template          DocumentTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([uploaderId])
+  @@index([templateId])
+}
+
+// =====================================================
+// 문서 양식 보관함 (관리자가 자주 쓰는 양식)
+// =====================================================
+model DocumentTemplate {
+  id          String   @id @default(cuid())
+  uploaderId  String
+  name        String   // 예: "2026 연차휴가신청서"
+  description String?  @db.Text
+
+  // 한국어 버전 (필수)
+  koPath     String
+  koMime     String
+  koFileName String
+
+  // 영어 버전 (선택)
+  enPath     String?
+  enMime     String?
+  enFileName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  uploader User       @relation("TemplateUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@index([uploaderId])
+  @@map("document_templates")
 }
 
 model SignatureRequest {

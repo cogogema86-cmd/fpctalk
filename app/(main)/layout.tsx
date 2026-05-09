@@ -38,6 +38,11 @@ export default async function MainLayout({
   const isAdmin = user.role.isAdmin;
   const userLevel = user.role.defaultLevel;
 
+  // 본인이 사인해야 할 미서명 카운트 (사이드바 배지용)
+  const pendingSignsCount = await prisma.signatureRequest.count({
+    where: { signerId: user.id, status: "PENDING" },
+  });
+
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-black">
       <header className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center justify-between bg-white dark:bg-black shrink-0">
@@ -62,11 +67,18 @@ export default async function MainLayout({
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar isAdmin={isAdmin} userLevel={userLevel} />
+        <Sidebar
+          isAdmin={isAdmin}
+          userLevel={userLevel}
+          pendingSignsCount={pendingSignsCount}
+        />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
 
-      <MobileNav userLevel={userLevel} />
+      <MobileNav
+        userLevel={userLevel}
+        pendingSignsCount={pendingSignsCount}
+      />
     </div>
   );
 }
