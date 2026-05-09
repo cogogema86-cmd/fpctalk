@@ -20,6 +20,7 @@ const BASE_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin/users", label: "직원 관리", icon: "👥" },
   { href: "/admin/roles", label: "역할 관리", icon: "🏷️" },
+  { href: "/admin/leave", label: "연차 승인", icon: "✅" },
 ];
 
 export function Sidebar({ isAdmin }: { isAdmin: boolean }) {
