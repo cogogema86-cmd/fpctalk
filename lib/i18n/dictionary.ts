@@ -534,6 +534,7 @@ export const dictKo = {
   "install.cards.iosNotifDenied": "iOS 설정 앱 → FPCTalk → 알림 → \"허용\"으로 변경해야 합니다. (보안상 이 페이지에서 설정 앱을 자동으로 열 수는 없습니다.)",
   "install.cards.iosShare": "📤 공유 메뉴는 어디에?",
   "install.cards.iosShareBody": "iPhone Safari: 화면 하단 가운데 ⬆️ 아이콘 / iPad Safari: 화면 상단 우측 ⬆️ 아이콘",
+  "install.cards.iosBlankIconTip": "🚫 홈 화면에 추가했는데 아이콘이 회색/빈 상자로 나오나요? Safari 캐시 문제입니다 — iPhone 설정 → Safari → 방문 기록 및 웹 사이트 데이터 지우기 → 다시 사이트 진입 후 추가하세요.",
   // Android
   "install.cards.androidTitle": "🤖 Android",
   "install.cards.androidWhy": "Chrome/Edge 1탭 자동 설치",
@@ -1055,6 +1056,7 @@ export const dictEn: Record<DictKey, string> = {
   "install.cards.iosNotifDenied": "Open the iOS Settings app → FPCTalk → Notifications → \"Allow\". (For security, web pages can't auto-open the Settings app.)",
   "install.cards.iosShare": "📤 Where is the share menu?",
   "install.cards.iosShareBody": "iPhone Safari: ⬆️ icon at the bottom-center / iPad Safari: ⬆️ icon at the top-right",
+  "install.cards.iosBlankIconTip": "🚫 Home screen icon shows as gray/blank box? Safari cache issue — iPhone Settings → Safari → Clear History and Website Data → revisit the site → Add to Home Screen.",
   "install.cards.androidTitle": "🤖 Android",
   "install.cards.androidWhy": "Chrome/Edge one-tap install",
   "install.cards.androidInstall": "📲 Install now",

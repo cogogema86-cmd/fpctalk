@@ -33,7 +33,10 @@ export const metadata: Metadata = {
       { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
     ],
     apple: [
-      { url: "/icons/apple-touch-icon.png", sizes: "180x180" },
+      { url: "/icons/apple-touch-icon-180.png?v=2", sizes: "180x180" },
+      { url: "/icons/apple-touch-icon-167.png?v=2", sizes: "167x167" },
+      { url: "/icons/apple-touch-icon-152.png?v=2", sizes: "152x152" },
+      { url: "/icons/apple-touch-icon-120.png?v=2", sizes: "120x120" },
     ],
   },
 };
@@ -56,6 +59,41 @@ export default async function RootLayout({
       lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* iOS Safari는 link 태그를 head에서 직접 찾음.
+            Next.js Metadata API와 별도로 명시 — 일부 iOS 버전에서 fallback 보장. */}
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="/icons/apple-touch-icon-180.png?v=2"
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="167x167"
+          href="/icons/apple-touch-icon-167.png?v=2"
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="152x152"
+          href="/icons/apple-touch-icon-152.png?v=2"
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="120x120"
+          href="/icons/apple-touch-icon-120.png?v=2"
+        />
+        <link
+          rel="apple-touch-icon-precomposed"
+          href="/icons/apple-touch-icon-180.png?v=2"
+        />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="FPCTalk" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="default"
+        />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider locale={locale}>{children}</LocaleProvider>
       </body>

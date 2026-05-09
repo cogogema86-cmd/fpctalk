@@ -111,10 +111,27 @@ async function main() {
     await getSourceBuffer(512, { maskable: true }),
   ]);
 
-  // Apple touch icon
+  // Apple touch icons — iOS는 다양한 디바이스 사이즈를 link로 명시해야 안정적으로 잡힘.
+  // iPad Pro 12.9 = 167, iPad = 152, iPhone = 180, 구형 iPhone = 120.
   tasks.push([
-    path.join(ICON_DIR, "apple-touch-icon.png"),
+    path.join(ICON_DIR, "apple-touch-icon.png"), // 기본 180
     await getSourceBuffer(180),
+  ]);
+  tasks.push([
+    path.join(ICON_DIR, "apple-touch-icon-180.png"),
+    await getSourceBuffer(180),
+  ]);
+  tasks.push([
+    path.join(ICON_DIR, "apple-touch-icon-167.png"),
+    await getSourceBuffer(167),
+  ]);
+  tasks.push([
+    path.join(ICON_DIR, "apple-touch-icon-152.png"),
+    await getSourceBuffer(152),
+  ]);
+  tasks.push([
+    path.join(ICON_DIR, "apple-touch-icon-120.png"),
+    await getSourceBuffer(120),
   ]);
 
   // favicon.ico (multi-size)

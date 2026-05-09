@@ -346,12 +346,17 @@ function IosCard(props: {
       )}
 
       {!props.isStandalone && props.recommended && (
-        <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 p-2 text-[11px] text-zinc-600 dark:text-zinc-400">
-          <div className="font-medium mb-0.5">
-            {t("install.cards.iosShare")}
+        <>
+          <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 p-2 text-[11px] text-zinc-600 dark:text-zinc-400">
+            <div className="font-medium mb-0.5">
+              {t("install.cards.iosShare")}
+            </div>
+            {t("install.cards.iosShareBody")}
           </div>
-          {t("install.cards.iosShareBody")}
-        </div>
+          <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 p-2 text-[11px] text-amber-900 dark:text-amber-200">
+            {t("install.cards.iosBlankIconTip")}
+          </div>
+        </>
       )}
 
       {!props.isStandalone && (
