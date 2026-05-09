@@ -231,6 +231,9 @@ model Document {
   // 어떤 양식 템플릿에서 만들어졌는지 (옵션)
   templateId String?
 
+  // 저장소 타입 — "supabase" (기존) 또는 "drive" (Google Drive)
+  storageType String @default("supabase")
+
   createdAt DateTime @default(now())
 
   signatureRequests SignatureRequest[]
@@ -258,6 +261,9 @@ model DocumentTemplate {
   enPath     String?
   enMime     String?
   enFileName String?
+
+  // 저장소 타입
+  storageType String @default("supabase")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,10 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getMe } from "@/lib/chat";
-import {
-  getDocumentSignedUrl,
-  getSignatureRequestForSigner,
-} from "@/lib/documents";
+import { getSignatureRequestForSigner } from "@/lib/documents";
 import { SignCanvas } from "./_canvas";
 import { LangViewer } from "./_lang-viewer";
 
@@ -20,17 +17,12 @@ export default async function SignPage({
   const req = await getSignatureRequestForSigner(reqId, me.id);
   if (!req) notFound();
 
-  // 한국어/영어 파일 signed URL (5분 유효)
-  let koUrl: string | null = null;
-  let enUrl: string | null = null;
-  try {
-    koUrl = await getDocumentSignedUrl(req.document.storagePath, 300);
-  } catch {}
-  if (req.document.storagePathEn) {
-    try {
-      enUrl = await getDocumentSignedUrl(req.document.storagePathEn, 300);
-    } catch {}
-  }
+  // 다운로드 URL은 항상 /api/files 프록시 사용
+  // (storageType에 관계없이 동작 — 서버에서 권한 체크 + 적절한 스토리지 라우팅)
+  const koUrl = `/api/files/${req.document.id}?type=primary`;
+  const enUrl = req.document.storagePathEn
+    ? `/api/files/${req.document.id}?type=en`
+    : null;
 
   if (req.status !== "PENDING") {
     return (
@@ -74,7 +66,6 @@ export default async function SignPage({
         </div>
       </div>
 
-      {/* 문서 보기 (한국어/영어 토글) */}
       <section className="space-y-2">
         <h2 className="font-semibold text-sm">📄 문서 확인</h2>
         <LangViewer
@@ -87,7 +78,6 @@ export default async function SignPage({
         />
       </section>
 
-      {/* 사인 캔버스 */}
       <section className="space-y-2">
         <h2 className="font-semibold text-sm">✍️ 사인</h2>
         <p className="text-xs text-zinc-500">

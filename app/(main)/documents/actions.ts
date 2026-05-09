@@ -6,7 +6,6 @@ import { getMe } from "@/lib/chat";
 import {
   createExternalSignatureRequests,
   createSignatureRequests,
-  getDocumentSignedUrl,
   submitSignature,
   uploadDocument,
   type ExternalSignerInput,
@@ -122,19 +121,4 @@ export async function submitSignatureAction(
   return { ok: true };
 }
 
-// =====================================================
-// 다운로드용 signed URL 발급
-// =====================================================
-export async function getDownloadUrlAction(
-  storagePath: string,
-): Promise<{ url?: string; error?: string }> {
-  const me = await getMe();
-  if (!me) return { error: "로그인이 필요합니다." };
-
-  try {
-    const url = await getDocumentSignedUrl(storagePath, 300);
-    return { url };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "URL 발급 실패" };
-  }
-}
+// 다운로드는 이제 /api/files/[id] 라우트로 직접 접근 (서버 액션 불필요)

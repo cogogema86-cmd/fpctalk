@@ -1,53 +1,39 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { getDownloadUrlAction } from "../actions";
-
+/**
+ * 단순 다운로드 링크.
+ * 모든 다운로드는 /api/files/[id] 프록시 라우트를 통해 진행됨
+ * (권한 체크 + Supabase/Drive 자동 라우팅).
+ */
 export function DownloadButton({
-  storagePath,
+  documentId,
+  type,
+  signRequestId,
   label,
   compact,
 }: {
-  storagePath: string;
+  documentId: string;
+  type: "primary" | "en" | "signed";
+  signRequestId?: string;
   label: string;
   compact?: boolean;
 }) {
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const handleClick = () => {
-    setError(null);
-    startTransition(async () => {
-      const r = await getDownloadUrlAction(storagePath);
-      if (r.error) {
-        setError(r.error);
-        return;
-      }
-      if (r.url) {
-        window.open(r.url, "_blank", "noopener,noreferrer");
-      }
-    });
-  };
+  const params = new URLSearchParams({ type });
+  if (signRequestId) params.set("signRequestId", signRequestId);
+  const href = `/api/files/${documentId}?${params.toString()}`;
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={isPending}
-        className={
-          compact
-            ? "text-xs rounded-md bg-blue-500 hover:bg-blue-600 text-white px-2.5 py-1 font-medium disabled:opacity-50"
-            : "rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
-        }
-      >
-        {isPending ? "처리중..." : label}
-      </button>
-      {error && (
-        <div className="text-xs text-red-600 dark:text-red-400 mt-1">
-          {error}
-        </div>
-      )}
-    </>
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={
+        compact
+          ? "text-xs rounded-md bg-blue-500 hover:bg-blue-600 text-white px-2.5 py-1 font-medium inline-block"
+          : "rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 inline-block"
+      }
+    >
+      {label}
+    </a>
   );
 }

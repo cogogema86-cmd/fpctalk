@@ -1,8 +1,5 @@
 import { notFound } from "next/navigation";
-import {
-  getDocumentSignedUrl,
-  getSignatureRequestByToken,
-} from "@/lib/documents";
+import { getSignatureRequestByToken } from "@/lib/documents";
 import { ExternalSignCanvas } from "./_canvas";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +14,8 @@ export default async function ExternalSignPage({
   const req = await getSignatureRequestByToken(token);
   if (!req) notFound();
 
-  const expired =
-    req.tokenExpiresAt && req.tokenExpiresAt < new Date();
+  const expired = req.tokenExpiresAt && req.tokenExpiresAt < new Date();
 
-  // 이미 사인 완료
   if (req.status === "SIGNED") {
     return (
       <Wrapper title="✅ 이미 사인이 완료되었습니다">
@@ -46,13 +41,13 @@ export default async function ExternalSignPage({
     );
   }
 
-  // PDF signed URL
-  let pdfUrl: string | null = null;
-  try {
-    pdfUrl = await getDocumentSignedUrl(req.document.storagePath, 600);
-  } catch {
-    // ignore
-  }
+  // 토큰 기반 파일 URL (login 없이 접근 가능)
+  const koUrl = `/api/sign-files/${token}?lang=ko`;
+  const enUrl = req.document.storagePathEn
+    ? `/api/sign-files/${token}?lang=en`
+    : null;
+  const isPdfKo = req.document.mimeType === "application/pdf";
+  const isPdfEn = req.document.mimeTypeEn === "application/pdf";
 
   return (
     <Wrapper title={req.document.title}>
@@ -71,30 +66,15 @@ export default async function ExternalSignPage({
           </div>
         </div>
 
-        {/* PDF 미리보기 */}
+        {/* 문서 보기 (한국어/영어 토글) */}
         <section className="space-y-2">
           <h2 className="font-semibold text-sm">📄 문서 확인</h2>
-          {pdfUrl ? (
-            <>
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium"
-              >
-                📥 PDF 새 창에서 열기
-              </a>
-              <iframe
-                src={pdfUrl}
-                className="w-full h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
-                title="문서 미리보기"
-              />
-            </>
-          ) : (
-            <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700">
-              PDF 링크 발급에 실패했습니다. 새로고침 후 다시 시도해주세요.
-            </div>
-          )}
+          <SignFileViewer
+            koUrl={koUrl}
+            enUrl={enUrl}
+            isPdfKo={isPdfKo}
+            isPdfEn={isPdfEn}
+          />
         </section>
 
         {/* 사인 캔버스 */}
@@ -119,6 +99,57 @@ export default async function ExternalSignPage({
   );
 }
 
+// 외부 사인 화면용 LangViewer (server component, 토큰 URL을 그대로 사용)
+function SignFileViewer({
+  koUrl,
+  enUrl,
+  isPdfKo,
+  isPdfEn,
+}: {
+  koUrl: string;
+  enUrl: string | null;
+  isPdfKo: boolean;
+  isPdfEn: boolean;
+}) {
+  // 한 언어만 있으면 그것만 보여줌 (외부 페이지는 단순 유지)
+  const url = koUrl;
+  const isPdf = isPdfKo;
+  return (
+    <div className="space-y-2">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-block rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium"
+      >
+        📥 한국어 새 창에서 열기 / 다운로드
+      </a>
+      {enUrl && (
+        <a
+          href={enUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block ml-2 rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm font-medium"
+        >
+          📥 English open / download
+        </a>
+      )}
+      {isPdf ? (
+        <iframe
+          src={url}
+          className="w-full h-72 md:h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
+          title="문서 미리보기"
+        />
+      ) : (
+        <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-900">
+          <div className="text-3xl mb-2">📎</div>
+          PDF가 아닌 파일입니다. 위 다운로드 버튼을 눌러 확인 후 사인해주세요.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Wrapper({
   title,
   children,
@@ -130,7 +161,9 @@ function Wrapper({
     <div className="min-h-screen bg-zinc-50 dark:bg-black p-4">
       <div className="max-w-2xl mx-auto py-8 space-y-4">
         <header className="text-center space-y-1">
-          <div className="text-xs text-zinc-400">FPCTalk · Francis Parker 학원</div>
+          <div className="text-xs text-zinc-400">
+            FPCTalk · Francis Parker 학원
+          </div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
             {title}
           </h1>

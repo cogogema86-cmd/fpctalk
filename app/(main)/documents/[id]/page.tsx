@@ -95,9 +95,17 @@ export default async function DocumentDetailPage({
       <section className="space-y-2">
         <h2 className="font-semibold">원본 문서</h2>
         <DownloadButton
-          storagePath={doc.storagePath}
-          label="📄 원본 PDF 다운로드"
+          documentId={doc.id}
+          type="primary"
+          label="📄 한국어 원본 다운로드"
         />
+        {doc.storagePathEn && (
+          <DownloadButton
+            documentId={doc.id}
+            type="en"
+            label="📄 English 원본 다운로드"
+          />
+        )}
       </section>
 
       {/* 직원 사인 진행 */}
@@ -136,7 +144,9 @@ export default async function DocumentDetailPage({
                     <Status status={r.status} />
                     {r.signedPdfPath && (
                       <DownloadButton
-                        storagePath={r.signedPdfPath}
+                        documentId={doc.id}
+                        type="signed"
+                        signRequestId={r.id}
                         label="📥 사인본"
                         compact
                       />
@@ -200,7 +210,9 @@ export default async function DocumentDetailPage({
                       <Status status={r.status} />
                       {r.signedPdfPath && (
                         <DownloadButton
-                          storagePath={r.signedPdfPath}
+                          documentId={doc.id}
+                          type="signed"
+                          signRequestId={r.id}
                           label="📥 사인본"
                           compact
                         />

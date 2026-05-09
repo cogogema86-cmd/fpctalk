@@ -2,16 +2,26 @@
  * 문서 + 디지털 사인 헬퍼 (서버 전용)
  *
  * 흐름:
- *  1. uploadDocument: 관리자가 PDF 업로드 → Document row + Storage 저장
+ *  1. uploadDocument: 관리자가 파일 업로드 → Document row + 스토리지 저장
  *  2. createSignatureRequests: 대상자들에게 SignatureRequest 일괄 생성
- *  3. submitSignature: 대상자가 사인 → 사인 PNG 저장 + 합성 PDF 생성
- *  4. getSignedPdfUrl: 관리자/대상자가 합성된 PDF 다운로드 (signed URL)
+ *  3. submitSignature: 대상자가 사인 → 사인 PNG 저장 + (PDF면) 합성 PDF 생성
+ *  4. getSignatureRequestForSigner / ByToken: 사인 페이지용
+ *
+ * 스토리지: lib/storage.ts 통해 Supabase 또는 Google Drive로 라우팅.
+ * Document.storageType 필드가 어디에 저장됐는지 표시.
  */
 import { prisma } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import {
+  type StorageType,
+  deleteFiles,
+  downloadFile,
+  getActiveStorageType,
+  getSupabaseSignedUrl,
+  uploadFile,
+} from "@/lib/storage";
 
-const DOC_BUCKET = "documents";
 const SIG_BUCKET = "signatures";
 
 // =====================================================
@@ -27,7 +37,6 @@ async function isUserAdmin(userId: string): Promise<boolean> {
 
 // =====================================================
 // 1. 문서 업로드 (관리자) — 다중 포맷 지원
-// PDF는 페이지 수 자동 추출, 그 외는 원본 그대로
 // =====================================================
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
@@ -57,12 +66,12 @@ export async function uploadDocument(
   }
 
   const isPdf = file.type === "application/pdf";
+  const buffer = Buffer.from(await file.arrayBuffer());
 
   let pageCount: number | null = null;
   if (isPdf) {
-    const arrayBuffer = await file.arrayBuffer();
     try {
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pdfDoc = await PDFDocument.load(buffer);
       pageCount = pdfDoc.getPageCount();
     } catch {
       // PDF 파싱 실패 — 그래도 업로드는 진행
@@ -71,17 +80,17 @@ export async function uploadDocument(
 
   const ts = Date.now();
   const ext = extFromName(file.name) || (isPdf ? "pdf" : "bin");
-  const storagePath = `${uploaderId}/${ts}_${safeFileName(title)}.${ext}`;
+  const path = `${uploaderId}/${ts}_${safeFileName(title)}.${ext}`;
+  const fileName = `${ts}_${safeFileName(title)}.${ext}`;
 
-  const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage
-    .from(DOC_BUCKET)
-    .upload(storagePath, file, {
-      contentType: file.type || "application/octet-stream",
-    });
-  if (uploadError) {
-    throw new Error(`업로드 실패: ${uploadError.message}`);
-  }
+  const storageType = getActiveStorageType();
+  const { storagePath } = await uploadFile({
+    storageType,
+    path,
+    fileName,
+    buffer,
+    mimeType: file.type || "application/octet-stream",
+  });
 
   const doc = await prisma.document.create({
     data: {
@@ -91,176 +100,11 @@ export async function uploadDocument(
       storagePath,
       mimeType: file.type || "application/octet-stream",
       pageCount,
+      storageType,
     },
   });
 
   return { id: doc.id, storagePath };
-}
-
-// =====================================================
-// 1-B. 양식 템플릿 업로드 (한국어 + 영어 옵션)
-// =====================================================
-export type SaveTemplateInput = {
-  uploaderId: string;
-  name: string;
-  description?: string;
-  koFile: File;
-  enFile?: File | null;
-};
-
-async function uploadOneFile(
-  uploaderId: string,
-  file: File,
-  prefix: string,
-): Promise<{ path: string; mime: string; fileName: string }> {
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`${prefix} 파일이 20MB를 초과합니다.`);
-  }
-  if (file.size === 0) {
-    throw new Error(`${prefix} 파일이 비어있습니다.`);
-  }
-  const ts = Date.now() + Math.floor(Math.random() * 1000);
-  const ext = extFromName(file.name) || "bin";
-  const safeBase = safeFileName(file.name.slice(0, file.name.lastIndexOf(".") || file.name.length));
-  const path = `templates/${uploaderId}/${ts}_${prefix}_${safeBase}.${ext}`;
-  const admin = createAdminClient();
-  const { error } = await admin.storage
-    .from(DOC_BUCKET)
-    .upload(path, file, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    });
-  if (error) throw new Error(`${prefix} 업로드 실패: ${error.message}`);
-  return {
-    path,
-    mime: file.type || "application/octet-stream",
-    fileName: file.name,
-  };
-}
-
-export async function saveTemplate(input: SaveTemplateInput) {
-  if (!(await isUserAdmin(input.uploaderId))) {
-    throw new Error("관리자만 양식을 저장할 수 있습니다.");
-  }
-  if (!input.name?.trim()) throw new Error("양식 이름을 입력해주세요.");
-
-  const ko = await uploadOneFile(input.uploaderId, input.koFile, "ko");
-  const en = input.enFile
-    ? await uploadOneFile(input.uploaderId, input.enFile, "en")
-    : null;
-
-  const tpl = await prisma.documentTemplate.create({
-    data: {
-      uploaderId: input.uploaderId,
-      name: input.name.trim(),
-      description: input.description?.trim() || null,
-      koPath: ko.path,
-      koMime: ko.mime,
-      koFileName: ko.fileName,
-      enPath: en?.path,
-      enMime: en?.mime,
-      enFileName: en?.fileName,
-    },
-  });
-  return tpl;
-}
-
-export async function listTemplates(uploaderId: string) {
-  if (!(await isUserAdmin(uploaderId))) {
-    throw new Error("관리자만 양식 목록을 볼 수 있습니다.");
-  }
-  return prisma.documentTemplate.findMany({
-    where: { uploaderId },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
-export async function deleteTemplate(uploaderId: string, templateId: string) {
-  if (!(await isUserAdmin(uploaderId))) {
-    throw new Error("관리자만 양식을 삭제할 수 있습니다.");
-  }
-  const tpl = await prisma.documentTemplate.findUnique({
-    where: { id: templateId },
-  });
-  if (!tpl || tpl.uploaderId !== uploaderId) {
-    throw new Error("양식을 찾을 수 없습니다.");
-  }
-  // Storage 파일 삭제 (실패해도 DB는 진행)
-  const admin = createAdminClient();
-  const paths = [tpl.koPath, tpl.enPath].filter(Boolean) as string[];
-  if (paths.length > 0) {
-    await admin.storage.from(DOC_BUCKET).remove(paths).catch(() => {});
-  }
-  await prisma.documentTemplate.delete({ where: { id: templateId } });
-}
-
-// =====================================================
-// 1-C. 양식으로 전 직원 사인 요청
-// 양식 파일을 Document로 복사 + 본인 제외 모든 직원에게 SignatureRequest 생성
-// =====================================================
-export async function requestSignaturesFromTemplate(
-  uploaderId: string,
-  templateId: string,
-): Promise<{ documentId: string; signersCount: number }> {
-  if (!(await isUserAdmin(uploaderId))) {
-    throw new Error("관리자만 사인 요청을 보낼 수 있습니다.");
-  }
-  const tpl = await prisma.documentTemplate.findUnique({
-    where: { id: templateId },
-  });
-  if (!tpl || tpl.uploaderId !== uploaderId) {
-    throw new Error("양식을 찾을 수 없습니다.");
-  }
-
-  // PDF면 페이지 수 추출 시도
-  let pageCount: number | null = null;
-  if (tpl.koMime === "application/pdf") {
-    const admin = createAdminClient();
-    const { data: file } = await admin.storage
-      .from(DOC_BUCKET)
-      .download(tpl.koPath);
-    if (file) {
-      try {
-        const buf = Buffer.from(await file.arrayBuffer());
-        pageCount = (await PDFDocument.load(buf)).getPageCount();
-      } catch {}
-    }
-  }
-
-  // Document 생성 (양식 파일을 그대로 참조)
-  const doc = await prisma.document.create({
-    data: {
-      uploaderId,
-      title: tpl.name,
-      description: tpl.description,
-      storagePath: tpl.koPath,
-      mimeType: tpl.koMime,
-      pageCount,
-      storagePathEn: tpl.enPath,
-      mimeTypeEn: tpl.enMime,
-      templateId: tpl.id,
-    },
-  });
-
-  // 본인 제외 모든 직원
-  const others = await prisma.user.findMany({
-    where: { id: { not: uploaderId } },
-    select: { id: true },
-  });
-
-  if (others.length > 0) {
-    await prisma.signatureRequest.createMany({
-      data: others.map((u) => ({
-        documentId: doc.id,
-        requesterId: uploaderId,
-        signerId: u.id,
-        status: "PENDING" as const,
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  return { documentId: doc.id, signersCount: others.length };
 }
 
 // =====================================================
@@ -276,7 +120,6 @@ export async function createSignatureRequests(
   }
   if (signerIds.length === 0) return 0;
 
-  // 중복 제거
   const uniqueSignerIds = [...new Set(signerIds)];
 
   await prisma.signatureRequest.createMany({
@@ -302,7 +145,6 @@ export type ExternalSignerInput = {
 };
 
 function generateToken(): string {
-  // 32자 랜덤 토큰
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return Buffer.from(bytes).toString("base64url");
@@ -312,7 +154,6 @@ export async function createExternalSignatureRequests(
   documentId: string,
   requesterId: string,
   externals: ExternalSignerInput[],
-  /** 토큰 유효 기간 (일). 기본 30일. */
   expireDays = 30,
 ): Promise<{ id: string; token: string; name: string }[]> {
   if (!(await isUserAdmin(requesterId))) {
@@ -355,11 +196,9 @@ export async function createExternalSignatureRequests(
 // =====================================================
 export type SubmitSignatureParams = {
   requestId: string;
-  /** 직원 사인이면 본인 user.id, 외부면 null */
   signerId: string | null;
-  /** 외부 사인의 토큰 검증을 통과한 경우만 true */
   externalToken?: string;
-  signatureBase64: string; // dataURL: data:image/png;base64,...
+  signatureBase64: string;
   ip?: string;
   userAgent?: string;
 };
@@ -374,20 +213,17 @@ export async function submitSignature(params: SubmitSignatureParams) {
     userAgent,
   } = params;
 
-  // 권한 + 상태 체크
   const req = await prisma.signatureRequest.findUnique({
     where: { id: requestId },
     include: { document: true },
   });
   if (!req) throw new Error("요청을 찾을 수 없습니다.");
 
-  // 권한 검증: 직원 또는 외부 토큰
   if (signerId !== null) {
     if (req.signerId !== signerId) {
       throw new Error("본인의 사인 요청이 아닙니다.");
     }
   } else {
-    // 외부 사인
     if (!externalToken || req.accessToken !== externalToken) {
       throw new Error("유효하지 않은 사인 링크입니다.");
     }
@@ -399,7 +235,6 @@ export async function submitSignature(params: SubmitSignatureParams) {
     throw new Error("이미 처리된 요청입니다.");
   }
 
-  // 사인 이미지 base64 → Buffer
   const matches = signatureBase64.match(/^data:image\/png;base64,(.+)$/);
   if (!matches) throw new Error("사인 이미지 형식이 잘못되었습니다.");
   const sigBuffer = Buffer.from(matches[1], "base64");
@@ -407,38 +242,47 @@ export async function submitSignature(params: SubmitSignatureParams) {
     throw new Error("사인 이미지가 너무 큽니다.");
   }
 
-  const admin = createAdminClient();
+  const docStorageType = (req.document.storageType ?? "supabase") as StorageType;
 
-  // 1) 사인 PNG Storage 저장
+  // 1) 사인 PNG 저장 — 부모 문서와 같은 스토리지 사용
   const sigOwner = signerId ?? `ext_${requestId}`;
-  const sigPath = `${sigOwner}/${requestId}.png`;
-  const { error: sigErr } = await admin.storage
-    .from(SIG_BUCKET)
-    .upload(sigPath, sigBuffer, {
-      contentType: "image/png",
-      upsert: true,
-    });
-  if (sigErr) throw new Error(`사인 저장 실패: ${sigErr.message}`);
+  const sigName = `${requestId}.png`;
+  const sigPath = `${sigOwner}/${sigName}`;
+
+  let storedSigPath: string;
+  if (docStorageType === "drive") {
+    const { fileId } = await (
+      await import("@/lib/storage-drive")
+    ).uploadToDrive(sigBuffer, `sig_${sigName}`, "image/png");
+    storedSigPath = fileId;
+  } else {
+    // Supabase signatures 버킷 사용 (기존 동작)
+    const admin = createAdminClient();
+    const { error: sigErr } = await admin.storage
+      .from(SIG_BUCKET)
+      .upload(sigPath, sigBuffer, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    if (sigErr) throw new Error(`사인 저장 실패: ${sigErr.message}`);
+    storedSigPath = sigPath;
+  }
 
   // 2) 원본 파일 다운로드
-  // PDF는 사인 합성, 그 외 포맷은 원본 그대로 사용 (사인 PNG는 별도 보관)
   const isPdf = req.document.mimeType === "application/pdf";
-  const { data: docFile, error: docErr } = await admin.storage
-    .from(DOC_BUCKET)
-    .download(req.document.storagePath);
-  if (docErr || !docFile) {
-    throw new Error(`원본 파일 다운로드 실패: ${docErr?.message}`);
-  }
-  const docBuffer = Buffer.from(await docFile.arrayBuffer());
+  const docBuffer = await downloadFile(
+    docStorageType,
+    req.document.storagePath,
+  );
 
-  // 비-PDF 처리: 합성 없이 원본 경로 그대로 사용 + 사인은 별도로 저장
+  // 비-PDF: 합성 없이 원본 그대로 사용
   if (!isPdf) {
     await prisma.signatureRequest.update({
       where: { id: requestId },
       data: {
         status: "SIGNED",
-        signaturePath: sigPath,
-        signedPdfPath: req.document.storagePath, // 원본을 그대로
+        signaturePath: storedSigPath,
+        signedPdfPath: req.document.storagePath, // 원본 그대로
         signedAt: new Date(),
         signerIp: ip ?? null,
         signerAgent: userAgent ?? null,
@@ -448,17 +292,14 @@ export async function submitSignature(params: SubmitSignatureParams) {
     return { signedPath: req.document.storagePath };
   }
 
-  // 3) PDF에 사인 + 메타 페이지 합성
+  // 3) PDF에 사인 페이지 합성
   const pdfDoc = await PDFDocument.load(docBuffer);
   const sigImage = await pdfDoc.embedPng(sigBuffer);
 
-  // 마지막 페이지에 사인 영역 추가 (또는 새 페이지)
-  // 단순 구현: 새 페이지 추가 (가독성 + 손상 없음)
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const newPage = pdfDoc.addPage();
-  const { width, height } = newPage.getSize();
+  const { height } = newPage.getSize();
 
-  // 헤더
   newPage.drawText("Signature", {
     x: 50,
     y: height - 80,
@@ -467,7 +308,6 @@ export async function submitSignature(params: SubmitSignatureParams) {
     color: rgb(0, 0, 0),
   });
 
-  // 사인 이미지 (가로 max 300, 비율 유지)
   const sigDims = sigImage.scale(1);
   const maxW = 300;
   const scale = sigDims.width > maxW ? maxW / sigDims.width : 1;
@@ -480,7 +320,6 @@ export async function submitSignature(params: SubmitSignatureParams) {
     height: sigH,
   });
 
-  // 메타 정보 (영문으로 표기 - StandardFonts는 한글 미지원)
   let signerLabel: string;
   if (signerId) {
     const signer = await prisma.user.findUnique({
@@ -489,7 +328,6 @@ export async function submitSignature(params: SubmitSignatureParams) {
     });
     signerLabel = signer?.username ?? signerId;
   } else {
-    // 외부 사인자
     signerLabel = `external: ${req.externalName ?? "unknown"}`;
   }
   const now = new Date();
@@ -516,32 +354,42 @@ export async function submitSignature(params: SubmitSignatureParams) {
   const signedBytes = await pdfDoc.save();
   const signedBuffer = Buffer.from(signedBytes);
   const signerKey = signerId ?? `ext_${requestId}`;
-  const signedPath = req.document.storagePath.replace(
-    /\.pdf$/i,
-    `__signed_${signerKey}.pdf`,
-  );
+  const ts = Date.now();
+  const signedFileName = `${ts}_signed_${signerKey}.pdf`;
 
-  const { error: signedErr } = await admin.storage
-    .from(DOC_BUCKET)
-    .upload(signedPath, signedBuffer, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
-  if (signedErr) throw new Error(`합성 PDF 저장 실패: ${signedErr.message}`);
+  let signedPath: string;
+  if (docStorageType === "drive") {
+    const { fileId } = await (
+      await import("@/lib/storage-drive")
+    ).uploadToDrive(signedBuffer, signedFileName, "application/pdf");
+    signedPath = fileId;
+  } else {
+    const sigDocPath = req.document.storagePath.replace(
+      /\.pdf$/i,
+      `__signed_${signerKey}.pdf`,
+    );
+    const admin = createAdminClient();
+    const { error: signedErr } = await admin.storage
+      .from("documents")
+      .upload(sigDocPath, signedBuffer, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    if (signedErr) throw new Error(`합성 PDF 저장 실패: ${signedErr.message}`);
+    signedPath = sigDocPath;
+  }
 
-  // 5) DB 업데이트 (외부 사인 시 토큰 무효화)
+  // 5) DB 업데이트
   await prisma.signatureRequest.update({
     where: { id: requestId },
     data: {
       status: "SIGNED",
-      signaturePath: sigPath,
+      signaturePath: storedSigPath,
       signedPdfPath: signedPath,
       signedAt: now,
       signerIp: ip ?? null,
       signerAgent: userAgent ?? null,
-      ...(signerId === null
-        ? { accessToken: null } // 외부 사인은 토큰 무효화 (재사용 차단)
-        : {}),
+      ...(signerId === null ? { accessToken: null } : {}),
     },
   });
 
@@ -549,28 +397,209 @@ export async function submitSignature(params: SubmitSignatureParams) {
 }
 
 // =====================================================
-// 4. Signed URL 생성 (다운로드용)
+// 4. Signed URL / 다운로드 URL 생성
+// 클라이언트에서 호출. Supabase는 직접 signed URL, Drive는 프록시 URL.
 // =====================================================
 export async function getDocumentSignedUrl(
   storagePath: string,
   expiresInSeconds = 300,
+  storageType: StorageType = "supabase",
 ): Promise<string> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage
-    .from(DOC_BUCKET)
-    .createSignedUrl(storagePath, expiresInSeconds);
-  if (error || !data) throw new Error(`URL 발급 실패: ${error?.message}`);
-  return data.signedUrl;
+  if (storageType === "drive") {
+    // Drive는 직접 URL을 노출하지 않음 — /api/files 프록시 라우트 사용
+    // 호출자가 documentId를 알아야 하므로 이 함수는 supabase에서만 의미가 있음
+    throw new Error("Drive 파일은 /api/files 라우트로 다운로드합니다.");
+  }
+  return getSupabaseSignedUrl(storagePath, expiresInSeconds);
 }
 
 // =====================================================
-// 조회 함수
+// 양식 템플릿 관련
+// =====================================================
+export type SaveTemplateInput = {
+  uploaderId: string;
+  name: string;
+  description?: string;
+  koFile: File;
+  enFile?: File | null;
+};
+
+async function uploadOneTemplateFile(
+  uploaderId: string,
+  file: File,
+  prefix: string,
+  storageType: StorageType,
+): Promise<{ path: string; mime: string; fileName: string }> {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`${prefix} 파일이 20MB를 초과합니다.`);
+  }
+  if (file.size === 0) {
+    throw new Error(`${prefix} 파일이 비어있습니다.`);
+  }
+  const ts = Date.now() + Math.floor(Math.random() * 1000);
+  const ext = extFromName(file.name) || "bin";
+  const safeBase = safeFileName(
+    file.name.slice(0, file.name.lastIndexOf(".") || file.name.length),
+  );
+  const path = `templates/${uploaderId}/${ts}_${prefix}_${safeBase}.${ext}`;
+  const driveFileName = `tpl_${ts}_${prefix}_${safeBase}.${ext}`;
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { storagePath } = await uploadFile({
+    storageType,
+    path,
+    fileName: driveFileName,
+    buffer,
+    mimeType: file.type || "application/octet-stream",
+  });
+  return {
+    path: storagePath,
+    mime: file.type || "application/octet-stream",
+    fileName: file.name,
+  };
+}
+
+export async function saveTemplate(input: SaveTemplateInput) {
+  if (!(await isUserAdmin(input.uploaderId))) {
+    throw new Error("관리자만 양식을 저장할 수 있습니다.");
+  }
+  if (!input.name?.trim()) throw new Error("양식 이름을 입력해주세요.");
+
+  const storageType = getActiveStorageType();
+  const ko = await uploadOneTemplateFile(
+    input.uploaderId,
+    input.koFile,
+    "ko",
+    storageType,
+  );
+  const en = input.enFile
+    ? await uploadOneTemplateFile(
+        input.uploaderId,
+        input.enFile,
+        "en",
+        storageType,
+      )
+    : null;
+
+  const tpl = await prisma.documentTemplate.create({
+    data: {
+      uploaderId: input.uploaderId,
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      koPath: ko.path,
+      koMime: ko.mime,
+      koFileName: ko.fileName,
+      enPath: en?.path,
+      enMime: en?.mime,
+      enFileName: en?.fileName,
+      storageType,
+    },
+  });
+  return tpl;
+}
+
+export async function listTemplates(uploaderId: string) {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 양식 목록을 볼 수 있습니다.");
+  }
+  return prisma.documentTemplate.findMany({
+    where: { uploaderId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function deleteTemplate(uploaderId: string, templateId: string) {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 양식을 삭제할 수 있습니다.");
+  }
+  const tpl = await prisma.documentTemplate.findUnique({
+    where: { id: templateId },
+  });
+  if (!tpl || tpl.uploaderId !== uploaderId) {
+    throw new Error("양식을 찾을 수 없습니다.");
+  }
+  const storageType = (tpl.storageType ?? "supabase") as StorageType;
+  const paths = [tpl.koPath, tpl.enPath].filter(Boolean) as string[];
+  if (paths.length > 0) {
+    await deleteFiles(storageType, paths).catch(() => {});
+  }
+  await prisma.documentTemplate.delete({ where: { id: templateId } });
+}
+
+export async function requestSignaturesFromTemplate(
+  uploaderId: string,
+  templateId: string,
+): Promise<{ documentId: string; signersCount: number }> {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 사인 요청을 보낼 수 있습니다.");
+  }
+  const tpl = await prisma.documentTemplate.findUnique({
+    where: { id: templateId },
+  });
+  if (!tpl || tpl.uploaderId !== uploaderId) {
+    throw new Error("양식을 찾을 수 없습니다.");
+  }
+
+  const storageType = (tpl.storageType ?? "supabase") as StorageType;
+
+  let pageCount: number | null = null;
+  if (tpl.koMime === "application/pdf") {
+    try {
+      const buf = await downloadFile(storageType, tpl.koPath);
+      pageCount = (await PDFDocument.load(buf)).getPageCount();
+    } catch {}
+  }
+
+  const doc = await prisma.document.create({
+    data: {
+      uploaderId,
+      title: tpl.name,
+      description: tpl.description,
+      storagePath: tpl.koPath,
+      mimeType: tpl.koMime,
+      pageCount,
+      storagePathEn: tpl.enPath,
+      mimeTypeEn: tpl.enMime,
+      templateId: tpl.id,
+      storageType,
+    },
+  });
+
+  const others = await prisma.user.findMany({
+    where: { id: { not: uploaderId } },
+    select: { id: true },
+  });
+
+  if (others.length > 0) {
+    await prisma.signatureRequest.createMany({
+      data: others.map((u) => ({
+        documentId: doc.id,
+        requesterId: uploaderId,
+        signerId: u.id,
+        status: "PENDING" as const,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  return { documentId: doc.id, signersCount: others.length };
+}
+
+// =====================================================
+// 조회
 // =====================================================
 export async function getMyPendingSignatures(signerId: string) {
   return prisma.signatureRequest.findMany({
     where: { signerId, status: "PENDING" },
     include: {
-      document: { select: { id: true, title: true, description: true, pageCount: true } },
+      document: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          pageCount: true,
+        },
+      },
       requester: { select: { name: true, username: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -613,7 +642,14 @@ export async function getDocumentDetailForAdmin(
     include: {
       signatureRequests: {
         include: {
-          signer: { select: { id: true, name: true, username: true, role: { select: { label: true } } } },
+          signer: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: { select: { label: true } },
+            },
+          },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -634,9 +670,6 @@ export async function getSignatureRequestForSigner(
   });
 }
 
-// =====================================================
-// 외부 사인: 토큰으로 요청 조회
-// =====================================================
 export async function getSignatureRequestByToken(token: string) {
   return prisma.signatureRequest.findFirst({
     where: { accessToken: token },
