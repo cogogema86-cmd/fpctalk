@@ -83,6 +83,8 @@ export function InstallCards() {
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
+      // 진단 패널이 읽을 수 있도록 window 플래그 설정
+      (window as Window & { __fpcInstallable?: boolean }).__fpcInstallable = true;
     };
     const onInstalled = () => setIsStandalone(true);
     window.addEventListener("beforeinstallprompt", onPrompt);
@@ -376,27 +378,50 @@ function AndroidCard(props: {
 }) {
   const t = useT();
   const [isPending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<{
+    kind: "ok" | "err";
+    msg: string;
+  } | null>(null);
 
   const onInstall = () => {
     if (!props.deferred) return;
+    setFeedback(null);
     startTransition(async () => {
       try {
         await props.deferred!.prompt();
-        await props.deferred!.userChoice;
-      } catch {
-        // ignore
+        const r = await props.deferred!.userChoice;
+        if (r.outcome === "accepted") {
+          setFeedback({ kind: "ok", msg: "✅ 설치됨" });
+        } else {
+          setFeedback({ kind: "err", msg: "사용자가 설치를 취소했습니다." });
+        }
+      } catch (e) {
+        setFeedback({
+          kind: "err",
+          msg: e instanceof Error ? e.message : "설치 실패",
+        });
       }
       props.setDeferred(null);
     });
   };
 
-  const onEnableNotif = () =>
+  const onEnableNotif = () => {
+    setFeedback(null);
     startTransition(async () => {
-      await enableNotifications({
+      const r = await enableNotifications({
         setNotifPerm: props.setNotifPerm,
         setPushSubscribed: props.setPushSubscribed,
       });
+      if (r.ok) {
+        setFeedback({ kind: "ok", msg: "🔔 알림이 켜졌습니다" });
+      } else {
+        setFeedback({
+          kind: "err",
+          msg: r.error ?? "알림 허용 실패 — 진단 패널을 확인하세요.",
+        });
+      }
     });
+  };
 
   return (
     <CardShell recommended={props.recommended}>
@@ -458,6 +483,18 @@ function AndroidCard(props: {
           🚫 알림이 차단됨 — 주소창 자물쇠 → 사이트 설정 → 알림 허용으로 변경
         </div>
       )}
+
+      {feedback && (
+        <div
+          className={`rounded-md p-2 text-[11px] ${
+            feedback.kind === "ok"
+              ? "bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-200"
+              : "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200"
+          }`}
+        >
+          {feedback.msg}
+        </div>
+      )}
     </CardShell>
   );
 }
@@ -477,27 +514,50 @@ function DesktopCard(props: {
 }) {
   const t = useT();
   const [isPending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<{
+    kind: "ok" | "err";
+    msg: string;
+  } | null>(null);
 
   const onInstall = () => {
     if (!props.deferred) return;
+    setFeedback(null);
     startTransition(async () => {
       try {
         await props.deferred!.prompt();
-        await props.deferred!.userChoice;
-      } catch {
-        // ignore
+        const r = await props.deferred!.userChoice;
+        if (r.outcome === "accepted") {
+          setFeedback({ kind: "ok", msg: "✅ 설치됨" });
+        } else {
+          setFeedback({ kind: "err", msg: "사용자가 설치를 취소했습니다." });
+        }
+      } catch (e) {
+        setFeedback({
+          kind: "err",
+          msg: e instanceof Error ? e.message : "설치 실패",
+        });
       }
       props.setDeferred(null);
     });
   };
 
-  const onEnableNotif = () =>
+  const onEnableNotif = () => {
+    setFeedback(null);
     startTransition(async () => {
-      await enableNotifications({
+      const r = await enableNotifications({
         setNotifPerm: props.setNotifPerm,
         setPushSubscribed: props.setPushSubscribed,
       });
+      if (r.ok) {
+        setFeedback({ kind: "ok", msg: "🔔 알림이 켜졌습니다" });
+      } else {
+        setFeedback({
+          kind: "err",
+          msg: r.error ?? "알림 허용 실패 — 진단 패널을 확인하세요.",
+        });
+      }
     });
+  };
 
   return (
     <CardShell recommended={props.recommended}>
@@ -548,6 +608,24 @@ function DesktopCard(props: {
             ? t("install.cards.notifEnabling")
             : t("install.cards.notifEnable")}
         </button>
+      )}
+
+      {props.notifPerm === "denied" && (
+        <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 p-2 text-[11px] text-amber-800 dark:text-amber-200">
+          🚫 알림이 차단됨 — 주소창 자물쇠 → 사이트 설정 → 알림 허용으로 변경
+        </div>
+      )}
+
+      {feedback && (
+        <div
+          className={`rounded-md p-2 text-[11px] ${
+            feedback.kind === "ok"
+              ? "bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-200"
+              : "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200"
+          }`}
+        >
+          {feedback.msg}
+        </div>
       )}
     </CardShell>
   );

@@ -20,6 +20,15 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+/**
+ * fetch 이벤트 핸들러는 비어 있어도 반드시 등록되어야 함.
+ * Chrome/Edge의 PWA installability 체크가 sw에 fetch 핸들러 존재 여부를 봄.
+ * (없으면 beforeinstallprompt 이벤트가 발생하지 않음 → "지금 설치" 버튼이 안 뜸)
+ */
+self.addEventListener("fetch", () => {
+  // pass-through: 캐싱 없음, 브라우저 기본 동작에 위임
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {

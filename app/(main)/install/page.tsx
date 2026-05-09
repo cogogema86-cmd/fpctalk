@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getMe } from "@/lib/chat";
 import { getT } from "@/lib/i18n/server";
 import { InstallCards } from "./_install-cards";
+import { Diagnostics } from "./_diagnostics";
 
 export default async function InstallPage() {
   const me = await getMe();
@@ -38,6 +39,8 @@ export default async function InstallPage() {
       </div>
 
       <InstallCards />
+
+      <Diagnostics />
 
       <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 p-3 text-xs text-zinc-500">
         {t("install.note")}
