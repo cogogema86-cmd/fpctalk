@@ -14,8 +14,11 @@ import {
   markAsReadAction,
   sendMessageAction,
   translateMessageAction,
+  triggerChatAiAction,
   type SendMessageState,
 } from "../actions";
+
+const AI_TRIGGER = /^@(비서|ai|assistant)\s+/i;
 
 type Message = {
   id: string;
@@ -264,6 +267,18 @@ export function ChatRoom({
 
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
+
+    // @비서 호출 감지 → AI 비서에게 별도 요청 (서버에서 type=AI Message 생성, Realtime이 전파)
+    const aiMatch = AI_TRIGGER.exec(content);
+    if (aiMatch) {
+      const aiPrompt = content.replace(AI_TRIGGER, "").trim();
+      if (aiPrompt) {
+        // fire-and-forget — AI 답변은 Realtime/폴링으로 도착
+        triggerChatAiAction(chatId, aiPrompt).catch((err) => {
+          console.error("[chat AI] trigger failed:", err);
+        });
+      }
+    }
   };
 
   // 서버 액션 실패 시 pending 임시 메시지 정리
@@ -326,7 +341,7 @@ export function ChatRoom({
           <textarea
             ref={inputRef}
             name="content"
-            placeholder="메시지를 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)"
+            placeholder="메시지를 입력하세요... (Enter 전송 / Shift+Enter 줄바꿈 / @비서 질문 으로 AI 비서 호출)"
             rows={1}
             disabled={isPending}
             onKeyDown={handleKeyDown}
@@ -342,6 +357,100 @@ export function ChatRoom({
         </div>
       </form>
     </>
+  );
+}
+
+function AiMessageBubble({ message }: { message: Message }) {
+  type AiMeta = { model?: string; mode?: "fast" | "pro" };
+  const meta = (message as Message & { metadata?: AiMeta }).metadata as
+    | AiMeta
+    | undefined;
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [transError, setTransError] = useState<string | null>(null);
+  const [isTransPending, startTransTransition] = useTransition();
+
+  const handleTranslate = (target: "ko" | "en") => {
+    setTransError(null);
+    startTransTransition(async () => {
+      const r = await translateMessageAction(message.content, target);
+      if (r.error) {
+        setTransError(r.error);
+        return;
+      }
+      if (r.translation) setTranslation(r.translation);
+    });
+  };
+
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[85%] flex flex-col">
+        <div className="text-xs mb-0.5 px-1 flex items-center gap-1.5">
+          <span className="text-purple-700 dark:text-purple-300 font-medium">
+            🤖 AI 비서
+          </span>
+          {meta?.mode && (
+            <span className="text-[10px] text-zinc-400">
+              {meta.mode === "pro" ? "🔵 Pro" : "🟢 Flash"}
+            </span>
+          )}
+        </div>
+        <div className="rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-100 border border-purple-200 dark:border-purple-800">
+          {message.content}
+        </div>
+
+        {translation && (
+          <div className="mt-1 rounded-xl px-3 py-2 text-xs whitespace-pre-wrap bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+            <div className="text-[9px] text-zinc-500 mb-0.5">번역</div>
+            {translation}
+          </div>
+        )}
+        {transError && (
+          <div className="mt-1 text-[10px] text-red-500 px-1">{transError}</div>
+        )}
+
+        <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
+          <span>
+            {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          {!translation && !isTransPending && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleTranslate("ko")}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+              >
+                한글
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTranslate("en")}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+              >
+                English
+              </button>
+            </>
+          )}
+          {isTransPending && (
+            <span className="text-zinc-500">번역 중...</span>
+          )}
+          {translation && (
+            <button
+              type="button"
+              onClick={() => {
+                setTranslation(null);
+                setTransError(null);
+              }}
+              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+            >
+              번역 닫기
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -368,6 +477,11 @@ function MessageBubble({
   isMine: boolean;
   showAuthor: boolean;
 }) {
+  // AI 비서 메시지는 별도 컴포넌트로 렌더
+  if (message.type === "AI") {
+    return <AiMessageBubble message={message} />;
+  }
+
   const isPending = !!message.pending;
   const [translation, setTranslation] = useState<string | null>(null);
   const [transError, setTransError] = useState<string | null>(null);
