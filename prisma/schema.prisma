@@ -219,14 +219,25 @@ model Document {
 }
 
 model SignatureRequest {
-  id            String      @id @default(cuid())
-  documentId    String
-  requesterId   String
-  signerId      String
-  status        SignStatus  @default(PENDING)
-  pageNumber    Int         @default(1)
-  positionX     Float?
-  positionY     Float?
+  id          String     @id @default(cuid())
+  documentId  String
+  requesterId String
+  status      SignStatus @default(PENDING)
+  pageNumber  Int        @default(1)
+  positionX   Float?
+  positionY   Float?
+
+  // 내부 직원 사인자 (있으면 signer 사용)
+  signerId String?
+
+  // 외부 사인자 (학부모 등) — signerId 없을 때 사용
+  externalName   String?
+  externalEmail  String?
+  externalPhone  String?
+  accessToken    String?   @unique
+  tokenExpiresAt DateTime?
+
+  // 결과물
   signaturePath String?
   signedPdfPath String?
   signedAt      DateTime?
@@ -238,10 +249,11 @@ model SignatureRequest {
 
   document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   requester User     @relation("SignRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  signer    User     @relation("SignSigner", fields: [signerId], references: [id], onDelete: Cascade)
+  signer    User?    @relation("SignSigner", fields: [signerId], references: [id], onDelete: SetNull)
 
   @@index([signerId, status])
   @@index([requesterId])
+  @@index([accessToken])
 }
 
 enum SignStatus {

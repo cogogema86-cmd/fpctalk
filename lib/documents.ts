@@ -78,7 +78,7 @@ export async function uploadDocument(
 }
 
 // =====================================================
-// 2. 사인 요청 일괄 생성
+// 2. 사인 요청 일괄 생성 (직원)
 // =====================================================
 export async function createSignatureRequests(
   documentId: string,
@@ -107,18 +107,86 @@ export async function createSignatureRequests(
 }
 
 // =====================================================
-// 3. 사인 제출
+// 2-B. 외부 사인 요청 생성 (학부모 등)
+// =====================================================
+export type ExternalSignerInput = {
+  name: string;
+  email?: string;
+  phone?: string;
+};
+
+function generateToken(): string {
+  // 32자 랜덤 토큰
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Buffer.from(bytes).toString("base64url");
+}
+
+export async function createExternalSignatureRequests(
+  documentId: string,
+  requesterId: string,
+  externals: ExternalSignerInput[],
+  /** 토큰 유효 기간 (일). 기본 30일. */
+  expireDays = 30,
+): Promise<{ id: string; token: string; name: string }[]> {
+  if (!(await isUserAdmin(requesterId))) {
+    throw new Error("관리자만 사인을 요청할 수 있습니다.");
+  }
+  if (externals.length === 0) return [];
+
+  const expiresAt = new Date(Date.now() + expireDays * 24 * 60 * 60 * 1000);
+
+  const created = await Promise.all(
+    externals.map(async (ext) => {
+      const token = generateToken();
+      const r = await prisma.signatureRequest.create({
+        data: {
+          documentId,
+          requesterId,
+          signerId: null,
+          status: "PENDING",
+          externalName: ext.name.trim(),
+          externalEmail: ext.email?.trim() || null,
+          externalPhone: ext.phone?.trim() || null,
+          accessToken: token,
+          tokenExpiresAt: expiresAt,
+        },
+        select: { id: true, accessToken: true, externalName: true },
+      });
+      return {
+        id: r.id,
+        token: r.accessToken!,
+        name: r.externalName!,
+      };
+    }),
+  );
+
+  return created;
+}
+
+// =====================================================
+// 3. 사인 제출 (직원 또는 외부)
 // =====================================================
 export type SubmitSignatureParams = {
   requestId: string;
-  signerId: string;
+  /** 직원 사인이면 본인 user.id, 외부면 null */
+  signerId: string | null;
+  /** 외부 사인의 토큰 검증을 통과한 경우만 true */
+  externalToken?: string;
   signatureBase64: string; // dataURL: data:image/png;base64,...
   ip?: string;
   userAgent?: string;
 };
 
 export async function submitSignature(params: SubmitSignatureParams) {
-  const { requestId, signerId, signatureBase64, ip, userAgent } = params;
+  const {
+    requestId,
+    signerId,
+    externalToken,
+    signatureBase64,
+    ip,
+    userAgent,
+  } = params;
 
   // 권한 + 상태 체크
   const req = await prisma.signatureRequest.findUnique({
@@ -126,8 +194,20 @@ export async function submitSignature(params: SubmitSignatureParams) {
     include: { document: true },
   });
   if (!req) throw new Error("요청을 찾을 수 없습니다.");
-  if (req.signerId !== signerId) {
-    throw new Error("본인의 사인 요청이 아닙니다.");
+
+  // 권한 검증: 직원 또는 외부 토큰
+  if (signerId !== null) {
+    if (req.signerId !== signerId) {
+      throw new Error("본인의 사인 요청이 아닙니다.");
+    }
+  } else {
+    // 외부 사인
+    if (!externalToken || req.accessToken !== externalToken) {
+      throw new Error("유효하지 않은 사인 링크입니다.");
+    }
+    if (req.tokenExpiresAt && req.tokenExpiresAt < new Date()) {
+      throw new Error("사인 링크가 만료되었습니다.");
+    }
   }
   if (req.status !== "PENDING") {
     throw new Error("이미 처리된 요청입니다.");
@@ -144,7 +224,8 @@ export async function submitSignature(params: SubmitSignatureParams) {
   const admin = createAdminClient();
 
   // 1) 사인 PNG Storage 저장
-  const sigPath = `${signerId}/${requestId}.png`;
+  const sigOwner = signerId ?? `ext_${requestId}`;
+  const sigPath = `${sigOwner}/${requestId}.png`;
   const { error: sigErr } = await admin.storage
     .from(SIG_BUCKET)
     .upload(sigPath, sigBuffer, {
@@ -195,13 +276,20 @@ export async function submitSignature(params: SubmitSignatureParams) {
   });
 
   // 메타 정보 (영문으로 표기 - StandardFonts는 한글 미지원)
-  const signer = await prisma.user.findUnique({
-    where: { id: signerId },
-    select: { username: true, name: true },
-  });
+  let signerLabel: string;
+  if (signerId) {
+    const signer = await prisma.user.findUnique({
+      where: { id: signerId },
+      select: { username: true, name: true },
+    });
+    signerLabel = signer?.username ?? signerId;
+  } else {
+    // 외부 사인자
+    signerLabel = `external: ${req.externalName ?? "unknown"}`;
+  }
   const now = new Date();
   const meta = [
-    `Signer: ${signer?.username ?? signerId}`,
+    `Signer: ${signerLabel}`,
     `Date: ${now.toISOString()}`,
     ip ? `IP: ${ip}` : null,
     userAgent ? `Agent: ${userAgent.slice(0, 60)}` : null,
@@ -222,9 +310,10 @@ export async function submitSignature(params: SubmitSignatureParams) {
   // 4) 합성된 PDF 저장
   const signedBytes = await pdfDoc.save();
   const signedBuffer = Buffer.from(signedBytes);
+  const signerKey = signerId ?? `ext_${requestId}`;
   const signedPath = req.document.storagePath.replace(
     /\.pdf$/i,
-    `__signed_${signerId}.pdf`,
+    `__signed_${signerKey}.pdf`,
   );
 
   const { error: signedErr } = await admin.storage
@@ -235,7 +324,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
     });
   if (signedErr) throw new Error(`합성 PDF 저장 실패: ${signedErr.message}`);
 
-  // 5) DB 업데이트
+  // 5) DB 업데이트 (외부 사인 시 토큰 무효화)
   await prisma.signatureRequest.update({
     where: { id: requestId },
     data: {
@@ -245,6 +334,9 @@ export async function submitSignature(params: SubmitSignatureParams) {
       signedAt: now,
       signerIp: ip ?? null,
       signerAgent: userAgent ?? null,
+      ...(signerId === null
+        ? { accessToken: null } // 외부 사인은 토큰 무효화 (재사용 차단)
+        : {}),
     },
   });
 
@@ -330,6 +422,19 @@ export async function getSignatureRequestForSigner(
 ) {
   return prisma.signatureRequest.findFirst({
     where: { id: requestId, signerId },
+    include: {
+      document: true,
+      requester: { select: { name: true, username: true } },
+    },
+  });
+}
+
+// =====================================================
+// 외부 사인: 토큰으로 요청 조회
+// =====================================================
+export async function getSignatureRequestByToken(token: string) {
+  return prisma.signatureRequest.findFirst({
+    where: { accessToken: token },
     include: {
       document: true,
       requester: { select: { name: true, username: true } },

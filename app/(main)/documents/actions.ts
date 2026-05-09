@@ -1,18 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getMe } from "@/lib/chat";
 import {
+  createExternalSignatureRequests,
   createSignatureRequests,
   getDocumentSignedUrl,
   submitSignature,
   uploadDocument,
+  type ExternalSignerInput,
 } from "@/lib/documents";
 
 // =====================================================
-// 관리자: 문서 업로드 + 사인 요청
+// 관리자: 문서 업로드 + 사인 요청 (직원 + 외부)
 // =====================================================
 export type UploadState = {
   error?: string;
@@ -31,15 +32,40 @@ export async function uploadDocumentAction(
   const description = (formData.get("description") as string)?.trim();
   const signerIdsRaw = formData.getAll("signerIds") as string[];
 
+  // 외부 사인자 (학부모) — JSON으로 전송
+  const externalsJson = formData.get("externals") as string | null;
+  let externals: ExternalSignerInput[] = [];
+  if (externalsJson) {
+    try {
+      const parsed = JSON.parse(externalsJson);
+      if (Array.isArray(parsed)) {
+        externals = parsed
+          .filter((p) => p && typeof p.name === "string" && p.name.trim())
+          .map((p) => ({
+            name: p.name.trim(),
+            email: typeof p.email === "string" ? p.email.trim() : undefined,
+            phone: typeof p.phone === "string" ? p.phone.trim() : undefined,
+          }));
+      }
+    } catch {
+      // JSON 파싱 실패 → 외부 사인자 없음으로 처리
+    }
+  }
+
   if (!file || file.size === 0) return { error: "PDF 파일을 선택해주세요." };
   if (!title) return { error: "제목을 입력해주세요." };
-  if (signerIdsRaw.length === 0) {
-    return { error: "사인할 직원을 1명 이상 선택해주세요." };
+  if (signerIdsRaw.length === 0 && externals.length === 0) {
+    return { error: "사인 대상자를 직원 또는 외부 1명 이상 추가해주세요." };
   }
 
   try {
     const { id } = await uploadDocument(me.id, file, title, description);
-    await createSignatureRequests(id, me.id, signerIdsRaw);
+    if (signerIdsRaw.length > 0) {
+      await createSignatureRequests(id, me.id, signerIdsRaw);
+    }
+    if (externals.length > 0) {
+      await createExternalSignatureRequests(id, me.id, externals, 30);
+    }
     revalidatePath("/documents");
     return { documentId: id };
   } catch (e) {
