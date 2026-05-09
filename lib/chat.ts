@@ -1,7 +1,14 @@
 /**
  * 채팅 데이터 액세스 헬퍼 (서버 전용)
  *
- * 권한: 항상 호출자(authUser → DB User)를 기반으로 본인 채팅만 조작
+ * 채팅 종류:
+ *  - DM (1:1)             : ChatMember 명시 멤버 2명
+ *  - GROUP (명시 멤버)     : ChatMember 명시 멤버 N명
+ *  - 레벨 채팅 (GROUP+levelRequired) : 멤버 명시 안 함, role.defaultLevel >= levelRequired면 자동 공개
+ *
+ * 권한 검증 패턴:
+ *  - canAccess(chatId, userId): 채팅 접근 가능 여부 (멤버이거나, 레벨 충족)
+ *  - 레벨 채팅 첫 진입 시 자동으로 ChatMember 생성 (lastReadAt 추적용)
  */
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
@@ -19,10 +26,63 @@ export async function getMe() {
   });
 }
 
+async function getMyLevel(userId: string): Promise<number> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: { select: { defaultLevel: true } } },
+  });
+  return u?.role.defaultLevel ?? 0;
+}
+
+async function isUserAdmin(userId: string): Promise<boolean> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: { select: { isAdmin: true } } },
+  });
+  return !!u?.role.isAdmin;
+}
+
+/**
+ * 채팅 접근 가능 여부:
+ *  - 명시 멤버이거나
+ *  - 레벨 채팅이고 user.role.defaultLevel >= chat.levelRequired
+ */
+async function canAccess(
+  chatId: string,
+  userId: string,
+): Promise<{ ok: true; isMember: boolean } | { ok: false }> {
+  const member = await prisma.chatMember.findUnique({
+    where: { chatId_userId: { chatId, userId } },
+  });
+  if (member) return { ok: true, isMember: true };
+
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { levelRequired: true },
+  });
+  if (!chat || chat.levelRequired === null) return { ok: false };
+
+  const myLevel = await getMyLevel(userId);
+  if (myLevel >= chat.levelRequired) return { ok: true, isMember: false };
+  return { ok: false };
+}
+
+/** 레벨 채팅 첫 진입 시 ChatMember 자동 upsert (멤버십 + lastReadAt 추적용) */
+async function ensureMembership(chatId: string, userId: string) {
+  await prisma.chatMember.upsert({
+    where: { chatId_userId: { chatId, userId } },
+    create: { chatId, userId },
+    update: {},
+  });
+}
+
 // =====================================================
-// 내 채팅방 목록 (마지막 메시지/시간/안 읽은 수 포함)
+// 내 채팅방 목록 (멤버십 + 레벨 채팅 합쳐서 반환)
 // =====================================================
 export async function getMyChats(userId: string) {
+  const myLevel = await getMyLevel(userId);
+
+  // 1) 명시적 멤버십 채팅 (DM, GROUP, 그리고 이미 진입한 레벨 채팅)
   const memberships = await prisma.chatMember.findMany({
     where: { userId },
     include: {
@@ -30,9 +90,7 @@ export async function getMyChats(userId: string) {
         include: {
           members: {
             include: {
-              user: {
-                select: { id: true, username: true, name: true },
-              },
+              user: { select: { id: true, username: true, name: true } },
             },
           },
           messages: {
@@ -51,33 +109,106 @@ export async function getMyChats(userId: string) {
     },
   });
 
-  // 채팅방을 마지막 메시지 시각순으로 정렬
-  const items = memberships.map((m) => {
-    const lastMessage = m.chat.messages[0] ?? null;
-    const otherMembers = m.chat.members
-      .filter((cm) => cm.userId !== userId)
-      .map((cm) => cm.user);
-    // 1:1이면 상대방 이름, 그룹이면 chat.name (없으면 멤버 이름들)
-    const title =
-      m.chat.type === "DM"
-        ? otherMembers[0]?.name ?? "(상대 없음)"
-        : m.chat.name ?? otherMembers.map((u) => u.name).join(", ");
+  const memberChatIds = new Set(memberships.map((m) => m.chatId));
 
-    const unread =
-      lastMessage && (!m.lastReadAt || lastMessage.createdAt > m.lastReadAt)
-        ? 1 // 정확한 카운트는 별도 쿼리 필요. 여기선 0/1만.
-        : 0;
-
-    return {
-      chatId: m.chatId,
-      type: m.chat.type,
-      title,
-      otherMembers,
-      lastMessage,
-      unread,
-      lastReadAt: m.lastReadAt,
-    };
+  // 2) 레벨 충족 + 아직 진입 안 한 레벨 채팅
+  const levelChats = await prisma.chat.findMany({
+    where: {
+      levelRequired: { not: null, lte: myLevel },
+      id: { notIn: [...memberChatIds] },
+    },
+    include: {
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          content: true,
+          type: true,
+          createdAt: true,
+          userId: true,
+        },
+      },
+    },
   });
+
+  // 3) 각 채팅별 unread count 계산 (멤버십 기준 lastReadAt)
+  // 레벨 채팅 중 아직 멤버십 없는 건 모든 메시지가 unread
+  const unreadCounts = new Map<string, number>();
+
+  // 멤버십 있는 채팅 — lastReadAt 이후 + 본인 메시지 제외
+  for (const m of memberships) {
+    if (m.chat.messages.length === 0) {
+      unreadCounts.set(m.chatId, 0);
+      continue;
+    }
+    const lastMsg = m.chat.messages[0];
+    if (m.lastReadAt && lastMsg.createdAt <= m.lastReadAt) {
+      unreadCounts.set(m.chatId, 0);
+      continue;
+    }
+    const cnt = await prisma.message.count({
+      where: {
+        chatId: m.chatId,
+        userId: { not: userId },
+        ...(m.lastReadAt
+          ? { createdAt: { gt: m.lastReadAt } }
+          : {}),
+      },
+    });
+    unreadCounts.set(m.chatId, cnt);
+  }
+
+  // 레벨 채팅 (멤버십 없음) — 본인 메시지 제외 전체
+  for (const lc of levelChats) {
+    if (lc.messages.length === 0) {
+      unreadCounts.set(lc.id, 0);
+      continue;
+    }
+    const cnt = await prisma.message.count({
+      where: {
+        chatId: lc.id,
+        userId: { not: userId },
+      },
+    });
+    unreadCounts.set(lc.id, cnt);
+  }
+
+  // 4) 통합 리스트 빌드
+  const items = [
+    ...memberships.map((m) => {
+      const lastMessage = m.chat.messages[0] ?? null;
+      const otherMembers = m.chat.members
+        .filter((cm) => cm.userId !== userId)
+        .map((cm) => cm.user);
+      const title =
+        m.chat.type === "DM"
+          ? otherMembers[0]?.name ?? "(상대 없음)"
+          : m.chat.name ?? otherMembers.map((u) => u.name).join(", ");
+      return {
+        chatId: m.chatId,
+        type: m.chat.type as "DM" | "GROUP",
+        title,
+        otherMembers,
+        lastMessage,
+        unread: unreadCounts.get(m.chatId) ?? 0,
+        lastReadAt: m.lastReadAt,
+        levelRequired: m.chat.levelRequired,
+        isLevelChat: m.chat.levelRequired !== null,
+      };
+    }),
+    ...levelChats.map((lc) => ({
+      chatId: lc.id,
+      type: lc.type as "DM" | "GROUP",
+      title: lc.name ?? `레벨 ${lc.levelRequired}+ 채팅`,
+      otherMembers: [],
+      lastMessage: lc.messages[0] ?? null,
+      unread: unreadCounts.get(lc.id) ?? 0,
+      lastReadAt: null,
+      levelRequired: lc.levelRequired,
+      isLevelChat: true,
+    })),
+  ];
 
   items.sort((a, b) => {
     const ta = a.lastMessage?.createdAt.getTime() ?? 0;
@@ -89,35 +220,66 @@ export async function getMyChats(userId: string) {
 }
 
 // =====================================================
-// 그룹 채팅 생성
+// 그룹 채팅 생성 (명시 멤버 또는 레벨 기반)
 // =====================================================
-export async function createGroupChat(
-  name: string,
-  memberIds: string[],
-  myUserId: string,
-) {
-  const trimmed = name.trim();
-  if (!trimmed) throw new Error("그룹 이름을 입력해주세요.");
-  if (trimmed.length > 50) throw new Error("그룹 이름은 50자 이하로 입력해주세요.");
+export type CreateGroupParams = {
+  name: string;
+  myUserId: string;
+} & (
+  | { mode: "members"; memberIds: string[] }
+  | { mode: "level"; levelRequired: number }
+);
 
-  // 본인 자동 포함, 중복 제거
-  const allMembers = [...new Set([myUserId, ...memberIds])];
+export async function createGroupChat(params: CreateGroupParams) {
+  const trimmed = params.name.trim();
+  if (!trimmed) throw new Error("그룹 이름을 입력해주세요.");
+  if (trimmed.length > 50)
+    throw new Error("그룹 이름은 50자 이하로 입력해주세요.");
+
+  if (params.mode === "level") {
+    // 관리자만 레벨 채팅 생성 가능
+    if (!(await isUserAdmin(params.myUserId))) {
+      throw new Error("레벨 기반 채팅은 관리자만 생성할 수 있습니다.");
+    }
+    if (
+      !Number.isFinite(params.levelRequired) ||
+      params.levelRequired < 0 ||
+      params.levelRequired > 99
+    ) {
+      throw new Error("레벨은 0~99 사이의 숫자여야 합니다.");
+    }
+    const chat = await prisma.chat.create({
+      data: {
+        type: "GROUP",
+        name: trimmed,
+        levelRequired: params.levelRequired,
+        createdById: params.myUserId,
+        // 생성자는 ChatMember로 자동 가입 (lastReadAt 추적용)
+        members: {
+          create: [{ userId: params.myUserId }],
+        },
+      },
+      select: { id: true },
+    });
+    return chat.id;
+  }
+
+  // mode: members (기존 동작)
+  const allMembers = [...new Set([params.myUserId, ...params.memberIds])];
   if (allMembers.length < 3) {
     throw new Error("그룹 채팅은 본인 포함 최소 3명이어야 합니다.");
   }
-
-  // 멤버 모두 실제 존재 확인
   const found = await prisma.user.count({
     where: { id: { in: allMembers } },
   });
   if (found !== allMembers.length) {
     throw new Error("일부 멤버를 찾을 수 없습니다.");
   }
-
   const chat = await prisma.chat.create({
     data: {
       type: "GROUP",
       name: trimmed,
+      createdById: params.myUserId,
       members: {
         create: allMembers.map((userId) => ({ userId })),
       },
@@ -128,20 +290,17 @@ export async function createGroupChat(
 }
 
 // =====================================================
-// 1:1 DM 가져오기/생성 (둘 다 멤버인 DM이 이미 있으면 그것 반환)
+// 1:1 DM 가져오기/생성
 // =====================================================
 export async function createOrGetDM(myUserId: string, otherUserId: string) {
   if (myUserId === otherUserId) {
     throw new Error("자기 자신과는 채팅할 수 없습니다.");
   }
-
-  // 둘 다 멤버인 DM 채팅 검색
   const existingMine = await prisma.chatMember.findMany({
     where: { userId: myUserId, chat: { type: "DM" } },
     select: { chatId: true },
   });
   const myChatIds = existingMine.map((m) => m.chatId);
-
   if (myChatIds.length > 0) {
     const shared = await prisma.chat.findFirst({
       where: {
@@ -153,8 +312,6 @@ export async function createOrGetDM(myUserId: string, otherUserId: string) {
     });
     if (shared) return shared.id;
   }
-
-  // 새 DM 생성
   const chat = await prisma.chat.create({
     data: {
       type: "DM",
@@ -168,14 +325,16 @@ export async function createOrGetDM(myUserId: string, otherUserId: string) {
 }
 
 // =====================================================
-// 특정 채팅의 메시지 목록 (오래된 → 최신)
+// 메시지 목록 조회
 // =====================================================
 export async function getChatMessages(chatId: string, userId: string) {
-  // 권한 체크
-  const member = await prisma.chatMember.findUnique({
-    where: { chatId_userId: { chatId, userId } },
-  });
-  if (!member) throw new Error("이 채팅의 멤버가 아닙니다.");
+  const access = await canAccess(chatId, userId);
+  if (!access.ok) throw new Error("이 채팅에 접근 권한이 없습니다.");
+
+  // 레벨 채팅이고 아직 멤버 아니면 자동 가입 (lastReadAt 추적 시작)
+  if (!access.isMember) {
+    await ensureMembership(chatId, userId);
+  }
 
   const messages = await prisma.message.findMany({
     where: { chatId },
@@ -183,19 +342,22 @@ export async function getChatMessages(chatId: string, userId: string) {
     include: {
       user: { select: { id: true, username: true, name: true } },
     },
-    take: 200, // 페이징은 추후 추가
+    take: 200,
   });
   return messages;
 }
 
 // =====================================================
-// 채팅방 정보 (헤더 표시용)
+// 채팅방 정보
 // =====================================================
 export async function getChatInfo(chatId: string, userId: string) {
-  const member = await prisma.chatMember.findUnique({
-    where: { chatId_userId: { chatId, userId } },
-  });
-  if (!member) return null;
+  const access = await canAccess(chatId, userId);
+  if (!access.ok) return null;
+
+  // 레벨 채팅 미가입 시 자동 가입
+  if (!access.isMember) {
+    await ensureMembership(chatId, userId);
+  }
 
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
@@ -209,15 +371,32 @@ export async function getChatInfo(chatId: string, userId: string) {
   });
   if (!chat) return null;
 
+  // 본인의 lastReadAt (resume 위치용)
+  const me = await prisma.chatMember.findUnique({
+    where: { chatId_userId: { chatId, userId } },
+    select: { lastReadAt: true },
+  });
+
   const others = chat.members
     .filter((m) => m.userId !== userId)
     .map((m) => m.user);
-  const title =
-    chat.type === "DM"
-      ? others[0]?.name ?? "(상대 없음)"
-      : chat.name ?? others.map((u) => u.name).join(", ");
 
-  return { ...chat, title, otherMembers: others };
+  let title: string;
+  if (chat.type === "DM") {
+    title = others[0]?.name ?? "(상대 없음)";
+  } else if (chat.levelRequired !== null) {
+    title = chat.name ?? `레벨 ${chat.levelRequired}+ 채팅`;
+  } else {
+    title = chat.name ?? others.map((u) => u.name).join(", ");
+  }
+
+  return {
+    ...chat,
+    title,
+    otherMembers: others,
+    myLastReadAt: me?.lastReadAt ?? null,
+    isLevelChat: chat.levelRequired !== null,
+  };
 }
 
 // =====================================================
@@ -228,15 +407,17 @@ export async function sendMessage(
   userId: string,
   content: string,
 ) {
-  // 권한 체크
-  const member = await prisma.chatMember.findUnique({
-    where: { chatId_userId: { chatId, userId } },
-  });
-  if (!member) throw new Error("이 채팅의 멤버가 아닙니다.");
+  const access = await canAccess(chatId, userId);
+  if (!access.ok) throw new Error("이 채팅에 접근 권한이 없습니다.");
+
+  if (!access.isMember) {
+    await ensureMembership(chatId, userId);
+  }
 
   const trimmed = content.trim();
   if (!trimmed) throw new Error("메시지가 비어있습니다.");
-  if (trimmed.length > 4000) throw new Error("메시지가 너무 깁니다 (4000자 제한).");
+  if (trimmed.length > 4000)
+    throw new Error("메시지가 너무 깁니다 (4000자 제한).");
 
   return prisma.message.create({
     data: {
@@ -252,11 +433,12 @@ export async function sendMessage(
 }
 
 // =====================================================
-// 읽음 표시 갱신
+// 읽음 표시 갱신 (멤버십 없으면 생성)
 // =====================================================
 export async function markAsRead(chatId: string, userId: string) {
-  await prisma.chatMember.update({
+  await prisma.chatMember.upsert({
     where: { chatId_userId: { chatId, userId } },
-    data: { lastReadAt: new Date() },
+    create: { chatId, userId, lastReadAt: new Date() },
+    update: { lastReadAt: new Date() },
   });
 }

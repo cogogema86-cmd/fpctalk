@@ -24,7 +24,7 @@ export async function startDmAction(formData: FormData) {
 }
 
 // =====================================================
-// 그룹 채팅 생성
+// 그룹 채팅 생성 (명시 멤버 또는 레벨 기반)
 // =====================================================
 export type CreateGroupState = {
   error?: string;
@@ -38,14 +38,34 @@ export async function createGroupChatAction(
   if (!me) return { error: "로그인이 필요합니다." };
 
   const name = formData.get("name") as string;
-  const memberIds = formData.getAll("memberIds") as string[];
+  const mode = (formData.get("mode") as string) || "members";
 
   try {
-    const chatId = await createGroupChat(name, memberIds, me.id);
+    let chatId: string;
+    if (mode === "level") {
+      const levelStr = formData.get("levelRequired") as string;
+      const level = parseInt(levelStr, 10);
+      if (!Number.isFinite(level)) {
+        return { error: "레벨을 숫자로 입력해주세요." };
+      }
+      chatId = await createGroupChat({
+        mode: "level",
+        myUserId: me.id,
+        name,
+        levelRequired: level,
+      });
+    } else {
+      const memberIds = formData.getAll("memberIds") as string[];
+      chatId = await createGroupChat({
+        mode: "members",
+        myUserId: me.id,
+        name,
+        memberIds,
+      });
+    }
     revalidatePath("/chat");
     redirect(`/chat/${chatId}`);
   } catch (e) {
-    // redirect()는 NEXT_REDIRECT throw — 그건 그대로 통과
     if (e instanceof Error && e.message === "NEXT_REDIRECT") throw e;
     return {
       error: e instanceof Error ? e.message : "생성 실패",

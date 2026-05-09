@@ -81,14 +81,25 @@ model User {
 // 채팅
 // =====================================================
 model Chat {
-  id        String   @id @default(cuid())
-  type      ChatType @default(GROUP)
-  name      String?
+  id   String   @id @default(cuid())
+  type ChatType @default(GROUP)
+  name String?
+
+  // 레벨 기반 자동 공개 채팅:
+  // - null: DM 또는 명시적 멤버 그룹 (기존 동작)
+  // - N (>=0): 사용자의 role.defaultLevel >= N 이면 자동으로 보임 (멤버 명시 불필요)
+  levelRequired Int?
+
+  // 레벨 채팅 생성자 (관리자) 추적용
+  createdById String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   members  ChatMember[]
   messages Message[]
+
+  @@index([levelRequired])
 }
 
 enum ChatType {

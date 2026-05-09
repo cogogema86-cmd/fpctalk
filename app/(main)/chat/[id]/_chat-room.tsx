@@ -1,8 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { Fragment, useActionState, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { sendMessageAction, type SendMessageState } from "../actions";
+import {
+  markAsReadAction,
+  sendMessageAction,
+  type SendMessageState,
+} from "../actions";
 
 type Message = {
   id: string;
@@ -27,15 +31,16 @@ export function ChatRoom({
   meId,
   meName,
   members,
+  myLastReadAt,
   initialMessages,
 }: {
   chatId: string;
   meId: string;
   meName: string;
   members: Member[];
+  myLastReadAt: string | null;
   initialMessages: Message[];
 }) {
-  // 멤버 id → 정보 맵 (Realtime으로 들어오는 새 메시지에 작성자 이름 부착)
   const memberMap = new Map(members.map((m) => [m.id, m]));
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [state, formAction, isPending] = useActionState(
@@ -45,17 +50,55 @@ export function ChatRoom({
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dividerRef = useRef<HTMLDivElement>(null);
+  const initialScrollDoneRef = useRef(false);
 
-  // 새 메시지 도착 시 스크롤 맨 아래로
+  // "여기서부터 안 읽음" 구분선이 들어갈 첫 메시지 인덱스
+  // 본인 메시지가 아니면서 lastReadAt 이후인 첫 메시지
+  const lastReadTime = myLastReadAt ? new Date(myLastReadAt).getTime() : 0;
+  const firstUnreadIdx = (() => {
+    if (!myLastReadAt) {
+      // 처음 진입 (멤버십도 없거나 lastReadAt 없음) — 메시지 있으면 첫 unread는 본인 아닌 첫 메시지
+      const idx = initialMessages.findIndex((m) => m.userId !== meId);
+      return idx >= 0 ? idx : -1;
+    }
+    return initialMessages.findIndex(
+      (m) => m.userId !== meId && new Date(m.createdAt).getTime() > lastReadTime,
+    );
+  })();
+
+  // 진입 시 초기 스크롤: 미읽 메시지 있으면 구분선으로, 없으면 맨 아래
   useEffect(() => {
+    if (initialScrollDoneRef.current) return;
+    initialScrollDoneRef.current = true;
+    setTimeout(() => {
+      if (firstUnreadIdx >= 0 && dividerRef.current && scrollRef.current) {
+        // 구분선이 화면 상단에 가깝게 오도록
+        dividerRef.current.scrollIntoView({ block: "start" });
+        // 약간 위로 여백 (구분선 위 메시지 한두 개도 보이게)
+        scrollRef.current.scrollTop = Math.max(
+          0,
+          scrollRef.current.scrollTop - 80,
+        );
+      } else {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+      }
+      // 진입 후 markAsRead (조금 늦게 호출 — 사용자가 화면 본 후)
+      setTimeout(() => {
+        markAsReadAction(chatId).catch(() => {});
+      }, 1500);
+    }, 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 새 메시지 도착 시 (이미 진입 후): 자동 스크롤만 — 구분선은 그대로 둠
+  useEffect(() => {
+    if (!initialScrollDoneRef.current) return;
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
   }, [messages.length]);
-
-  // memberMap을 effect 의존성에서 안정적으로 사용하기 위해 변환
-  // (지금은 매 렌더마다 새 Map이지만 effect 안에선 closure로 캡쳐)
 
   // Realtime 구독
   useEffect(() => {
@@ -79,12 +122,10 @@ export function ChatRoom({
             type: string;
             createdAt: string;
           };
-
-          // 이미 있으면 무시 (중복 방지)
           setMessages((prev) => {
             if (prev.some((m) => m.id === row.id)) return prev;
-            // 작성자 정보: 본인이거나 멤버맵에서 찾음
-            let user: { id: string; username: string; name: string } | null = null;
+            let user: { id: string; username: string; name: string } | null =
+              null;
             if (row.userId === meId) {
               user = { id: meId, username: "", name: meName };
             } else if (row.userId) {
@@ -104,6 +145,11 @@ export function ChatRoom({
               },
             ];
           });
+          // 새 메시지 도착 시 markAsRead (사용자가 보고 있다고 가정)
+          // 다른 사람이 보낸 메시지면 갱신
+          if (row.userId !== meId) {
+            markAsReadAction(chatId).catch(() => {});
+          }
         },
       )
       .subscribe();
@@ -111,11 +157,9 @@ export function ChatRoom({
     return () => {
       supabase.removeChannel(channel);
     };
-    // memberMap은 매 렌더마다 새로 생성되지만 effect 안에서 closure로 사용 — chatId가 같으면 재구독 불필요
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, meId, meName, members]);
 
-  // 전송 후 입력칸 비우기
   const handleSubmit = (formData: FormData) => {
     const content = formData.get("content") as string;
     if (!content?.trim()) return;
@@ -123,7 +167,6 @@ export function ChatRoom({
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  // Enter로 전송, Shift+Enter는 줄바꿈
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -133,7 +176,6 @@ export function ChatRoom({
 
   return (
     <>
-      {/* 메시지 영역 */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
@@ -148,19 +190,21 @@ export function ChatRoom({
             const prev = messages[i - 1];
             const showAuthor =
               !isMine && (!prev || prev.userId !== m.userId);
+            const showDivider = i === firstUnreadIdx;
             return (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                isMine={isMine}
-                showAuthor={showAuthor}
-              />
+              <Fragment key={m.id}>
+                {showDivider && <UnreadDivider ref={dividerRef} />}
+                <MessageBubble
+                  message={m}
+                  isMine={isMine}
+                  showAuthor={showAuthor}
+                />
+              </Fragment>
             );
           })
         )}
       </div>
 
-      {/* 입력 영역 */}
       <form
         ref={formRef}
         action={handleSubmit}
@@ -195,6 +239,20 @@ export function ChatRoom({
   );
 }
 
+const UnreadDivider = ({
+  ref,
+}: {
+  ref: React.RefObject<HTMLDivElement | null>;
+}) => (
+  <div ref={ref} className="flex items-center gap-2 py-2">
+    <div className="flex-1 h-px bg-red-300 dark:bg-red-700" />
+    <span className="text-xs font-medium text-red-600 dark:text-red-400 px-2 bg-zinc-50 dark:bg-zinc-950">
+      여기서부터 안 읽음
+    </span>
+    <div className="flex-1 h-px bg-red-300 dark:bg-red-700" />
+  </div>
+);
+
 function MessageBubble({
   message,
   isMine,
@@ -206,7 +264,9 @@ function MessageBubble({
 }) {
   return (
     <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[70%] ${isMine ? "items-end" : "items-start"} flex flex-col`}>
+      <div
+        className={`max-w-[70%] ${isMine ? "items-end" : "items-start"} flex flex-col`}
+      >
         {showAuthor && message.user && (
           <div className="text-xs text-zinc-500 mb-0.5 px-1">
             {message.user.name}

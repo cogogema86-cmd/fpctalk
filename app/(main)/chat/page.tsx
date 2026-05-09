@@ -7,6 +7,7 @@ export default async function ChatListPage() {
   if (!me) redirect("/login");
 
   const chats = await getMyChats(me.id);
+  const totalUnread = chats.reduce((s, c) => s + c.unread, 0);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-4">
@@ -14,6 +15,11 @@ export default async function ChatListPage() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
             채팅
+            {totalUnread > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center min-w-[1.5rem] h-6 rounded-full bg-red-500 text-white text-xs font-medium px-2 align-middle">
+                {totalUnread > 99 ? "99+" : totalUnread}
+              </span>
+            )}
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             현재 채팅방 {chats.length}개
@@ -48,18 +54,18 @@ export default async function ChatListPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-zinc-900 dark:text-zinc-50 truncate">
                         {c.title}
                       </span>
-                      {c.type === "GROUP" && (
+                      {c.type === "GROUP" && !c.isLevelChat && (
                         <span className="text-xs rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-zinc-600 dark:text-zinc-400">
                           그룹
                         </span>
                       )}
-                      {c.unread > 0 && (
-                        <span className="text-xs rounded-full bg-red-500 text-white px-1.5 py-0.5">
-                          새 메시지
+                      {c.isLevelChat && (
+                        <span className="text-xs rounded bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
+                          ⭐ 레벨 {c.levelRequired}+
                         </span>
                       )}
                     </div>
@@ -73,11 +79,18 @@ export default async function ChatListPage() {
                       </div>
                     )}
                   </div>
-                  {c.lastMessage && (
-                    <span className="text-xs text-zinc-400 shrink-0">
-                      {formatTime(c.lastMessage.createdAt)}
-                    </span>
-                  )}
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    {c.lastMessage && (
+                      <span className="text-xs text-zinc-400">
+                        {formatTime(c.lastMessage.createdAt)}
+                      </span>
+                    )}
+                    {c.unread > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-red-500 text-white text-[11px] font-semibold px-1.5">
+                        {c.unread > 99 ? "99+" : c.unread}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </Link>
             </li>
