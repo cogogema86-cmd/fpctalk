@@ -132,7 +132,8 @@ export function BadgeSync({
     lastSeenRef.current = { chat: chatUnread, signs: pendingSigns };
   }, [chatUnread, pendingSigns]);
 
-  // 30초마다 서버 fetch — 다른 사람 메시지 도착 / 사인 요청 변동 catch-up
+  // 폴링 + visibility 즉시 갱신
+  // - 카운트가 변경되면 router.refresh() 로 SSR 페이지(사이드바/모바일nav 배지) 동기화
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
@@ -142,21 +143,42 @@ export function BadgeSync({
         const data = await res.json();
         if (cancelled) return;
         if (
-          typeof data.chat === "number" &&
-          typeof data.signs === "number"
+          typeof data.chat !== "number" ||
+          typeof data.signs !== "number"
         ) {
+          return;
+        }
+        const changed =
+          data.chat !== lastSeenRef.current.chat ||
+          data.signs !== lastSeenRef.current.signs;
+        if (changed) {
           setCounts({ chat: data.chat, signs: data.signs });
+          lastSeenRef.current = { chat: data.chat, signs: data.signs };
+          // 사이드바/모바일 nav의 SSR 배지도 동기화
+          router.refresh();
         }
       } catch {
         // ignore
       }
     };
-    const id = setInterval(tick, 30_000);
+    // 첫 로드 직후 한 번 + 이후 10초 간격
+    void tick();
+    const id = setInterval(tick, 10_000);
+
+    // 탭 다시 활성화 시 즉시 갱신
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+
     return () => {
       cancelled = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
     };
-  }, []);
+  }, [router]);
 
   // 채팅방 진입 시 해당 방의 unread는 markAsRead로 이미 클리어되므로
   // pathname 변경 시 한번 refresh 해서 최신 카운트 반영
