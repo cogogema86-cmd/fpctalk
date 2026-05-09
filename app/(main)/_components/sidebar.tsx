@@ -12,9 +12,15 @@ type NavItem = {
 const BASE_NAV: NavItem[] = [
   { href: "/dashboard", label: "대시보드", icon: "🏠" },
   { href: "/chat", label: "채팅", icon: "💬" },
-  { href: "/assistant", label: "AI 비서", icon: "🤖" },
   { href: "/documents", label: "문서", icon: "📄" },
 ];
+
+// 레벨 3+ 만 보임 (학원장급)
+const ASSISTANT_NAV: NavItem = {
+  href: "/assistant",
+  label: "AI 비서",
+  icon: "🤖",
+};
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin/users", label: "직원 관리", icon: "👥" },
@@ -23,8 +29,15 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/leave", label: "연차 승인", icon: "✅" },
 ];
 
-export function Sidebar({ isAdmin }: { isAdmin: boolean }) {
+export function Sidebar({
+  isAdmin,
+  userLevel,
+}: {
+  isAdmin: boolean;
+  userLevel: number;
+}) {
   const pathname = usePathname();
+  const showAssistant = userLevel >= 3;
 
   return (
     <nav className="hidden md:flex w-56 shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
@@ -32,6 +45,19 @@ export function Sidebar({ isAdmin }: { isAdmin: boolean }) {
         {BASE_NAV.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
+
+        {showAssistant && (
+          <>
+            <li className="pt-4 pb-1 px-3 text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              학원장 도구
+            </li>
+            <NavLink
+              key={ASSISTANT_NAV.href}
+              item={ASSISTANT_NAV}
+              pathname={pathname}
+            />
+          </>
+        )}
 
         {isAdmin && (
           <>

@@ -3,15 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ITEMS = [
+const BASE_ITEMS = [
   { href: "/dashboard", label: "홈", icon: "🏠" },
   { href: "/chat", label: "채팅", icon: "💬" },
-  { href: "/assistant", label: "AI", icon: "🤖" },
   { href: "/documents", label: "문서", icon: "📄" },
 ];
 
-export function MobileNav() {
+const ASSISTANT_ITEM = {
+  href: "/assistant",
+  label: "AI",
+  icon: "🤖",
+};
+
+export function MobileNav({ userLevel }: { userLevel: number }) {
   const pathname = usePathname();
+  const ITEMS = userLevel >= 3 ? [...BASE_ITEMS, ASSISTANT_ITEM] : BASE_ITEMS;
   return (
     <nav className="md:hidden border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black flex justify-around">
       {ITEMS.map((item) => {

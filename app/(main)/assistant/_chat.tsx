@@ -25,10 +25,10 @@ type Msg =
     };
 
 const EXAMPLES = [
-  { mode: "fast" as const, text: "내일 회의 안내 메시지 짧게 작성해줘" },
-  { mode: "fast" as const, text: "이번 주 회의에서 결정된 사항 정리하면 어떻게 적어?" },
-  { mode: "pro" as const, text: "여름방학 캠프 학부모 안내문 초안" },
-  { mode: "pro" as const, text: "현장학습 동의서 양식 작성해줘" },
+  { mode: "fast" as const, text: "오늘 길동이는 어떻게 하나요?" },
+  { mode: "fast" as const, text: "이번 주 회의 일정 알려줘" },
+  { mode: "pro" as const, text: "Summarize this week's important decisions" },
+  { mode: "pro" as const, text: "여름방학 캠프 학부모 안내문 초안 작성해줘" },
 ];
 
 export function AssistantChat({ userName }: { userName: string }) {
@@ -203,12 +203,11 @@ export function AssistantChat({ userName }: { userName: string }) {
             안녕하세요, {userName}님
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            잊어버린 일 다시 알려드리고, 약속한 일정 정리하고, 공지·동의서
-            초안을 만들어 드릴 수 있어요.
+            학원의 모든 채팅을 알고 있는 비서입니다. 누가 언제 무슨 말을 했는지
+            기억하고, 일정·약속·정보를 인용해 답변합니다.
           </p>
           <p className="mt-1 text-xs text-zinc-400">
-            ⚠️ 출퇴근/매출/학사 등 시스템 내부 데이터는 직접 보지 못합니다 — 해당
-            메뉴에서 확인해주세요.
+            한국어 / English 모두 OK · 질문 언어로 답변
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-left">

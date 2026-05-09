@@ -134,6 +134,61 @@ export type PolledMessage = {
   user: { id: string; username: string; name: string } | null;
 };
 
+// =====================================================
+// 메시지 번역
+// 클라이언트가 누른 메시지의 텍스트를 받아서 한↔영 번역
+// =====================================================
+import { askAI } from "@/lib/ai";
+
+export type TranslateResult = {
+  error?: string;
+  translation?: string;
+  /** 감지/타겟 언어 라벨 */
+  fromLang?: string;
+  toLang?: string;
+};
+
+export async function translateMessageAction(
+  text: string,
+  target: "ko" | "en",
+): Promise<TranslateResult> {
+  const me = await getMe();
+  if (!me) return { error: "로그인이 필요합니다." };
+
+  const trimmed = text.trim();
+  if (!trimmed) return { error: "번역할 텍스트가 없습니다." };
+  if (trimmed.length > 2000) {
+    return { error: "텍스트가 너무 깁니다 (2000자 제한)." };
+  }
+
+  const targetLabel = target === "ko" ? "Korean" : "English";
+  const fromLabel = target === "ko" ? "English (or other)" : "Korean (or other)";
+
+  const systemPrompt = `You are a precise translator. Translate the user's message to ${targetLabel}.
+Rules:
+- Output ONLY the translation. No quotes, no explanations, no notes.
+- Preserve names, numbers, dates, emoji exactly as-is.
+- Keep tone/register similar to the original.
+- If the source is already in ${targetLabel}, output it as-is.`;
+
+  try {
+    const result = await askAI(trimmed, {
+      mode: "fast",
+      system: systemPrompt,
+      maxTokens: 1024,
+    });
+    return {
+      translation: result.text.trim(),
+      fromLang: fromLabel,
+      toLang: targetLabel,
+    };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "번역 실패",
+    };
+  }
+}
+
 export async function getMessagesSinceAction(
   chatId: string,
   sinceIso: string,

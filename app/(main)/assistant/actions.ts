@@ -2,6 +2,7 @@
 
 import { askAI, classifyMode, type AiMode } from "@/lib/ai";
 import { getMe } from "@/lib/chat";
+import { prisma } from "@/lib/db";
 
 export type AssistantMode = "auto" | "fast" | "pro";
 
@@ -11,6 +12,7 @@ export type AssistantResponse =
       text: string;
       modelUsed: string;
       mode: AiMode;
+      contextSize: number; // 참고: 몇 개의 메시지를 컨텍스트로 사용했는지
     }
   | {
       ok: false;
@@ -18,10 +20,74 @@ export type AssistantResponse =
     };
 
 /**
- * AI 비서에게 질문 → 답변
- * - mode "auto": 키워드/길이 기반 자동 분류
- * - mode "fast" / "pro": 강제 지정
+ * 학원장이 멤버인 모든 채팅의 최근 메시지를 컨텍스트로 가져옴.
+ * - 직원이 멤버인 채팅 + 레벨로 접근 가능한 레벨 채팅
+ * - 최근 30일 또는 최대 1000개
  */
+async function getChatContext(userId: string): Promise<string> {
+  // 멤버 채팅 + 레벨 채팅
+  const memberships = await prisma.chatMember.findMany({
+    where: { userId },
+    select: { chatId: true },
+  });
+  const memberChatIds = memberships.map((m) => m.chatId);
+
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: { select: { defaultLevel: true } } },
+  });
+  const myLevel = u?.role.defaultLevel ?? 0;
+
+  const levelChats = await prisma.chat.findMany({
+    where: {
+      levelRequired: { not: null, lte: myLevel },
+      id: { notIn: memberChatIds },
+    },
+    select: { id: true },
+  });
+  const allChatIds = [...memberChatIds, ...levelChats.map((c) => c.id)];
+
+  if (allChatIds.length === 0) return "";
+
+  // 최근 30일치 메시지 (또는 최대 1000개)
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const messages = await prisma.message.findMany({
+    where: {
+      chatId: { in: allChatIds },
+      createdAt: { gte: since },
+      // AI 메시지 자체는 컨텍스트에 안 넣음 (echo 방지)
+      type: { not: "AI" },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 1000,
+    include: {
+      user: { select: { name: true, username: true } },
+      chat: { select: { name: true, type: true } },
+    },
+  });
+
+  if (messages.length === 0) return "";
+
+  // 시간 오름차순으로 정렬
+  messages.reverse();
+
+  const formatted = messages
+    .map((m) => {
+      const sender = m.user?.name ?? "(이름없음)";
+      const chatLabel =
+        m.chat.name ??
+        (m.chat.type === "DM" ? "1:1 채팅" : "그룹 채팅");
+      const t = m.createdAt
+        .toISOString()
+        .replace("T", " ")
+        .slice(0, 16);
+      return `[${t}] [${chatLabel}] ${sender}: ${m.content.slice(0, 500)}`;
+    })
+    .join("\n");
+
+  return formatted;
+}
+
 export async function askAssistantAction(
   prompt: string,
   mode: AssistantMode = "auto",
@@ -29,36 +95,51 @@ export async function askAssistantAction(
   const me = await getMe();
   if (!me) return { ok: false, error: "로그인이 필요합니다." };
 
+  // 권한 재확인 (레벨 3+)
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { defaultLevel: true } } },
+  });
+  if (!meWithRole || meWithRole.role.defaultLevel < 3) {
+    return { ok: false, error: "AI 비서는 학원장(레벨 3+)만 사용할 수 있습니다." };
+  }
+
   const trimmed = prompt.trim();
   if (!trimmed) return { ok: false, error: "질문을 입력해주세요." };
   if (trimmed.length > 4000) {
     return { ok: false, error: "질문이 너무 깁니다 (4000자 제한)." };
   }
 
-  const finalMode: AiMode | undefined = mode === "auto" ? undefined : mode;
+  // 채팅 컨텍스트 수집
+  const chatContext = await getChatContext(me.id);
+  const contextSize = chatContext ? chatContext.split("\n").length : 0;
 
-  const systemPrompt = `당신은 Francis Parker 학원 직원의 비서입니다.
-사용자: ${me.name} (${me.username})
+  // 컨텍스트가 많으면 자동으로 Pro 모드 강제 (긴 컨텍스트 처리)
+  let finalMode: AiMode | undefined =
+    mode === "auto" ? undefined : mode;
+  if (mode === "auto" && contextSize > 100) {
+    finalMode = "pro";
+  }
 
-[당신의 주된 역할]
-1. 일반 채팅 도우미 — 학원 운영 관련 질문 응답
-2. 잊어버린 정보 다시 알려주기 — 이전 대화에서 사용자가 말한 내용 정리
-3. 약속·일정 확인 — 사용자가 제공한 일정 정보 정리
-4. 문서 초안 작성 — 공지문, 안내문, 동의서, 양식 등
-5. 회의 내용 정리 / 요약
+  const systemPrompt = `당신은 Francis Parker 학원의 AI 비서입니다. 학원장 ${me.name}님을 보좌합니다.
 
-[당신이 직접 접근할 수 없는 것 — 이런 질문 받으면 안내]
-- 출퇴근 데이터 → "근태 메뉴에서 직접 확인해주세요"
-- 매출/재무 데이터 → "이 시스템에서는 다루지 않습니다"
-- 학생/학부모 개별 정보 → "학사 시스템 또는 별도 자료를 참조해주세요"
-- 직원 비밀번호/계정 정보 → "관리자 메뉴에서 처리됩니다"
+[당신의 역할]
+- 학원의 모든 채팅 내용을 알고 있는 비서로서 일정·약속·과거 대화를 정확히 기억하고 답변
+- 학원장의 요청을 이해하고 정확히 처리
+- 다른 직원처럼 자연스럽게 정보 제공
 
-[원칙]
-- 한국어로 답변. 간결하고 명확하게.
-- 모르는 정보는 추측하지 말고 "확인이 필요합니다"라고 답변.
-- 사용자가 제공한 정보(일정·결정사항·이름 등)는 그대로 정리/재구성.
-- 학부모용 안내문은 정중하고 친근한 톤, 직원용은 명확하고 간결한 톤.
-- 이모지는 의미 전달에 도움이 될 때만 절제해서 사용.`;
+[답변 원칙]
+- 사용자가 한국어로 물으면 한국어로, 영어로 물으면 영어로 답변. (자동 감지)
+- 추측하지 말 것. 채팅 기록에 없는 내용은 "관련 기록을 찾을 수 없습니다"라고 답변
+- 채팅 기록에서 가져온 정보는 누가/언제 말했는지 인용
+  예: "박은숙님이 2026-04-10 09:13에 '길동이 개별하원'이라고 말씀하셨습니다."
+  영어 예: "Park Eun-sook said on 2026-04-10 09:13: 'Gildong individual pickup'"
+- 이모지는 의미 전달에 꼭 필요할 때만 사용
+
+[참고: 학원의 최근 30일 채팅 기록]
+${chatContext || "(아직 채팅 기록이 없습니다)"}
+
+이제 학원장의 요청에 답하세요.`;
 
   try {
     const result = await askAI(trimmed, {
@@ -70,6 +151,7 @@ export async function askAssistantAction(
       text: result.text,
       modelUsed: result.modelUsed,
       mode: result.mode,
+      contextSize,
     };
   } catch (e) {
     console.error("[assistant] AI 호출 실패:", e);
@@ -80,9 +162,6 @@ export async function askAssistantAction(
   }
 }
 
-/**
- * 자동 분류 결과만 미리 알려주는 헬퍼 (UI 표시용)
- */
 export async function previewMode(prompt: string): Promise<AiMode> {
   return classifyMode(prompt);
 }

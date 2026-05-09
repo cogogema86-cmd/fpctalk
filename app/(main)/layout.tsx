@@ -36,6 +36,7 @@ export default async function MainLayout({
   }
 
   const isAdmin = user.role.isAdmin;
+  const userLevel = user.role.defaultLevel;
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-black">
@@ -61,11 +62,11 @@ export default async function MainLayout({
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar isAdmin={isAdmin} />
+        <Sidebar isAdmin={isAdmin} userLevel={userLevel} />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
 
-      <MobileNav />
+      <MobileNav userLevel={userLevel} />
     </div>
   );
 }

@@ -1,11 +1,19 @@
 "use client";
 
-import { Fragment, useActionState, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   getMessagesSinceAction,
   markAsReadAction,
   sendMessageAction,
+  translateMessageAction,
   type SendMessageState,
 } from "../actions";
 
@@ -361,10 +369,26 @@ function MessageBubble({
   showAuthor: boolean;
 }) {
   const isPending = !!message.pending;
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [transError, setTransError] = useState<string | null>(null);
+  const [isTransPending, startTransTransition] = useTransition();
+
+  const handleTranslate = (target: "ko" | "en") => {
+    setTransError(null);
+    startTransTransition(async () => {
+      const r = await translateMessageAction(message.content, target);
+      if (r.error) {
+        setTransError(r.error);
+        return;
+      }
+      if (r.translation) setTranslation(r.translation);
+    });
+  };
+
   return (
     <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[70%] ${isMine ? "items-end" : "items-start"} flex flex-col transition-opacity ${
+        className={`max-w-[75%] ${isMine ? "items-end" : "items-start"} flex flex-col transition-opacity ${
           isPending ? "opacity-60" : ""
         }`}
       >
@@ -382,13 +406,69 @@ function MessageBubble({
         >
           {message.content}
         </div>
-        <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-1">
+
+        {/* 번역 결과 */}
+        {translation && (
+          <div
+            className={`mt-1 rounded-xl px-3 py-2 text-xs whitespace-pre-wrap ${
+              isMine
+                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-900"
+                : "bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+            }`}
+          >
+            <div className="text-[9px] text-zinc-500 mb-0.5">번역</div>
+            {translation}
+          </div>
+        )}
+        {transError && (
+          <div className="mt-1 text-[10px] text-red-500 px-1">{transError}</div>
+        )}
+
+        <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
           {isPending && <span className="text-zinc-400">전송 중...</span>}
-          {!isPending &&
-            new Date(message.createdAt).toLocaleTimeString("ko-KR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          {!isPending && (
+            <>
+              <span>
+                {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              {!translation && !isTransPending && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleTranslate("ko")}
+                    className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+                  >
+                    한글
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTranslate("en")}
+                    className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+                  >
+                    English
+                  </button>
+                </>
+              )}
+              {isTransPending && (
+                <span className="text-zinc-500">번역 중...</span>
+              )}
+              {translation && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTranslation(null);
+                    setTransError(null);
+                  }}
+                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+                >
+                  번역 닫기
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
