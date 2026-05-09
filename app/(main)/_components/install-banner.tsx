@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useT } from "@/lib/i18n/client";
 
 const DISMISS_KEY = "fpctalk:installBanner:dismissedAt";
-const DISMISS_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7일
+const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000; // 24시간
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -178,7 +178,11 @@ export function InstallBanner() {
               <li>{t("install.ios.step4")}</li>
             </ol>
 
-            <div className="flex gap-2 pt-2">
+            <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 p-2 text-[11px] text-amber-800 dark:text-amber-200">
+              {t("install.ios.tip")}
+            </div>
+
+            <div className="flex gap-2 pt-1">
               <Link
                 href="/install"
                 onClick={() => setShowIosModal(false)}
@@ -189,8 +193,8 @@ export function InstallBanner() {
               <button
                 type="button"
                 onClick={() => {
-                  // 보고 닫음 = 한동안 안 뜨게 dismiss
-                  dismiss();
+                  // 모달만 닫고 배너는 그대로 유지 — 다시 시도 가능
+                  setShowIosModal(false);
                 }}
                 className="rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium px-3 py-2 flex-1"
               >

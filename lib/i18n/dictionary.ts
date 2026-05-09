@@ -483,6 +483,9 @@ export const dictKo = {
   "install.ios.step3": "이름을 확인 후 \"추가\"를 누르면 끝.",
   "install.ios.step4": "홈 화면의 FPCTalk 아이콘을 누르면 바로 채팅으로 이동합니다.",
   "install.ios.gotIt": "알겠습니다",
+  "install.ios.tip": "💡 추가 후 아이콘이 안 보이면 홈 화면의 마지막 페이지 / 앱 보관함을 확인해보세요. \"홈 화면에 추가\"가 메뉴에 안 보이면 Safari 공유 메뉴에서 아래로 스크롤하거나 Chrome이 아닌 Safari로 접속하셔야 합니다.",
+  "install.ios.openInSafari": "Safari로 열기",
+  "install.preview.iosBanner": "📱 iPhone에서는 Safari 공유 → \"홈 화면에 추가\"로 추가합니다.",
 } as const;
 
 export type DictKey = keyof typeof dictKo;
@@ -938,6 +941,9 @@ export const dictEn: Record<DictKey, string> = {
   "install.ios.step3": "Confirm the name and tap \"Add\".",
   "install.ios.step4": "Tap the FPCTalk icon on your home screen to launch directly into chat.",
   "install.ios.gotIt": "Got it",
+  "install.ios.tip": "💡 If the icon is missing afterwards, check the last page of your home screen or your App Library. If \"Add to Home Screen\" doesn't appear in the share menu, scroll down inside it — and make sure you're using Safari (not Chrome on iOS).",
+  "install.ios.openInSafari": "Open in Safari",
+  "install.preview.iosBanner": "📱 On iPhone, add via Safari → Share → \"Add to Home Screen\".",
 };
 
 export const dict = { ko: dictKo, en: dictEn } as const;

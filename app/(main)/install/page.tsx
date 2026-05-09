@@ -3,6 +3,7 @@ import { getMe } from "@/lib/chat";
 import { getT } from "@/lib/i18n/server";
 import { InstallButton } from "./_install-button";
 import { SubscribeButton } from "./_subscribe-button";
+import { IosGuide } from "./_ios-guide";
 
 export default async function InstallPage() {
   const me = await getMe();
@@ -20,7 +21,7 @@ export default async function InstallPage() {
         </p>
       </div>
 
-      {/* 미리보기 카드: FPC 아이콘 */}
+      {/* 미리보기 카드 */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 flex items-center gap-4">
         <img
           src="/icons/icon-192.png"
@@ -38,11 +39,12 @@ export default async function InstallPage() {
         </div>
       </div>
 
-      {/* 1단계: 홈 화면 설치 */}
+      {/* 1단계: 홈 화면 설치 (iOS는 가이드 항상 표시) */}
       <section className="space-y-2">
         <h2 className="font-semibold">{t("install.step1Title")}</h2>
         <p className="text-xs text-zinc-500">{t("install.step1Body")}</p>
         <InstallButton />
+        <IosGuide />
       </section>
 
       {/* 2단계: 알림 허용 */}
@@ -50,39 +52,6 @@ export default async function InstallPage() {
         <h2 className="font-semibold">{t("install.step2Title")}</h2>
         <p className="text-xs text-zinc-500">{t("install.step2Body")}</p>
         <SubscribeButton />
-      </section>
-
-      {/* 3단계: 아이콘 / 바로가기 */}
-      <section className="space-y-2">
-        <h2 className="font-semibold">{t("install.step3Title")}</h2>
-        <ul className="text-sm text-zinc-600 dark:text-zinc-400 space-y-1.5 list-disc pl-5">
-          <li>{t("install.step3Item1")}</li>
-          <li>{t("install.step3Item2")}</li>
-          <li>{t("install.step3Item3")}</li>
-        </ul>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <a
-            href="/icons/icon-512.png"
-            download="fpctalk-icon-512.png"
-            className="text-xs rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-          >
-            ⬇️ icon-512.png
-          </a>
-          <a
-            href="/icons/icon-192.png"
-            download="fpctalk-icon-192.png"
-            className="text-xs rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-          >
-            ⬇️ icon-192.png
-          </a>
-          <a
-            href="/icons/apple-touch-icon.png"
-            download="fpctalk-apple-touch-icon.png"
-            className="text-xs rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-          >
-            ⬇️ apple-touch-icon.png
-          </a>
-        </div>
       </section>
 
       <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 p-3 text-xs text-zinc-500">

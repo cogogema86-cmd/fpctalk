@@ -68,9 +68,18 @@ export function InstallButton() {
       <button
         type="button"
         onClick={async () => {
-          await deferred.prompt();
-          const choice = await deferred.userChoice;
-          if (choice.outcome === "accepted") setMode("installed");
+          try {
+            await deferred.prompt();
+            const choice = await deferred.userChoice;
+            if (choice.outcome === "accepted") {
+              setMode("installed");
+            } else {
+              // 사용자가 OS 다이얼로그에서 취소 — 수동 안내로 전환
+              setMode("manual");
+            }
+          } catch {
+            setMode("manual");
+          }
           setDeferred(null);
         }}
         className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-medium"
@@ -81,25 +90,8 @@ export function InstallButton() {
   }
 
   if (mode === "ios") {
-    return (
-      <div className="rounded-md bg-blue-50 dark:bg-blue-950/40 p-4 text-sm text-blue-900 dark:text-blue-100 space-y-2">
-        <div className="font-semibold">📱 iPhone / iPad</div>
-        <ol className="space-y-1 list-decimal pl-5 text-xs">
-          <li>아래쪽 공유 버튼{" "}
-            <span className="inline-block px-1.5 py-0.5 rounded bg-white dark:bg-zinc-900 border">
-              ⬆️
-            </span>
-            을 누릅니다.
-          </li>
-          <li>"홈 화면에 추가" 항목을 선택합니다.</li>
-          <li>이름을 확인 후 "추가"를 누르면 홈 화면에 FPCTalk 아이콘이 생깁니다.</li>
-          <li>이후엔 카카오톡처럼 아이콘을 눌러 바로 채팅으로 진입합니다.</li>
-        </ol>
-        <div className="text-[11px] text-blue-700 dark:text-blue-300 mt-2">
-          ⚠️ 푸시 알림 + 앱 아이콘 배지는 iOS 16.4 이상 + 설치 후에만 동작합니다.
-        </div>
-      </div>
-    );
+    // iOS는 별도의 IosGuide 컴포넌트가 항상 표시되므로 여기선 아무것도 안 그림
+    return null;
   }
 
   // manual (Android/desktop이지만 beforeinstallprompt 이벤트가 안 온 케이스)
