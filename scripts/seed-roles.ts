@@ -9,7 +9,7 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 const SYSTEM_ROLES = [
-  { code: "PRINCIPAL", label: "원장",     defaultLevel: 3, isAdmin: true,  sortOrder: 0  },
+  { code: "PRINCIPAL", label: "admin",    defaultLevel: 3, isAdmin: true,  sortOrder: 0  },
   { code: "VICE",      label: "부원장",   defaultLevel: 2, isAdmin: true,  sortOrder: 10 },
   { code: "TEACHER",   label: "강사",     defaultLevel: 1, isAdmin: false, sortOrder: 20 },
   { code: "ASSISTANT", label: "동승",     defaultLevel: 0, isAdmin: false, sortOrder: 30 },

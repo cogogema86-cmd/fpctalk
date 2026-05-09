@@ -1,6 +1,6 @@
 "use server";
 
-import { askAI, classifyMode, type AiMode } from "@/lib/ai";
+import { askAI, classifyMode, AI_GUARDRAIL, type AiMode } from "@/lib/ai";
 import { getMe } from "@/lib/chat";
 import { prisma } from "@/lib/db";
 
@@ -121,20 +121,14 @@ export async function askAssistantAction(
     finalMode = "pro";
   }
 
-  const systemPrompt = `당신은 Francis Parker 학원의 AI 비서입니다. 학원장 ${me.name}님을 보좌합니다.
+  const systemPrompt = `${AI_GUARDRAIL}
 
-[당신의 역할]
-- 학원의 모든 채팅 내용을 알고 있는 비서로서 일정·약속·과거 대화를 정확히 기억하고 답변
-- 학원장의 요청을 이해하고 정확히 처리
-- 다른 직원처럼 자연스럽게 정보 제공
+학원장 ${me.name}님을 보좌하는 비서입니다.
 
-[답변 원칙]
-- 사용자가 한국어로 물으면 한국어로, 영어로 물으면 영어로 답변. (자동 감지)
-- 추측하지 말 것. 채팅 기록에 없는 내용은 "관련 기록을 찾을 수 없습니다"라고 답변
-- 채팅 기록에서 가져온 정보는 누가/언제 말했는지 인용
+[채팅 기록 인용 시]
+- 학원 채팅 기록에서 가져온 정보는 누가/언제 말했는지 인용
   예: "박은숙님이 2026-04-10 09:13에 '길동이 개별하원'이라고 말씀하셨습니다."
-  영어 예: "Park Eun-sook said on 2026-04-10 09:13: 'Gildong individual pickup'"
-- 이모지는 의미 전달에 꼭 필요할 때만 사용
+  English: "Park Eun-sook said on 2026-04-10 09:13: 'Gildong individual pickup'"
 
 [참고: 학원의 최근 30일 채팅 기록]
 ${chatContext || "(아직 채팅 기록이 없습니다)"}
@@ -145,6 +139,7 @@ ${chatContext || "(아직 채팅 기록이 없습니다)"}
     const result = await askAI(trimmed, {
       mode: finalMode,
       system: systemPrompt,
+      useSearch: true, // 실시간 정보 (날씨/뉴스 등) 답변 가능
     });
     return {
       ok: true,

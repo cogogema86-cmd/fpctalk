@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
+  deleteMessageAction,
   getMessagesSinceAction,
   markAsReadAction,
   sendMessageAction,
@@ -23,7 +24,10 @@ import {
   cancelEventProposalAction,
 } from "@/app/(main)/events/actions";
 
-const AI_TRIGGER = /^@(비서|ai|assistant)\s+/i;
+// @비서 / @AI / @assistant / @ + 공백 + 텍스트 모두 매칭
+const AI_TRIGGER = /^@(?:비서|ai|assistant)?\s+\S/i;
+// 사용자 입력에서 @ 트리거 부분 제거하는 정규식 (시작에 @[키워드?]+공백)
+const AI_TRIGGER_STRIP = /^@(?:비서|ai|assistant)?\s+/i;
 
 type Message = {
   id: string;
@@ -275,10 +279,10 @@ export function ChatRoom({
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
 
-    // @비서 호출 감지 → AI 비서에게 별도 요청 (서버에서 type=AI Message 생성, Realtime이 전파)
+    // @비서 / @AI / @ 단독 호출 감지 → AI 비서에게 별도 요청
     const aiMatch = AI_TRIGGER.exec(content);
     if (aiMatch) {
-      const aiPrompt = content.replace(AI_TRIGGER, "").trim();
+      const aiPrompt = content.replace(AI_TRIGGER_STRIP, "").trim();
       if (aiPrompt) {
         // fire-and-forget — AI 답변은 Realtime/폴링으로 도착
         triggerChatAiAction(chatId, aiPrompt).catch((err) => {
@@ -695,6 +699,8 @@ function MessageBubble({
   const [translation, setTranslation] = useState<string | null>(null);
   const [transError, setTransError] = useState<string | null>(null);
   const [isTransPending, startTransTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
+  const [isDeleted, setIsDeleted] = useState(false);
 
   if (message.type === "AI") {
     return <AiMessageBubble message={message} />;
@@ -703,7 +709,25 @@ function MessageBubble({
     return <EventProposalBubble message={message} isMine={isMine} />;
   }
 
-  const isPending = !!message.pending;
+  const isPending = !!message.pending || isDeleting;
+
+  const handleDelete = () => {
+    if (!confirm(t("chat.deleteConfirm"))) return;
+    startDeleteTransition(async () => {
+      const r = await deleteMessageAction(message.id);
+      if (r.ok) setIsDeleted(true);
+    });
+  };
+
+  if (isDeleted) {
+    return (
+      <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+        <div className="text-[11px] text-zinc-400 italic px-3 py-1">
+          {t("chat.deleted")}
+        </div>
+      </div>
+    );
+  }
 
   const handleTranslate = (target: "ko" | "en") => {
     setTransError(null);
@@ -796,6 +820,17 @@ function MessageBubble({
                   className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
                 >
                   {t("chat.translationClose")}
+                </button>
+              )}
+              {isMine && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  title={t("chat.deleteMessage")}
+                  className="text-red-500/70 hover:text-red-600 dark:hover:text-red-400 hover:underline disabled:opacity-50"
+                >
+                  {isDeleting ? t("chat.deleting") : "🗑"}
                 </button>
               )}
             </>

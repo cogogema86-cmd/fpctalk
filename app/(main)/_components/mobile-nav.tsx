@@ -88,20 +88,22 @@ export function MobileNav({
               <li
                 key={item.href}
                 ref={active ? activeRef : null}
-                className="shrink-0 min-w-[4.5rem]"
+                className="shrink-0 min-w-[6.75rem]"
               >
                 <Link
                   href={item.href}
-                  className={`relative flex flex-col items-center py-2 px-3 text-xs ${
+                  className={`relative flex flex-col items-center py-3 px-4 text-sm ${
                     active
                       ? "text-zinc-900 dark:text-zinc-50"
                       : "text-zinc-500 dark:text-zinc-400"
                   }`}
                 >
-                  <span className="text-lg leading-none">{item.icon}</span>
-                  <span className="whitespace-nowrap mt-0.5">{item.label}</span>
+                  <span className="text-2xl leading-none">{item.icon}</span>
+                  <span className="whitespace-nowrap mt-1 text-[13px] font-medium">
+                    {item.label}
+                  </span>
                   {item.badge !== undefined && item.badge > 0 && (
-                    <span className="absolute top-1 right-2 inline-flex items-center justify-center min-w-[1.1rem] h-4 rounded-full bg-red-500 text-white text-[10px] font-semibold px-1">
+                    <span className="absolute top-1.5 right-2.5 inline-flex items-center justify-center min-w-[1.4rem] h-5 rounded-full bg-red-500 text-white text-[12px] font-semibold px-1.5">
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}

@@ -23,7 +23,24 @@ export type AiCallOptions = {
   system?: string;
   /** 출력 길이 제한 */
   maxTokens?: number;
+  /** Google Search grounding 활성화 (실시간 정보 답변 시) */
+  useSearch?: boolean;
 };
+
+/**
+ * 모든 사용자 노출 AI 응답에 공통 적용할 안전 가이드.
+ * 호출자의 system prompt 앞에 prepend됨.
+ */
+export const AI_GUARDRAIL = [
+  "당신은 Francis Parker Collegiate 학원의 AI 비서입니다.",
+  "응답 규칙을 반드시 지키세요:",
+  "1. 모르는 정보는 추측하지 말고 \"정확한 정보가 없습니다\" 또는 \"확인 후 알려드리겠습니다\"라고 답하세요.",
+  "2. 사실(factual) 질문에 자신 없으면 절대로 만들어내지 마세요. 할루시네이션 금지.",
+  "3. 학원 채팅·일정·인물 등은 제공된 컨텍스트에 있는 정보만 인용하세요. 없으면 모른다고 답.",
+  "4. 외부 실시간 정보(날씨, 뉴스, 환율, 시세, 일반 상식)는 검색 도구가 활성화돼 있으면 그 결과를 인용해 답하고, 활성화되지 않았으면 \"실시간 정보는 확인할 수 없습니다\"라고 답하세요.",
+  "5. 응답은 한국어 또는 English 중 사용자 질문 언어로 답하세요.",
+  "6. 답변에 자신감 표현(반드시, 절대) 대신 출처가 있는 사실만 단정하세요.",
+].join("\n");
 
 export type AiResponse = {
   text: string;
@@ -89,18 +106,46 @@ async function callGemini(
       : (process.env.AI_MODEL_FAST ?? "gemini-2.5-flash");
 
   const genAI = new GoogleGenerativeAI(apiKey);
+
+  // Google Search grounding (gemini 2.x): 실시간/외부 사실 정보 답변 시
+  // 라이브러리 타입에 정식 노출되지 않은 필드라 unknown으로 캐스팅
+  const tools = options.useSearch
+    ? ([{ googleSearch: {} } as unknown] as never)
+    : undefined;
+
   const model = genAI.getGenerativeModel({
     model: modelName,
     systemInstruction: options.system,
     generationConfig: options.maxTokens
       ? { maxOutputTokens: options.maxTokens }
       : undefined,
+    tools,
   });
 
-  const result = await model.generateContent(prompt);
-  return {
-    text: result.response.text(),
-    modelUsed: modelName,
-    mode,
-  };
+  try {
+    const result = await model.generateContent(prompt);
+    return {
+      text: result.response.text(),
+      modelUsed: modelName,
+      mode,
+    };
+  } catch (e) {
+    // grounding 미지원 모델 → search 없이 재시도
+    if (options.useSearch) {
+      const fallback = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: options.system,
+        generationConfig: options.maxTokens
+          ? { maxOutputTokens: options.maxTokens }
+          : undefined,
+      });
+      const result = await fallback.generateContent(prompt);
+      return {
+        text: result.response.text(),
+        modelUsed: modelName,
+        mode,
+      };
+    }
+    throw e;
+  }
 }

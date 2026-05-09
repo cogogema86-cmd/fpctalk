@@ -6,7 +6,9 @@ import {
   getMe,
   markAsRead,
 } from "@/lib/chat";
+import { prisma } from "@/lib/db";
 import { ChatRoom } from "./_chat-room";
+import { ClearChatButton } from "./_clear-chat-button";
 import { getT } from "@/lib/i18n/server";
 
 export default async function ChatRoomPage({
@@ -23,6 +25,11 @@ export default async function ChatRoomPage({
 
   const messages = await getChatMessages(chatId, me.id);
   const t = await getT();
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  const isAdmin = !!meWithRole?.role.isAdmin;
 
   // markAsRead는 유저가 메시지를 다 본 다음에 호출해야 의미 있음.
   // 입장 시점에 미리 갱신하면 unread 카운트 즉시 0 되어버려 "마지막 읽음" 위치 표시가 망가짐.
@@ -55,6 +62,7 @@ export default async function ChatRoomPage({
                 : `${t("chat.groupMembers")} ${info.members.length}${t("chat.memberUnit")}`}
           </div>
         </div>
+        {isAdmin && <ClearChatButton chatId={chatId} />}
       </div>
 
       {/* 채팅 본체 */}

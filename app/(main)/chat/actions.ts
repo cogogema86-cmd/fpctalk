@@ -11,9 +11,60 @@ import {
   sendMessage,
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
-import { askAI } from "@/lib/ai";
+import { askAI, AI_GUARDRAIL } from "@/lib/ai";
 import { sendPushToUsers } from "@/lib/push";
 import { extractEventFromMessage } from "@/lib/event-extract";
+
+// =====================================================
+// 메시지 본인 삭제
+// =====================================================
+export async function deleteMessageAction(
+  messageId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const msg = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { userId: true, chatId: true, type: true },
+  });
+  if (!msg) return { ok: false, error: "메시지를 찾을 수 없습니다." };
+
+  // 본인 메시지만 삭제 가능 (admin은 채팅방 전체 초기화로 처리)
+  if (msg.userId !== me.id) {
+    return { ok: false, error: "본인이 작성한 메시지만 삭제할 수 있습니다." };
+  }
+  // AI 메시지는 사용자가 직접 삭제 불가 (혼란 방지)
+  if (msg.type === "AI" || msg.type === "EVENT_PROPOSAL") {
+    return { ok: false, error: "AI/시스템 메시지는 삭제할 수 없습니다." };
+  }
+
+  await prisma.message.delete({ where: { id: messageId } });
+  revalidatePath(`/chat/${msg.chatId}`);
+  return { ok: true };
+}
+
+// =====================================================
+// admin: 채팅방 전체 초기화 (모든 메시지 삭제)
+// =====================================================
+export async function clearChatRoomAction(
+  chatId: string,
+): Promise<{ ok: boolean; error?: string; deletedCount?: number }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: true },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 초기화할 수 있습니다." };
+  }
+
+  const result = await prisma.message.deleteMany({ where: { chatId } });
+  revalidatePath(`/chat/${chatId}`);
+  return { ok: true, deletedCount: result.count };
+}
 
 // =====================================================
 // 직원 선택 → 1:1 채팅 시작
@@ -283,18 +334,13 @@ export async function triggerChatAiAction(
   const context = await getUserChatContext(me.id, chatId);
   const contextSize = context ? context.split("\n").length : 0;
 
-  const systemPrompt = `당신은 Francis Parker 학원의 AI 비서입니다. 채팅방에 호출되어 모든 멤버가 답변을 봅니다.
+  const systemPrompt = `${AI_GUARDRAIL}
 
-[당신의 역할]
-- 학원의 채팅 기록을 알고 있는 비서로서 정확한 정보를 인용해 답변
-- 답변은 모든 채팅 멤버에게 보이므로 명확하고 간결하게
+채팅방에 호출되어 모든 멤버가 답변을 봅니다.
+
+[채팅 인용 시]
 - 누가/언제 말한 정보인지 인용 (예: "박은숙님이 2026-04-10 09:13에 '...'라고 말씀하셨습니다")
-
-[답변 원칙]
-- 사용자가 한국어로 물으면 한국어로, 영어로 물으면 영어로 답변
-- 추측하지 말 것. 채팅 기록에 없으면 "관련 기록을 찾을 수 없습니다"라고 답변
-- 답변은 4~5문장 이내 간결하게 (그룹에서 보는 답변)
-- 이모지는 의미 전달에 꼭 필요할 때만
+- 답변은 4~5문장 이내 간결하게 (그룹에서 보는 답변이라 짧을수록 좋음)
 
 [참고: 호출자가 접근 가능한 채팅의 최근 30일 메시지]
 ${context || "(아직 채팅 기록이 없습니다)"}
@@ -312,6 +358,7 @@ ${context || "(아직 채팅 기록이 없습니다)"}
       mode,
       system: systemPrompt,
       maxTokens: 1500,
+      useSearch: true, // 실시간 정보 (날씨/뉴스 등) 답변 가능
     });
     aiText = result.text.trim();
     modelUsed = result.modelUsed;
