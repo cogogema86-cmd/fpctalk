@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
-import { listTemplates } from "@/lib/documents";
 import { AssistantChat } from "./_chat";
-import { TemplatesSection } from "./_templates";
 
 export default async function AssistantPage() {
   const supabase = await createClient();
@@ -22,8 +20,6 @@ export default async function AssistantPage() {
     redirect("/dashboard");
   }
 
-  const templates = await listTemplates(me.id);
-
   return (
     <div className="h-[calc(100vh-58px)] flex flex-col">
       <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 bg-white dark:bg-black">
@@ -34,25 +30,10 @@ export default async function AssistantPage() {
           </span>
         </h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          학원의 모든 채팅을 알고 있는 비서 + 양식 보관함
+          학원의 모든 채팅을 알고 있는 비서. 일정·약속·과거 대화를 물어보거나 업무를 시킬 수 있습니다. (Korean / English)
         </p>
       </div>
 
-      {/* 양식 보관함 */}
-      <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-4 py-3 max-h-[40vh] overflow-y-auto">
-        <TemplatesSection
-          templates={templates.map((t) => ({
-            id: t.id,
-            name: t.name,
-            description: t.description,
-            koFileName: t.koFileName,
-            enFileName: t.enFileName,
-            createdAt: t.createdAt.toISOString(),
-          }))}
-        />
-      </div>
-
-      {/* AI 채팅 */}
       <AssistantChat userName={me.name} />
     </div>
   );
