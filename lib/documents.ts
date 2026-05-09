@@ -11,7 +11,6 @@
  * Document.storageType 필드가 어디에 저장됐는지 표시.
  */
 import { prisma } from "@/lib/db";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import {
   type StorageType,
@@ -21,8 +20,6 @@ import {
   getSupabaseSignedUrl,
   uploadFile,
 } from "@/lib/storage";
-
-const SIG_BUCKET = "signatures";
 
 // =====================================================
 // 권한 체크
@@ -244,29 +241,16 @@ export async function submitSignature(params: SubmitSignatureParams) {
 
   const docStorageType = (req.document.storageType ?? "supabase") as StorageType;
 
-  // 1) 사인 PNG 저장 — 부모 문서와 같은 스토리지 사용
+  // 1) 사인 PNG 저장 — 부모 문서와 같은 스토리지에 보관 (통합 어댑터 사용)
   const sigOwner = signerId ?? `ext_${requestId}`;
-  const sigName = `${requestId}.png`;
-  const sigPath = `${sigOwner}/${sigName}`;
-
-  let storedSigPath: string;
-  if (docStorageType === "drive") {
-    const { fileId } = await (
-      await import("@/lib/storage-drive")
-    ).uploadToDrive(sigBuffer, `sig_${sigName}`, "image/png");
-    storedSigPath = fileId;
-  } else {
-    // Supabase signatures 버킷 사용 (기존 동작)
-    const admin = createAdminClient();
-    const { error: sigErr } = await admin.storage
-      .from(SIG_BUCKET)
-      .upload(sigPath, sigBuffer, {
-        contentType: "image/png",
-        upsert: true,
-      });
-    if (sigErr) throw new Error(`사인 저장 실패: ${sigErr.message}`);
-    storedSigPath = sigPath;
-  }
+  const sigPath = `signatures/${sigOwner}/${requestId}.png`;
+  const { storagePath: storedSigPath } = await uploadFile({
+    storageType: docStorageType,
+    path: sigPath,
+    fileName: `sig_${requestId}.png`,
+    buffer: sigBuffer,
+    mimeType: "image/png",
+  });
 
   // 2) 원본 파일 다운로드
   const isPdf = req.document.mimeType === "application/pdf";
@@ -350,34 +334,21 @@ export async function submitSignature(params: SubmitSignatureParams) {
     metaY -= 14;
   }
 
-  // 4) 합성된 PDF 저장
+  // 4) 합성된 PDF 저장 — 부모 문서와 같은 스토리지에 보관
   const signedBytes = await pdfDoc.save();
   const signedBuffer = Buffer.from(signedBytes);
   const signerKey = signerId ?? `ext_${requestId}`;
   const ts = Date.now();
   const signedFileName = `${ts}_signed_${signerKey}.pdf`;
+  const signedPathInput = `signed/${signerKey}/${ts}_signed.pdf`;
 
-  let signedPath: string;
-  if (docStorageType === "drive") {
-    const { fileId } = await (
-      await import("@/lib/storage-drive")
-    ).uploadToDrive(signedBuffer, signedFileName, "application/pdf");
-    signedPath = fileId;
-  } else {
-    const sigDocPath = req.document.storagePath.replace(
-      /\.pdf$/i,
-      `__signed_${signerKey}.pdf`,
-    );
-    const admin = createAdminClient();
-    const { error: signedErr } = await admin.storage
-      .from("documents")
-      .upload(sigDocPath, signedBuffer, {
-        contentType: "application/pdf",
-        upsert: true,
-      });
-    if (signedErr) throw new Error(`합성 PDF 저장 실패: ${signedErr.message}`);
-    signedPath = sigDocPath;
-  }
+  const { storagePath: signedPath } = await uploadFile({
+    storageType: docStorageType,
+    path: signedPathInput,
+    fileName: signedFileName,
+    buffer: signedBuffer,
+    mimeType: "application/pdf",
+  });
 
   // 5) DB 업데이트
   await prisma.signatureRequest.update({
