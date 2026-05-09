@@ -76,6 +76,15 @@ async function ensureMembership(chatId: string, userId: string) {
   });
 }
 
+/** 폴링용 가벼운 권한 체크 (canAccess와 같지만 ensureMembership는 안 함) */
+export async function canAccessForPolling(
+  chatId: string,
+  userId: string,
+): Promise<boolean> {
+  const r = await canAccess(chatId, userId);
+  return r.ok;
+}
+
 // =====================================================
 // 내 채팅방 목록 (멤버십 + 레벨 채팅 합쳐서 반환)
 // =====================================================

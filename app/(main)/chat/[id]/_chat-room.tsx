@@ -3,6 +3,7 @@
 import { Fragment, useActionState, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
+  getMessagesSinceAction,
   markAsReadAction,
   sendMessageAction,
   type SendMessageState,
@@ -45,6 +46,11 @@ export function ChatRoom({
 }) {
   const memberMap = new Map(members.map((m) => [m.id, m]));
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  // 폴링에서 항상 최신 messages를 참조하기 위한 ref
+  const messagesRef = useRef<Message[]>(initialMessages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [state, formAction, isPending] = useActionState(
     sendMessageAction,
     initialState,
@@ -102,7 +108,57 @@ export function ChatRoom({
     });
   }, [messages.length]);
 
-  // Realtime 구독
+  // 5초 폴링 백업: Realtime이 끊겨도 새 메시지 catch-up
+  useEffect(() => {
+    let stopped = false;
+    const tick = async () => {
+      if (stopped) return;
+      // 마지막 메시지 시간 또는 5분 전 (초기값)
+      const last = (() => {
+        if (messagesRef.current.length === 0)
+          return new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        // pending 제외하고 가장 최근 메시지
+        const real = messagesRef.current.filter(
+          (m) => !m.id.startsWith("temp-"),
+        );
+        const lastMsg = real[real.length - 1];
+        return lastMsg
+          ? lastMsg.createdAt
+          : new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      })();
+
+      try {
+        const newOnes = await getMessagesSinceAction(chatId, last);
+        if (stopped || newOnes.length === 0) return;
+        setMessages((prev) => {
+          const existing = new Set(prev.map((m) => m.id));
+          const filtered = newOnes.filter((n) => !existing.has(n.id));
+          if (filtered.length === 0) return prev;
+          // 본인 메시지가 도착하면 같은 내용의 pending 제거
+          let next = prev;
+          for (const n of filtered) {
+            if (n.userId === meId) {
+              next = next.filter(
+                (m) => !(m.pending && m.content === n.content),
+              );
+            }
+          }
+          return [...next, ...filtered];
+        });
+      } catch {
+        // 무시
+      }
+    };
+
+    const interval = setInterval(tick, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, meId]);
+
+  // Realtime 구독 (메인) — 끊기면 폴링이 백업
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -165,7 +221,11 @@ export function ChatRoom({
           }
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`[chat ${chatId}] Realtime status: ${status}`);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

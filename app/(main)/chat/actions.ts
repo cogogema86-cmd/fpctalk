@@ -116,3 +116,57 @@ export async function markAsReadAction(chatId: string) {
     // 멤버 아니면 무시
   }
 }
+
+// =====================================================
+// 폴링 백업: 특정 시간 이후의 메시지 조회
+// Realtime이 끊겨도 5초마다 이걸로 catch-up
+// =====================================================
+import { prisma } from "@/lib/db";
+import { canAccessForPolling } from "@/lib/chat";
+
+export type PolledMessage = {
+  id: string;
+  chatId: string;
+  userId: string | null;
+  content: string;
+  type: string;
+  createdAt: string;
+  user: { id: string; username: string; name: string } | null;
+};
+
+export async function getMessagesSinceAction(
+  chatId: string,
+  sinceIso: string,
+): Promise<PolledMessage[]> {
+  const me = await getMe();
+  if (!me) return [];
+
+  // 권한 체크 (멤버 또는 레벨 충족)
+  const ok = await canAccessForPolling(chatId, me.id);
+  if (!ok) return [];
+
+  const since = new Date(sinceIso);
+  if (isNaN(since.getTime())) return [];
+
+  const rows = await prisma.message.findMany({
+    where: {
+      chatId,
+      createdAt: { gt: since },
+    },
+    orderBy: { createdAt: "asc" },
+    include: {
+      user: { select: { id: true, username: true, name: true } },
+    },
+    take: 50,
+  });
+
+  return rows.map((m) => ({
+    id: m.id,
+    chatId: m.chatId,
+    userId: m.userId,
+    content: m.content,
+    type: m.type,
+    createdAt: m.createdAt.toISOString(),
+    user: m.user,
+  }));
+}
