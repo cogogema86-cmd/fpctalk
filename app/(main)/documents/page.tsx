@@ -1,47 +1,165 @@
-export default function DocumentsPage() {
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { prisma } from "@/lib/db";
+import { getMe } from "@/lib/chat";
+import {
+  getDocumentsByUploader,
+  getMyCompletedSignatures,
+  getMyPendingSignatures,
+} from "@/lib/documents";
+
+export default async function DocumentsPage() {
+  const me = await getMe();
+  if (!me) redirect("/login");
+
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: true },
+  });
+  const isAdmin = !!meWithRole?.role.isAdmin;
+
+  const pending = await getMyPendingSignatures(me.id);
+  const completed = await getMyCompletedSignatures(me.id);
+  const myDocuments = isAdmin ? await getDocumentsByUploader(me.id) : [];
+
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          문서 + 사인
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          학원이 받아야 하는 각종 동의서·안내장을 PDF로 일괄 받고 보관
-        </p>
-      </div>
-      <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-6 bg-zinc-50 dark:bg-zinc-950">
-        <div className="text-xs font-medium uppercase tracking-wider text-zinc-400 mb-2">
-          🚧 STEP 8에서 구현 예정
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            문서 + 사인
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            동의서·안내장 PDF 일괄 사인
+          </p>
         </div>
-        <ul className="text-sm text-zinc-600 dark:text-zinc-400 space-y-1.5">
-          <li>
-            • <strong>관리자가 PDF 업로드</strong> — 휴가 동의서, 현장학습 동의서, 각종 안내장 등
-          </li>
-          <li>
-            • <strong>대상자 일괄 지정</strong> — 직원 전체 / 강사만 / 특정 직원 / 학부모(외부 링크) 등
-          </li>
-          <li>
-            • <strong>대상자 손글씨 사인</strong> — 캔버스에 마우스/터치로 사인 그리기
-          </li>
-          <li>
-            • <strong>PDF 자동 합성</strong> — 사인을 PDF에 합쳐서 완성본 생성
-          </li>
-          <li>
-            • <strong>관리자 다운로드</strong> — 사인 완료된 PDF를 한 번에 받아서 보관
-          </li>
-          <li>
-            • <strong>법적 효력 감사 로그</strong> — 누가 / 언제 / 어디서 사인했는지 기록 (시간·IP·기기)
-          </li>
-          <li>
-            • <strong>진행 상황 추적</strong> — 누가 사인했고 누가 안 했는지 한눈에
-          </li>
-        </ul>
+        {isAdmin && (
+          <Link
+            href="/documents/upload"
+            className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900"
+          >
+            + 문서 업로드 + 사인 요청
+          </Link>
+        )}
       </div>
-      <div className="rounded-md bg-blue-50 dark:bg-blue-950/40 p-4 text-xs text-blue-800 dark:text-blue-200">
-        💡 <strong>활용 예시</strong>: 여름방학 직원 휴가 동의서, 현장학습 학생
-        동의서, 안전 교육 수료 확인서, 개인정보 수집 동의서 등 학원에서 정기적으로
-        받아야 하는 모든 문서.
-      </div>
+
+      {/* 사인 요청 (모든 사용자) */}
+      <section className="space-y-2">
+        <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          내 사인 요청 ({pending.length})
+        </h2>
+        {pending.length === 0 ? (
+          <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
+            대기 중인 사인 요청이 없습니다.
+          </div>
+        ) : (
+          <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
+            {pending.map((p) => (
+              <li
+                key={p.id}
+                className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">
+                    {p.document.title}
+                  </div>
+                  {p.document.description && (
+                    <div className="text-xs text-zinc-500 truncate">
+                      {p.document.description}
+                    </div>
+                  )}
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    요청자: {p.requester.name} · 페이지 {p.document.pageCount ?? "?"}
+                  </div>
+                </div>
+                <Link
+                  href={`/documents/sign/${p.id}`}
+                  className="rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-4 py-2 shrink-0"
+                >
+                  사인하기 →
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* 사인 완료 (모든 사용자) */}
+      {completed.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
+            내가 사인한 문서
+          </h2>
+          <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden text-sm">
+            {completed.map((c) => (
+              <li key={c.id} className="px-4 py-2 bg-white dark:bg-zinc-950">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">{c.document.title}</div>
+                  <div className="text-xs text-zinc-400">
+                    ✓{" "}
+                    {c.signedAt &&
+                      new Date(c.signedAt).toLocaleDateString("ko-KR")}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* 관리자: 내가 업로드한 문서 */}
+      {isAdmin && (
+        <section className="space-y-2">
+          <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
+            내가 업로드한 문서
+          </h2>
+          {myDocuments.length === 0 ? (
+            <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
+              아직 업로드한 문서가 없습니다.
+            </div>
+          ) : (
+            <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
+              {myDocuments.map((d) => {
+                const total = d._count.signatureRequests;
+                const signed = d.signatureRequests.filter(
+                  (r) => r.status === "SIGNED",
+                ).length;
+                return (
+                  <li
+                    key={d.id}
+                    className="px-4 py-3 bg-white dark:bg-zinc-950"
+                  >
+                    <Link
+                      href={`/documents/${d.id}`}
+                      className="block hover:bg-zinc-50 dark:hover:bg-zinc-900 -mx-4 -my-3 px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{d.title}</div>
+                          {d.description && (
+                            <div className="text-xs text-zinc-500 truncate">
+                              {d.description}
+                            </div>
+                          )}
+                          <div className="text-xs text-zinc-400 mt-0.5">
+                            업로드 {d.createdAt.toLocaleDateString("ko-KR")}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-semibold">
+                            {signed} / {total}
+                          </div>
+                          <div className="text-xs text-zinc-400">사인 완료</div>
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }
