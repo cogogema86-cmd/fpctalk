@@ -2,13 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { checkInAction, checkOutAction } from "./actions";
+import { useT, useLocale } from "@/lib/i18n/client";
 
 type Props = {
-  checkInTime: string | null; // ISO 또는 null
+  checkInTime: string | null;
   checkOutTime: string | null;
 };
 
 export function CheckCard({ checkInTime, checkOutTime }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -28,7 +31,8 @@ export function CheckCard({ checkInTime, checkOutTime }: Props) {
     });
   };
 
-  const todayLabel = new Date().toLocaleDateString("ko-KR", {
+  const dateLocale = locale === "en" ? "en-US" : "ko-KR";
+  const todayLabel = new Date().toLocaleDateString(dateLocale, {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -38,26 +42,30 @@ export function CheckCard({ checkInTime, checkOutTime }: Props) {
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 space-y-4">
       <div>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">오늘</div>
+        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+          {t("att.todayDate")}
+        </div>
         <div className="text-lg font-semibold">{todayLabel}</div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <TimeBox
-          label="출근"
+          label={t("att.checkIn")}
           time={checkInTime}
           color="blue"
           onClick={handleCheckIn}
           disabled={!!checkInTime || isPending}
-          buttonLabel="출근 체크"
+          buttonLabel={t("att.checkInBtn")}
+          doneLabel={t("att.done")}
         />
         <TimeBox
-          label="퇴근"
+          label={t("att.checkOut")}
           time={checkOutTime}
           color="orange"
           onClick={handleCheckOut}
           disabled={!checkInTime || !!checkOutTime || isPending}
-          buttonLabel="퇴근 체크"
+          buttonLabel={t("att.checkOutBtn")}
+          doneLabel={t("att.done")}
         />
       </div>
 
@@ -77,6 +85,7 @@ function TimeBox({
   onClick,
   disabled,
   buttonLabel,
+  doneLabel,
 }: {
   label: string;
   time: string | null;
@@ -84,11 +93,12 @@ function TimeBox({
   onClick: () => void;
   disabled: boolean;
   buttonLabel: string;
+  doneLabel: string;
 }) {
   if (time) {
-    const t = new Date(time);
-    const hh = String(t.getHours()).padStart(2, "0");
-    const mm = String(t.getMinutes()).padStart(2, "0");
+    const dt = new Date(time);
+    const hh = String(dt.getHours()).padStart(2, "0");
+    const mm = String(dt.getMinutes()).padStart(2, "0");
     return (
       <div
         className={`rounded-md p-3 ${
@@ -101,7 +111,7 @@ function TimeBox({
         <div className="text-2xl font-bold mt-1">
           {hh}:{mm}
         </div>
-        <div className="text-xs opacity-70 mt-0.5">✓ 완료</div>
+        <div className="text-xs opacity-70 mt-0.5">{doneLabel}</div>
       </div>
     );
   }

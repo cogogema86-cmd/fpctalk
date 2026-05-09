@@ -5,10 +5,12 @@ import {
   changePasswordAction,
   type ChangePasswordState,
 } from "./actions";
+import { useT } from "@/lib/i18n/client";
 
 const initialState: ChangePasswordState = {};
 
 export function ChangePasswordForm() {
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     changePasswordAction,
     initialState,
@@ -16,7 +18,7 @@ export function ChangePasswordForm() {
 
   return (
     <form action={formAction} className="space-y-4">
-      <Field label="기존 비밀번호" required>
+      <Field label={t("pw.current")} required>
         <input
           name="currentPassword"
           type="password"
@@ -27,7 +29,7 @@ export function ChangePasswordForm() {
         />
       </Field>
 
-      <Field label="새 비밀번호 (최소 6자)" required>
+      <Field label={t("pw.new")} required>
         <input
           name="newPassword"
           type="password"
@@ -39,7 +41,7 @@ export function ChangePasswordForm() {
         />
       </Field>
 
-      <Field label="새 비밀번호 확인" required>
+      <Field label={t("pw.confirm")} required>
         <input
           name="confirmPassword"
           type="password"
@@ -67,7 +69,7 @@ export function ChangePasswordForm() {
         disabled={isPending}
         className="w-full rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
       >
-        {isPending ? "변경 중..." : "비밀번호 변경"}
+        {isPending ? t("pw.submitting") : t("pw.submit")}
       </button>
 
       <style>{`

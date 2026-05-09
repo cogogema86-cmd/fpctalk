@@ -3,10 +3,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getMe } from "@/lib/chat";
 import { startDmAction } from "../actions";
+import { getT } from "@/lib/i18n/server";
 
 export default async function NewChatPage() {
   const me = await getMe();
   if (!me) redirect("/login");
+  const t = await getT();
 
   // 본인 제외 모든 직원
   const others = await prisma.user.findMany({
@@ -25,34 +27,34 @@ export default async function NewChatPage() {
           href="/chat"
           className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
         >
-          ← 채팅 목록
+          {t("chat.backToList")}
         </Link>
       </div>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            새 채팅 시작
+            {t("chat.newDirectTitle")}
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            대화할 직원을 선택하세요. 1:1 채팅이 시작됩니다.
+            {t("chat.newDirectSubtitle")}
           </p>
         </div>
         <Link
           href="/chat/new/group"
           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm whitespace-nowrap hover:bg-zinc-50 dark:hover:bg-zinc-900"
         >
-          👥 그룹 만들기
+          {t("chat.openGroup")}
         </Link>
       </div>
 
       {others.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center text-zinc-500">
-          <div>아직 다른 직원이 없습니다.</div>
+          <div>{t("chat.noOthers")}</div>
           <Link
             href="/admin/users/new"
             className="mt-3 inline-block text-sm text-blue-600 dark:text-blue-400 underline"
           >
-            직원 추가하러 가기
+            {t("chat.gotoAddStaff")}
           </Link>
         </div>
       ) : (

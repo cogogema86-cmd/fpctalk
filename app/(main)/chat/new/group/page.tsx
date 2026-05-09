@@ -3,10 +3,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getMe } from "@/lib/chat";
 import { GroupForm } from "./_form";
+import { getT } from "@/lib/i18n/server";
 
 export default async function NewGroupChatPage() {
   const me = await getMe();
   if (!me) redirect("/login");
+  const t = await getT();
 
   // 본인 역할 정보 (레벨 채팅 옵션은 관리자만)
   const meWithRole = await prisma.user.findUnique({
@@ -37,16 +39,14 @@ export default async function NewGroupChatPage() {
         href="/chat/new"
         className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
       >
-        ← 1:1 채팅 시작
+        {t("chat.backTo1on1")}
       </Link>
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          그룹 채팅 만들기
+          {t("chat.newGroupTitle")}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {isAdmin
-            ? "직접 멤버를 선택하거나 레벨 기반 자동 공개 채팅을 만들 수 있습니다."
-            : "함께할 멤버를 직접 선택하세요. (본인 자동 포함)"}
+          {isAdmin ? t("chat.adminGroupHint") : t("chat.staffGroupHint")}
         </p>
       </div>
 

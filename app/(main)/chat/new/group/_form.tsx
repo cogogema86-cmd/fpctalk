@@ -6,6 +6,7 @@ import {
   createGroupChatAction,
   type CreateGroupState,
 } from "../../actions";
+import { useT } from "@/lib/i18n/client";
 
 const initialState: CreateGroupState = {};
 
@@ -28,6 +29,7 @@ export function GroupForm({
   myLevel: number;
   levelDistribution: Record<number, number>;
 }) {
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     createGroupChatAction,
     initialState,
@@ -75,7 +77,7 @@ export function GroupForm({
 
       <div>
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-          그룹 이름
+          {t("chat.groupName")}
           <span className="text-red-500 ml-0.5">*</span>
         </label>
         <input
@@ -86,8 +88,8 @@ export function GroupForm({
           disabled={isPending}
           placeholder={
             mode === "level"
-              ? "예: 강사 공지방, 운영진 비공개"
-              : "예: 강사진 단톡방, 회식 추진위"
+              ? t("chat.groupNamePhLevel")
+              : t("chat.groupNamePhMembers")
           }
           className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50"
         />
@@ -106,7 +108,7 @@ export function GroupForm({
                 : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
             }`}
           >
-            👥 직접 멤버 선택
+            {t("chat.modeMembers")}
           </button>
           <button
             type="button"
@@ -118,7 +120,7 @@ export function GroupForm({
                 : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900"
             }`}
           >
-            ⭐ 레벨 자동 공개
+            {t("chat.modeLevel")}
           </button>
         </div>
       )}
@@ -128,7 +130,7 @@ export function GroupForm({
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              멤버 (선택됨 {selected.size}명, 본인 포함 {selected.size + 1}명)
+              {t("chat.selectMember")} ({selected.size + 1})
               <span className="text-red-500 ml-0.5">*</span>
             </label>
             {selected.size > 0 && (
@@ -137,7 +139,7 @@ export function GroupForm({
                 onClick={() => setSelected(new Set())}
                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
               >
-                전체 해제
+                {t("chat.deselectAll")}
               </button>
             )}
           </div>
@@ -145,7 +147,7 @@ export function GroupForm({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="이름/아이디/역할 검색"
+            placeholder={t("chat.searchPh")}
             disabled={isPending}
             className="w-full mb-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50"
           />
@@ -153,8 +155,8 @@ export function GroupForm({
             {filtered.length === 0 && (
               <div className="px-4 py-6 text-sm text-zinc-500 text-center">
                 {candidates.length === 0
-                  ? "다른 직원이 없습니다."
-                  : "검색 결과가 없습니다."}
+                  ? t("chat.noOtherStaff")
+                  : t("chat.noSearchResult")}
               </div>
             )}
             {filtered.map((c) => (
@@ -173,14 +175,15 @@ export function GroupForm({
                 <div className="flex-1 text-sm">
                   <div className="font-medium">{c.name}</div>
                   <div className="text-xs text-zinc-500">
-                    {c.username} · {c.roleLabel} · 레벨 {c.level}
+                    {c.username} · {c.roleLabel} · {t("chat.levelLabel")}{" "}
+                    {c.level}
                   </div>
                 </div>
               </label>
             ))}
           </div>
           <p className="mt-1 text-xs text-zinc-500">
-            최소 본인 포함 3명 (다른 멤버 2명 이상) 필요
+            {t("chat.minMembersHint")}
           </p>
         </div>
       )}
@@ -190,7 +193,7 @@ export function GroupForm({
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              필요 레벨
+              {t("chat.requiredLevel")}
               <span className="text-red-500 ml-0.5">*</span>
             </label>
             <input
@@ -205,14 +208,14 @@ export function GroupForm({
               className="w-32 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50"
             />
             <p className="mt-1 text-xs text-zinc-500">
-              이 채팅방은 레벨 <strong>{levelInput}</strong> 이상 사용자에게
-              자동으로 보입니다. 신규 직원도 조건만 맞으면 자동 가입.
+              {t("chat.levelHint1")} <strong>{levelInput}</strong>{" "}
+              {t("chat.levelHint2")}
             </p>
           </div>
 
           <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 p-3 text-sm">
             <div className="text-xs font-medium text-zinc-500 mb-2">
-              현재 레벨 분포 (본인 포함 전체 직원)
+              {t("chat.levelDistTitle")}
             </div>
             <div className="space-y-1 text-xs">
               {Object.entries(levelDistribution)
@@ -224,21 +227,21 @@ export function GroupForm({
                     className="flex items-center justify-between"
                   >
                     <span>
-                      레벨 {lv}{" "}
-                      <span className="text-zinc-400">({count}명)</span>
+                      {t("chat.levelLabel")} {lv}{" "}
+                      <span className="text-zinc-400">({count})</span>
                     </span>
                     {levelPreview && lv >= levelPreview.level && (
                       <span className="text-green-600 dark:text-green-400">
-                        ✓ 포함
+                        {t("chat.levelIncluded")}
                       </span>
                     )}
                   </div>
                 ))}
               {levelPreview && (
                 <div className="border-t border-zinc-200 dark:border-zinc-800 mt-2 pt-2 font-medium">
-                  → 이 채팅방을 볼 수 있는 사람:{" "}
+                  {t("chat.levelVisibility")}{" "}
                   <span className="text-green-700 dark:text-green-300">
-                    {levelPreview.count}명
+                    {levelPreview.count}
                   </span>
                 </div>
               )}
@@ -246,8 +249,8 @@ export function GroupForm({
           </div>
 
           <div className="rounded-md bg-blue-50 dark:bg-blue-950/40 p-3 text-xs text-blue-800 dark:text-blue-200">
-            💡 본인의 레벨은 <strong>{myLevel}</strong>입니다. 본인 레벨 이상의
-            값을 입력하면 본인도 채팅방을 볼 수 있습니다.
+            {t("chat.myLevelHint1")} <strong>{myLevel}</strong>
+            {t("chat.myLevelHint2")}
           </div>
         </div>
       )}
@@ -265,16 +268,16 @@ export function GroupForm({
           className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
         >
           {isPending
-            ? "생성 중..."
+            ? t("chat.creatingGroup")
             : mode === "level"
-              ? `레벨 ${levelInput}+ 채팅방 만들기`
-              : "그룹 채팅 만들기"}
+              ? `${t("chat.levelLabel")} ${levelInput}+ ${t("chat.createLevelChat")}`
+              : t("chat.newGroupTitle")}
         </button>
         <Link
           href="/chat"
           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm"
         >
-          취소
+          {t("common.cancel")}
         </Link>
       </div>
     </form>
