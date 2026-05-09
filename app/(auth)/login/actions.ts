@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, REMEMBER_ME_COOKIE } from "@/lib/supabase/server";
 import { usernameToEmail } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 export type LoginState = {
   error?: string;
@@ -15,9 +16,24 @@ export async function loginAction(
 ): Promise<LoginState> {
   const username = (formData.get("username") as string)?.trim();
   const password = formData.get("password") as string;
+  const rememberMe = formData.get("rememberMe") === "1";
 
   if (!username || !password) {
     return { error: "아이디와 비밀번호를 입력해주세요." };
+  }
+
+  // rememberMe cookie를 먼저 설정 → 이후 createClient가 그 값을 읽어
+  // Supabase auth cookie의 maxAge를 결정함
+  const cookieStore = await cookies();
+  if (rememberMe) {
+    cookieStore.set(REMEMBER_ME_COOKIE, "1", {
+      maxAge: 60 * 60 * 24 * 365, // 1년 (장기 저장 의도)
+      path: "/",
+      sameSite: "lax",
+      httpOnly: false, // 클라이언트가 읽을 수 있게 (선택)
+    });
+  } else {
+    cookieStore.delete(REMEMBER_ME_COOKIE);
   }
 
   const email = usernameToEmail(username);

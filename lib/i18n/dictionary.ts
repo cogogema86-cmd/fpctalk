@@ -242,6 +242,8 @@ export const dictKo = {
   "login.passwordPh": "비밀번호",
   "login.contactAdmin": "계정이 없으시면 관리자에게 문의하세요.",
   "login.signing": "로그인 중...",
+  "login.rememberMe": "자동 로그인",
+  "login.rememberMeHint": "체크 시 30일 동안 로그인 유지. 공용 PC에서는 체크 해제 권장.",
 
   // ----- Settings (password) -----
   "pw.title": "비밀번호 변경",
@@ -773,6 +775,8 @@ export const dictEn: Record<DictKey, string> = {
   "login.passwordPh": "Password",
   "login.contactAdmin": "Contact your administrator if you do not have an account.",
   "login.signing": "Signing in...",
+  "login.rememberMe": "Keep me signed in",
+  "login.rememberMeHint": "Stay signed in for 30 days. Uncheck on shared devices.",
 
   "pw.title": "Change password",
   "pw.subtitle": "Enter your current password and new password.",
