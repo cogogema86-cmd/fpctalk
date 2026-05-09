@@ -41,6 +41,15 @@ function safeFileName(s: string): string {
   return s.replace(/[^a-zA-Z0-9가-힣_-]/g, "_").slice(0, 30);
 }
 
+/**
+ * pdf-lib StandardFonts.Helvetica는 WinAnsi(Windows-1252)만 인코딩 가능.
+ * 한글 등 비라틴 문자를 그대로 drawText하면 throw됨.
+ * 사용 가능한 문자는 그대로, 나머지는 '?'로 치환.
+ */
+function helveticaSafe(s: string): string {
+  return s.replace(/[^\x20-\x7E -ÿ]/g, "?");
+}
+
 function extFromName(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
@@ -298,13 +307,24 @@ export async function submitSignature(params: SubmitSignatureParams) {
       color: rgb(0.3, 0.3, 0.3),
     });
     cy -= 18;
-    certPage.drawText(`Title: ${req.document.title}`.slice(0, 80), {
+    certPage.drawText(
+      helveticaSafe(`Title: ${req.document.title}`).slice(0, 80),
+      {
+        x: 50,
+        y: cy,
+        size: 11,
+        font: certFont,
+      },
+    );
+    cy -= 16;
+    certPage.drawText(`Doc ID: ${req.document.id}`, {
       x: 50,
       y: cy,
-      size: 11,
+      size: 9,
       font: certFont,
+      color: rgb(0.5, 0.5, 0.5),
     });
-    cy -= 16;
+    cy -= 14;
     certPage.drawText(`Original type: ${req.document.mimeType}`, {
       x: 50,
       y: cy,
@@ -323,7 +343,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
       color: rgb(0.3, 0.3, 0.3),
     });
     cy -= 18;
-    certPage.drawText(signerLabelCert.slice(0, 80), {
+    certPage.drawText(helveticaSafe(signerLabelCert).slice(0, 80), {
       x: 50,
       y: cy,
       size: 11,
@@ -349,7 +369,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
     }
     if (userAgent) {
       cy -= 14;
-      certPage.drawText(`Agent: ${userAgent.slice(0, 70)}`, {
+      certPage.drawText(helveticaSafe(`Agent: ${userAgent.slice(0, 70)}`), {
         x: 50,
         y: cy,
         size: 9,
@@ -478,7 +498,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
 
   let metaY = height - 100 - sigH - 30;
   for (const line of meta) {
-    newPage.drawText(line as string, {
+    newPage.drawText(helveticaSafe(line as string), {
       x: 50,
       y: metaY,
       size: 9,
