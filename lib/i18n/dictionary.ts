@@ -471,6 +471,18 @@ export const dictKo = {
   "install.step3Item2": "다운로드한 아이콘을 사진/이미지로 저장 → 단축어/홈 화면 도구로 등록 가능.",
   "install.step3Item3": "아이콘은 학원 로고로 언제든 교체 가능합니다.",
   "install.note": "💡 iPhone(iOS 16.4 이상)은 반드시 Safari → '홈 화면에 추가' 한 후에만 푸시 알림과 아이콘 배지가 동작합니다. Android Chrome은 설치 즉시 동작합니다.",
+  "install.banner.title": "FPCTalk을 홈 화면에 추가",
+  "install.banner.body": "카카오톡처럼 아이콘으로 바로 진입 + 알림",
+  "install.banner.install": "설치",
+  "install.banner.add": "추가",
+  "install.banner.later": "나중에",
+  "install.banner.details": "자세히",
+  "install.ios.title": "📱 iPhone에서 홈 화면에 추가",
+  "install.ios.step1": "Safari 하단(또는 상단)의 공유 버튼 ⬆️ 을 누릅니다.",
+  "install.ios.step2": "목록을 아래로 스크롤하여 \"홈 화면에 추가\"를 선택합니다.",
+  "install.ios.step3": "이름을 확인 후 \"추가\"를 누르면 끝.",
+  "install.ios.step4": "홈 화면의 FPCTalk 아이콘을 누르면 바로 채팅으로 이동합니다.",
+  "install.ios.gotIt": "알겠습니다",
 } as const;
 
 export type DictKey = keyof typeof dictKo;
@@ -914,6 +926,18 @@ export const dictEn: Record<DictKey, string> = {
   "install.step3Item2": "Save the downloaded icon and register it via shortcut/home tools.",
   "install.step3Item3": "The icon can be swapped for the academy logo any time.",
   "install.note": "💡 iPhone (iOS 16.4+) requires installing via Safari → 'Add to Home Screen' before push notifications and icon badge work. Android Chrome works as soon as installed.",
+  "install.banner.title": "Add FPCTalk to home screen",
+  "install.banner.body": "Launch like KakaoTalk + notifications",
+  "install.banner.install": "Install",
+  "install.banner.add": "Add",
+  "install.banner.later": "Later",
+  "install.banner.details": "Details",
+  "install.ios.title": "📱 Add to iPhone home screen",
+  "install.ios.step1": "Tap the share button ⬆️ at the bottom (or top) of Safari.",
+  "install.ios.step2": "Scroll down and choose \"Add to Home Screen\".",
+  "install.ios.step3": "Confirm the name and tap \"Add\".",
+  "install.ios.step4": "Tap the FPCTalk icon on your home screen to launch directly into chat.",
+  "install.ios.gotIt": "Got it",
 };
 
 export const dict = { ko: dictKo, en: dictEn } as const;

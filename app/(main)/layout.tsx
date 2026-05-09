@@ -8,6 +8,7 @@ import { MobileNav } from "./_components/mobile-nav";
 import { LocaleToggle } from "./_components/locale-toggle";
 import { BadgeSync } from "./_components/badge-sync";
 import { ServiceWorkerRegister } from "./_components/sw-register";
+import { InstallBanner } from "./_components/install-banner";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { countChatUnread } from "@/lib/chat";
 
@@ -110,6 +111,7 @@ export default async function MainLayout({
         pendingSigns={pendingSignsCount}
       />
       <ServiceWorkerRegister />
+      <InstallBanner />
     </div>
   );
 }
