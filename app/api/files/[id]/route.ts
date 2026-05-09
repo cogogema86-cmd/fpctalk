@@ -3,19 +3,17 @@
  * GET /api/files/[documentId]?type=primary|en|signed|template
  *
  * 권한 체크 후:
- *  - storageType="supabase": 5분 signed URL로 302 redirect
+ *  - storageType="supabase" / "r2": signed URL로 302 redirect
  *  - storageType="drive": Drive에서 받아서 스트리밍
- *
- * type:
- *  - primary  : Document.storagePath (한국어/기본 파일)
- *  - en       : Document.storagePathEn (영어 파일)
- *  - signed   : SignatureRequest.signedPdfPath (사인 완료 PDF)
- *  - template : DocumentTemplate 파일 — id는 templateId, lang=ko|en 추가 쿼리
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getMe } from "@/lib/chat";
-import { downloadFile, getSupabaseSignedUrl, type StorageType } from "@/lib/storage";
+import {
+  downloadFile,
+  getDirectSignedUrl,
+  type StorageType,
+} from "@/lib/storage";
 
 export async function GET(
   req: NextRequest,
@@ -27,14 +25,13 @@ export async function GET(
   const { id } = await ctx.params;
   const url = new URL(req.url);
   const type = url.searchParams.get("type") ?? "primary";
-  const lang = url.searchParams.get("lang"); // template일 때
+  const lang = url.searchParams.get("lang");
 
-  // ----- TEMPLATE 분기 -----
+  // ----- TEMPLATE -----
   if (type === "template") {
     const tpl = await prisma.documentTemplate.findUnique({ where: { id } });
     if (!tpl) return new NextResponse("Not Found", { status: 404 });
     if (tpl.uploaderId !== me.id) {
-      // 본인이 만든 양식만 (관리자도 본인 양식만)
       return new NextResponse("Forbidden", { status: 403 });
     }
     const isEn = lang === "en";
@@ -45,7 +42,7 @@ export async function GET(
     return serveFile(storageType, path, mime);
   }
 
-  // ----- DOCUMENT 분기 -----
+  // ----- DOCUMENT -----
   const doc = await prisma.document.findUnique({
     where: { id },
     include: {
@@ -57,7 +54,6 @@ export async function GET(
   });
   if (!doc) return new NextResponse("Not Found", { status: 404 });
 
-  // 권한: 업로더이거나 사인 대상자
   const isUploader = doc.uploaderId === me.id;
   const isSigner = doc.signatureRequests.length > 0;
   if (!isUploader && !isSigner) {
@@ -76,12 +72,9 @@ export async function GET(
     return serveFile(storageType, doc.storagePathEn, doc.mimeTypeEn);
   }
   if (type === "signed") {
-    // 본인의 사인된 PDF (사인 대상자만)
     const myReq = doc.signatureRequests[0];
     if (!myReq?.signedPdfPath) {
-      // 관리자가 다른 직원의 사인본을 보고 싶으면 reqId로 별도 호출 필요
       if (isUploader) {
-        // 관리자: signRequestId 쿼리로 지정 가능
         const sigReqId = url.searchParams.get("signRequestId");
         if (!sigReqId) return new NextResponse("signRequestId 필요", { status: 400 });
         const sr = await prisma.signatureRequest.findUnique({
@@ -106,23 +99,15 @@ async function serveFile(
   storagePath: string,
   mimeType: string,
 ): Promise<NextResponse> {
-  if (storageType === "supabase") {
-    // Supabase는 5분 signed URL로 redirect (대역폭 절약)
-    try {
-      const signed = await getSupabaseSignedUrl(storagePath, 300);
-      return NextResponse.redirect(signed);
-    } catch (e) {
-      return new NextResponse(
-        `URL 발급 실패: ${e instanceof Error ? e.message : ""}`,
-        { status: 500 },
-      );
-    }
+  // Supabase / R2: signed URL로 302 redirect (대역폭 절약)
+  const signedUrl = await getDirectSignedUrl(storageType, storagePath, 300).catch(() => null);
+  if (signedUrl) {
+    return NextResponse.redirect(signedUrl);
   }
 
   // Drive: 파일을 받아서 스트리밍
   try {
     const buf = await downloadFile(storageType, storagePath);
-    // Buffer → Blob (NextResponse BodyInit 호환)
     const blob = new Blob([new Uint8Array(buf)], { type: mimeType });
     return new NextResponse(blob, {
       headers: {
