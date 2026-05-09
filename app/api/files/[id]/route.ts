@@ -72,6 +72,8 @@ export async function GET(
     return serveFile(storageType, doc.storagePathEn, doc.mimeTypeEn);
   }
   if (type === "signed") {
+    // 사인본은 PDF 원본 합성 또는 증명 PDF — 항상 application/pdf
+    const SIGNED_MIME = "application/pdf";
     const myReq = doc.signatureRequests[0];
     if (!myReq?.signedPdfPath) {
       if (isUploader) {
@@ -84,11 +86,11 @@ export async function GET(
         if (!sr || sr.documentId !== doc.id || !sr.signedPdfPath) {
           return new NextResponse("Not Found", { status: 404 });
         }
-        return serveFile(storageType, sr.signedPdfPath, doc.mimeType);
+        return serveFile(storageType, sr.signedPdfPath, SIGNED_MIME);
       }
       return new NextResponse("Not Found", { status: 404 });
     }
-    return serveFile(storageType, myReq.signedPdfPath, doc.mimeType);
+    return serveFile(storageType, myReq.signedPdfPath, SIGNED_MIME);
   }
 
   return new NextResponse("Bad Request", { status: 400 });

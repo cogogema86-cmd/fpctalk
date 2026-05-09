@@ -9,6 +9,8 @@ import {
   listTemplates,
 } from "@/lib/documents";
 import { DeleteTemplateButton } from "./_delete-template-button";
+import { PreviewButton } from "./[id]/_preview-button";
+import { DownloadButton } from "./[id]/_download-button";
 
 export default async function DocumentsPage() {
   const me = await getMe();
@@ -200,14 +202,31 @@ export default async function DocumentsPage() {
           </h2>
           <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden text-sm">
             {completed.map((c) => (
-              <li key={c.id} className="px-4 py-2 bg-white dark:bg-zinc-950">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">{c.document.title}</div>
-                  <div className="text-xs text-zinc-400">
+              <li
+                key={c.id}
+                className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3 flex-wrap"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{c.document.title}</div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
                     ✓{" "}
                     {c.signedAt &&
-                      new Date(c.signedAt).toLocaleDateString("ko-KR")}
+                      new Date(c.signedAt).toLocaleString("ko-KR")}
                   </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+                  <PreviewButton
+                    url={`/api/files/${c.document.id}?type=signed`}
+                    title={c.document.title}
+                    label="👁 미리보기"
+                    compact
+                  />
+                  <DownloadButton
+                    documentId={c.document.id}
+                    type="signed"
+                    label="📥 사인본"
+                    compact
+                  />
                 </div>
               </li>
             ))}

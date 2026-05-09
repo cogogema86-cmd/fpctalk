@@ -6,6 +6,7 @@ import { getDocumentDetailForAdmin } from "@/lib/documents";
 import { DownloadButton } from "./_download-button";
 import { CopyLinkButton } from "./_copy-link-button";
 import { CancelSignButton } from "./_cancel-button";
+import { PreviewButton } from "./_preview-button";
 
 export default async function DocumentDetailPage({
   params,
@@ -141,16 +142,24 @@ export default async function DocumentDetailPage({
                       <div className="text-xs text-zinc-400 mt-0.5">대기 중</div>
                     )}
                   </div>
-                  <div className="shrink-0 flex items-center gap-2">
+                  <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
                     <Status status={r.status} />
                     {r.signedPdfPath && (
-                      <DownloadButton
-                        documentId={doc.id}
-                        type="signed"
-                        signRequestId={r.id}
-                        label="📥 사인본"
-                        compact
-                      />
+                      <>
+                        <PreviewButton
+                          url={`/api/files/${doc.id}?type=signed&signRequestId=${r.id}`}
+                          title={`${doc.title} — ${s?.name ?? "사인"}`}
+                          label="👁 미리보기"
+                          compact
+                        />
+                        <DownloadButton
+                          documentId={doc.id}
+                          type="signed"
+                          signRequestId={r.id}
+                          label="📥 사인본"
+                          compact
+                        />
+                      </>
                     )}
                     {r.status === "PENDING" && (
                       <CancelSignButton
@@ -214,16 +223,24 @@ export default async function DocumentDetailPage({
                         </div>
                       )}
                     </div>
-                    <div className="shrink-0 flex items-center gap-2">
+                    <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
                       <Status status={r.status} />
                       {r.signedPdfPath && (
-                        <DownloadButton
-                          documentId={doc.id}
-                          type="signed"
-                          signRequestId={r.id}
-                          label="📥 사인본"
-                          compact
-                        />
+                        <>
+                          <PreviewButton
+                            url={`/api/files/${doc.id}?type=signed&signRequestId=${r.id}`}
+                            title={`${doc.title} — ${r.externalName ?? "외부"}`}
+                            label="👁 미리보기"
+                            compact
+                          />
+                          <DownloadButton
+                            documentId={doc.id}
+                            type="signed"
+                            signRequestId={r.id}
+                            label="📥 사인본"
+                            compact
+                          />
+                        </>
                       )}
                       {r.status === "PENDING" && (
                         <CancelSignButton
