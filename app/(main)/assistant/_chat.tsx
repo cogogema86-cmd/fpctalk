@@ -6,6 +6,7 @@ import {
   type AssistantMode,
   type AssistantResponse,
 } from "./actions";
+import { useT } from "@/lib/i18n/client";
 
 type Msg =
   | {
@@ -32,6 +33,7 @@ const EXAMPLES = [
 ];
 
 export function AssistantChat({ userName }: { userName: string }) {
+  const t = useT();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [forcedMode, setForcedMode] = useState<AssistantMode>("auto");
   const [input, setInput] = useState("");
@@ -106,7 +108,7 @@ export function AssistantChat({ userName }: { userName: string }) {
 
   const clearChat = () => {
     if (messages.length === 0) return;
-    if (confirm("대화 내역을 모두 지우시겠습니까?")) {
+    if (confirm(t("ai.clearConfirm"))) {
       setMessages([]);
       inputRef.current?.focus();
     }
@@ -114,18 +116,17 @@ export function AssistantChat({ userName }: { userName: string }) {
 
   return (
     <>
-      {/* 모드 토글 + 초기화 */}
       <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-2 flex items-center justify-between gap-2 bg-zinc-50 dark:bg-zinc-950">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500">응답 모드:</span>
+          <span className="text-xs text-zinc-500">{t("ai.responseMode")}</span>
           <ModeButton current={forcedMode} value="auto" onChange={setForcedMode}>
-            자동
+            {t("ai.modeAuto")}
           </ModeButton>
           <ModeButton current={forcedMode} value="fast" onChange={setForcedMode}>
-            🟢 일상
+            {t("ai.modeFast")}
           </ModeButton>
           <ModeButton current={forcedMode} value="pro" onChange={setForcedMode}>
-            🔵 업무
+            {t("ai.modePro")}
           </ModeButton>
         </div>
         <button
@@ -134,7 +135,7 @@ export function AssistantChat({ userName }: { userName: string }) {
           className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-30"
           disabled={messages.length === 0}
         >
-          대화 초기화
+          {t("ai.clearChat")}
         </button>
       </div>
 
@@ -168,7 +169,7 @@ export function AssistantChat({ userName }: { userName: string }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="질문이나 요청을 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)"
+            placeholder={t("ai.inputPh")}
             rows={2}
             disabled={isPending}
             className="flex-1 resize-none rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50 max-h-40"
@@ -178,11 +179,11 @@ export function AssistantChat({ userName }: { userName: string }) {
             disabled={isPending || !input.trim()}
             className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 shrink-0"
           >
-            {isPending ? "..." : "전송"}
+            {isPending ? "..." : t("chat.sendShort")}
           </button>
         </div>
         <div className="mt-1.5 text-[10px] text-zinc-400">
-          답변 모델은 자동 모드일 때 키워드(보고서/분석/검토 등) + 길이로 결정됩니다.
+          {t("ai.modelHint")}
         </div>
       </form>
     </>
@@ -200,14 +201,13 @@ export function AssistantChat({ userName }: { userName: string }) {
         <div className="text-5xl">🤖</div>
         <div>
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-            안녕하세요, {userName}님
+            {t("ai.welcome")} {userName}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            학원의 모든 채팅을 알고 있는 비서입니다. 누가 언제 무슨 말을 했는지
-            기억하고, 일정·약속·정보를 인용해 답변합니다.
+            {t("ai.welcomeBody")}
           </p>
           <p className="mt-1 text-xs text-zinc-400">
-            한국어 / English 모두 OK · 질문 언어로 답변
+            {t("ai.welcomeNote")}
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-left">
@@ -219,7 +219,7 @@ export function AssistantChat({ userName }: { userName: string }) {
               className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 text-sm bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
             >
               <div className="text-xs text-zinc-400 mb-1">
-                {ex.mode === "pro" ? "🔵 업무" : "🟢 일상"}
+                {ex.mode === "pro" ? t("ai.modePro") : t("ai.modeFast")}
               </div>
               <div className="text-zinc-700 dark:text-zinc-300">{ex.text}</div>
             </button>
@@ -294,6 +294,7 @@ function Bubble({ msg }: { msg: Msg }) {
 }
 
 function Thinking() {
+  const t = useT();
   return (
     <div className="flex justify-start">
       <div className="rounded-2xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm text-zinc-500 border border-zinc-200 dark:border-zinc-700 inline-flex items-center gap-2">
@@ -302,7 +303,7 @@ function Thinking() {
           <span className="dot" style={{ animationDelay: "0.15s" }} />
           <span className="dot" style={{ animationDelay: "0.3s" }} />
         </span>
-        <span>생각 중...</span>
+        <span>{t("ai.thinkingDots")}</span>
         <style>{`
           .dot {
             width: 6px;

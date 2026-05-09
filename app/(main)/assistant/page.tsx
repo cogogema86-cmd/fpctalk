@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { AssistantChat } from "./_chat";
+import { getT } from "@/lib/i18n/server";
 
 export default async function AssistantPage() {
   const supabase = await createClient();
@@ -20,17 +21,19 @@ export default async function AssistantPage() {
     redirect("/dashboard");
   }
 
+  const t = await getT();
+
   return (
     <div className="h-[calc(100vh-58px)] flex flex-col">
       <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 bg-white dark:bg-black">
         <h1 className="font-semibold text-zinc-900 dark:text-zinc-50">
-          AI 비서{" "}
+          {t("nav.assistant")}{" "}
           <span className="text-xs text-zinc-400 font-normal ml-1">
-            학원장 전용
+            {t("ai.principalOnly")}
           </span>
         </h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          학원의 모든 채팅을 알고 있는 비서. 일정·약속·과거 대화를 물어보거나 업무를 시킬 수 있습니다. (Korean / English)
+          {t("ai.subtitle")}
         </p>
       </div>
 

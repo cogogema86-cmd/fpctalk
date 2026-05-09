@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { DeleteTemplateButton } from "../../_delete-template-button";
+import { getLocale, getT } from "@/lib/i18n/server";
 
 export default async function TemplateDetailPage({
   params,
@@ -21,10 +22,13 @@ export default async function TemplateDetailPage({
     where: { authId: authUser.id },
     include: { role: true },
   });
+  const t = await getT();
+  const locale = await getLocale();
+  const dateLocale = locale === "en" ? "en-US" : "ko-KR";
   if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자 전용 페이지입니다.
+        {t("docDetail.adminOnly")}
       </div>
     );
   }
@@ -36,7 +40,7 @@ export default async function TemplateDetailPage({
   if (tpl.uploaderId !== me.id) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        본인이 만든 양식만 볼 수 있습니다.
+        {t("tpl.notMine")}
       </div>
     );
   }
@@ -63,7 +67,7 @@ export default async function TemplateDetailPage({
         href="/documents"
         className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
       >
-        ← 문서
+        {t("tpl.backToList")}
       </Link>
 
       <div>
@@ -76,24 +80,22 @@ export default async function TemplateDetailPage({
           </p>
         )}
         <div className="mt-1 text-xs text-zinc-400">
-          저장 {tpl.createdAt.toLocaleDateString("ko-KR")}
+          {t("tpl.savedAt")} {tpl.createdAt.toLocaleDateString(dateLocale)}
         </div>
       </div>
 
-      {/* 액션 */}
       <div className="flex items-center gap-2 flex-wrap">
         <Link
           href={`/documents/templates/${tpl.id}/request`}
           className="rounded-md bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 text-sm font-medium"
         >
-          ✍️ 이 양식으로 사인 요청 보내기
+          {t("tpl.requestFromHere")}
         </Link>
         <DeleteTemplateButton templateId={tpl.id} templateName={tpl.name} />
       </div>
 
-      {/* 양식 파일 */}
       <section className="space-y-2">
-        <h2 className="font-semibold text-sm">📄 양식 파일</h2>
+        <h2 className="font-semibold text-sm">{t("tpl.fileSection")}</h2>
         <div className="space-y-1.5">
           <a
             href={koUrl}
@@ -101,7 +103,7 @@ export default async function TemplateDetailPage({
             rel="noopener noreferrer"
             className="inline-block rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-sm font-medium mr-2"
           >
-            🇰🇷 한국어 다운로드
+            {t("tpl.dlKo")}
           </a>
           {enUrl && (
             <a
@@ -110,7 +112,7 @@ export default async function TemplateDetailPage({
               rel="noopener noreferrer"
               className="inline-block rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm font-medium"
             >
-              🇺🇸 English download
+              {t("tpl.dlEn")}
             </a>
           )}
         </div>
@@ -120,20 +122,19 @@ export default async function TemplateDetailPage({
         </div>
       </section>
 
-      {/* 캠페인 이력 */}
       <section className="space-y-2">
         <h2 className="font-semibold">
-          📋 이 양식으로 보낸 사인 요청 ({campaigns.length})
+          {t("tpl.history")} ({campaigns.length})
         </h2>
         {campaigns.length === 0 ? (
           <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
-            아직 사인 요청을 보낸 적이 없습니다.
+            {t("tpl.noHistory")}
             <br />
             <Link
               href={`/documents/templates/${tpl.id}/request`}
               className="text-blue-600 dark:text-blue-400 underline mt-2 inline-block"
             >
-              ✍️ 첫 사인 요청 보내기
+              {t("tpl.firstRequest")}
             </Link>
           </div>
         ) : (
@@ -155,14 +156,16 @@ export default async function TemplateDetailPage({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-sm">
-                          {c.createdAt.toLocaleString("ko-KR")}
+                          {c.createdAt.toLocaleString(dateLocale)}
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold">
                           {signed} / {total}
                         </div>
-                        <div className="text-xs text-zinc-400">사인 완료</div>
+                        <div className="text-xs text-zinc-400">
+                          {t("documents.signedCount")}
+                        </div>
                       </div>
                     </div>
                   </Link>

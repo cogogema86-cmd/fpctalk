@@ -195,6 +195,15 @@ export const dictKo = {
   "tpl.request.submitting": "전송 중...",
   "tpl.request.totalUnit": "총",
   "tpl.request.peopleUnit": "명",
+  "tpl.savedAt": "저장",
+  "tpl.requestFromHere": "✍️ 이 양식으로 사인 요청 보내기",
+  "tpl.fileSection": "📄 양식 파일",
+  "tpl.dlKo": "🇰🇷 한국어 다운로드",
+  "tpl.dlEn": "🇺🇸 English download",
+  "tpl.history": "📋 이 양식으로 보낸 사인 요청",
+  "tpl.noHistory": "아직 사인 요청을 보낸 적이 없습니다.",
+  "tpl.firstRequest": "✍️ 첫 사인 요청 보내기",
+  "tpl.notMine": "본인이 만든 양식만 볼 수 있습니다.",
 
   // ----- Misc -----
   "preview.openNewTab": "새 창",
@@ -352,6 +361,15 @@ export const dictKo = {
   // ----- Document upload -----
   "upload.namePh.fallback": "양식 이름",
   "upload.descriptionPh.fallback": "내부 메모",
+  "upload.savedRedirect": "✅ 양식이 저장되었습니다. 잠시 후 목록으로 이동합니다.",
+  "upload.addAnother": "계속 추가",
+  "upload.namePh2": "예: 2026 연차휴가신청서",
+  "upload.descriptionPh2": "간단한 설명",
+  "upload.koFile2": "🇰🇷 한국어 파일",
+  "upload.enFile2": "🇺🇸 English file (선택)",
+  "upload.fileHint2Line1": "PDF / HWP / DOCX / XLSX / 이미지 등 모든 포맷 가능 (각 파일 최대 20MB).",
+  "upload.fileHint2Line2": "PDF는 사인이 자동 합성됩니다. 그 외 포맷은 원본 + 사인 별도 보관.",
+  "upload.saveBtn": "양식 저장",
 
   // ----- Admin: users -----
   "adm.users.title": "직원 관리",
@@ -401,6 +419,18 @@ export const dictKo = {
   "ai.send": "보내기",
   "ai.thinking": "생각 중...",
   "ai.newConversation": "새 대화",
+  "ai.responseMode": "응답 모드:",
+  "ai.modeAuto": "자동",
+  "ai.modeFast": "🟢 일상",
+  "ai.modePro": "🔵 업무",
+  "ai.clearChat": "대화 초기화",
+  "ai.clearConfirm": "대화 내역을 모두 지우시겠습니까?",
+  "ai.inputPh": "질문이나 요청을 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)",
+  "ai.modelHint": "답변 모델은 자동 모드일 때 키워드(보고서/분석/검토 등) + 길이로 결정됩니다.",
+  "ai.welcome": "안녕하세요,",
+  "ai.welcomeBody": "학원의 모든 채팅을 알고 있는 비서입니다. 누가 언제 무슨 말을 했는지 기억하고, 일정·약속·정보를 인용해 답변합니다.",
+  "ai.welcomeNote": "한국어 / English 모두 OK · 질문 언어로 답변",
+  "ai.thinkingDots": "생각 중...",
 } as const;
 
 export type DictKey = keyof typeof dictKo;
@@ -580,6 +610,15 @@ export const dictEn: Record<DictKey, string> = {
   "tpl.request.submitting": "Sending...",
   "tpl.request.totalUnit": "Total",
   "tpl.request.peopleUnit": "",
+  "tpl.savedAt": "Saved",
+  "tpl.requestFromHere": "✍️ Send signature request from this template",
+  "tpl.fileSection": "📄 Template files",
+  "tpl.dlKo": "🇰🇷 Download Korean",
+  "tpl.dlEn": "🇺🇸 Download English",
+  "tpl.history": "📋 Signature requests from this template",
+  "tpl.noHistory": "No signature requests sent yet.",
+  "tpl.firstRequest": "✍️ Send the first request",
+  "tpl.notMine": "You can only view templates you uploaded.",
 
   "preview.openNewTab": "New tab",
   "preview.closeEsc": "Close (Esc)",
@@ -730,6 +769,15 @@ export const dictEn: Record<DictKey, string> = {
 
   "upload.namePh.fallback": "Template name",
   "upload.descriptionPh.fallback": "Internal memo",
+  "upload.savedRedirect": "✅ Template saved. Returning to the list...",
+  "upload.addAnother": "Add another",
+  "upload.namePh2": "e.g. 2026 annual leave form",
+  "upload.descriptionPh2": "Short description",
+  "upload.koFile2": "🇰🇷 Korean file",
+  "upload.enFile2": "🇺🇸 English file (optional)",
+  "upload.fileHint2Line1": "PDF / HWP / DOCX / XLSX / images all supported (each file max 20MB).",
+  "upload.fileHint2Line2": "PDFs auto-merge the signature; other formats keep original + a separate signature.",
+  "upload.saveBtn": "Save template",
 
   "adm.users.title": "Staff",
   "adm.users.add": "+ Add staff",
@@ -775,6 +823,18 @@ export const dictEn: Record<DictKey, string> = {
   "ai.send": "Send",
   "ai.thinking": "Thinking...",
   "ai.newConversation": "New conversation",
+  "ai.responseMode": "Mode:",
+  "ai.modeAuto": "Auto",
+  "ai.modeFast": "🟢 Casual",
+  "ai.modePro": "🔵 Work",
+  "ai.clearChat": "Clear chat",
+  "ai.clearConfirm": "Clear all chat history?",
+  "ai.inputPh": "Type your question or request... (Enter to send, Shift+Enter for newline)",
+  "ai.modelHint": "In Auto mode the model is chosen by keywords (report/analysis/review etc.) plus length.",
+  "ai.welcome": "Hello,",
+  "ai.welcomeBody": "I'm an assistant aware of every conversation in the academy. I remember who said what and when, and cite schedules, appointments and info in my answers.",
+  "ai.welcomeNote": "Korean / English both supported · I reply in the language you asked in",
+  "ai.thinkingDots": "Thinking...",
 };
 
 export const dict = { ko: dictKo, en: dictEn } as const;
