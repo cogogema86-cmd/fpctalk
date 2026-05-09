@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import { getMe } from "@/lib/chat";
 import { getT } from "@/lib/i18n/server";
-import { InstallButton } from "./_install-button";
-import { SubscribeButton } from "./_subscribe-button";
-import { IosGuide } from "./_ios-guide";
+import { InstallCards } from "./_install-cards";
 
 export default async function InstallPage() {
   const me = await getMe();
@@ -11,7 +9,7 @@ export default async function InstallPage() {
   const t = await getT();
 
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
           📲 {t("install.title")}
@@ -39,20 +37,7 @@ export default async function InstallPage() {
         </div>
       </div>
 
-      {/* 1단계: 홈 화면 설치 (iOS는 가이드 항상 표시) */}
-      <section className="space-y-2">
-        <h2 className="font-semibold">{t("install.step1Title")}</h2>
-        <p className="text-xs text-zinc-500">{t("install.step1Body")}</p>
-        <InstallButton />
-        <IosGuide />
-      </section>
-
-      {/* 2단계: 알림 허용 */}
-      <section className="space-y-2">
-        <h2 className="font-semibold">{t("install.step2Title")}</h2>
-        <p className="text-xs text-zinc-500">{t("install.step2Body")}</p>
-        <SubscribeButton />
-      </section>
+      <InstallCards />
 
       <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 p-3 text-xs text-zinc-500">
         {t("install.note")}
