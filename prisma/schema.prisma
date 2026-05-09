@@ -75,8 +75,54 @@ model User {
   signs             SignatureRequest[] @relation("SignSigner")
   templates         DocumentTemplate[] @relation("TemplateUploader")
   pushSubscriptions PushSubscription[]
+  events            Event[]              @relation("EventCreator")
+  eventAcks         EventAcknowledgement[]
 
   @@index([roleId])
+}
+
+// =====================================================
+// 학원 행사 (관리자 채팅 메시지에서 AI가 추출 → 확인 후 등록)
+// =====================================================
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  startDate   DateTime
+  endDate     DateTime
+  location    String?
+  description String?
+
+  createdById String
+  createdBy   User   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  source         EventSource @default(MANUAL)
+  sourceMessageId String?    @unique // EVENT_PROPOSAL 메시지 (취소 시 정리)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  acknowledgements EventAcknowledgement[]
+
+  @@index([startDate])
+  @@index([createdById])
+}
+
+enum EventSource {
+  MANUAL  // 직접 등록
+  CHAT_AI // 채팅 메시지에서 AI 추출 → 확인
+}
+
+model EventAcknowledgement {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ackedAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId])
 }
 
 // =====================================================
@@ -166,6 +212,7 @@ enum MessageType {
   FILE
   AI
   SYSTEM
+  EVENT_PROPOSAL // AI가 추출한 행사 등록 제안 (작성자에게 [확인]/[취소])
 }
 
 // =====================================================

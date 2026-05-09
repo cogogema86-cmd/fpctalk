@@ -73,6 +73,34 @@ export default async function AttendancePage() {
     }
   }
 
+  // 행사: 모든 사용자가 학원 행사 다 보임 (전체 공유)
+  const monthStart = new Date(year, monthIdx, 1);
+  const monthEnd = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
+  const events = await prisma.event.findMany({
+    where: {
+      startDate: { lte: monthEnd },
+      endDate: { gte: monthStart },
+    },
+    select: { id: true, title: true, startDate: true, endDate: true },
+    orderBy: { startDate: "asc" },
+  });
+  const eventsByDay: Record<string, Array<{ id: string; title: string }>> = {};
+  for (const ev of events) {
+    const start = new Date(
+      Math.max(ev.startDate.getTime(), monthStart.getTime()),
+    );
+    const end = new Date(Math.min(ev.endDate.getTime(), monthEnd.getTime()));
+    for (
+      let d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      d <= end;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const k = dayKey(d);
+      if (!eventsByDay[k]) eventsByDay[k] = [];
+      eventsByDay[k].push({ id: ev.id, title: ev.title });
+    }
+  }
+
   // 본인 연차 잔여 (휴가 신청 폼에 표시)
   const userInfo = await prisma.user.findUnique({
     where: { id: me.id },
@@ -143,6 +171,7 @@ export default async function AttendancePage() {
         year={year}
         monthIdx={monthIdx}
         leavesByDay={leavesByDay}
+        eventsByDay={eventsByDay}
         locale={locale}
       />
 

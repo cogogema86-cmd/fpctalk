@@ -492,6 +492,16 @@ export const dictKo = {
   "install.ios.tip": "💡 추가 후 아이콘이 안 보이면 홈 화면의 마지막 페이지 / 앱 보관함을 확인해보세요. \"홈 화면에 추가\"가 메뉴에 안 보이면 Safari 공유 메뉴에서 아래로 스크롤하거나 Chrome이 아닌 Safari로 접속하셔야 합니다.",
   "install.ios.openInSafari": "Safari로 열기",
   "install.preview.iosBanner": "📱 iPhone에서는 Safari 공유 → \"홈 화면에 추가\"로 추가합니다.",
+
+  // ----- AI event proposal -----
+  "event.proposal.aiSays": "AI 비서",
+  "event.proposal.question": "이 일정을 캘린더에 등록할까요?",
+  "event.proposal.approve": "✓ 등록",
+  "event.proposal.cancel": "취소",
+  "event.proposal.processing": "처리 중...",
+  "event.proposal.approved": "등록됨",
+  "event.proposal.cancelled": "취소됨",
+  "event.proposal.authorOnly": "작성자만 등록/취소할 수 있습니다.",
 } as const;
 
 export type DictKey = keyof typeof dictKo;
@@ -956,6 +966,15 @@ export const dictEn: Record<DictKey, string> = {
   "install.ios.tip": "💡 If the icon is missing afterwards, check the last page of your home screen or your App Library. If \"Add to Home Screen\" doesn't appear in the share menu, scroll down inside it — and make sure you're using Safari (not Chrome on iOS).",
   "install.ios.openInSafari": "Open in Safari",
   "install.preview.iosBanner": "📱 On iPhone, add via Safari → Share → \"Add to Home Screen\".",
+
+  "event.proposal.aiSays": "AI Assistant",
+  "event.proposal.question": "Add this event to the calendar?",
+  "event.proposal.approve": "✓ Add",
+  "event.proposal.cancel": "Dismiss",
+  "event.proposal.processing": "Processing...",
+  "event.proposal.approved": "Added",
+  "event.proposal.cancelled": "Dismissed",
+  "event.proposal.authorOnly": "Only the message author can add or dismiss.",
 };
 
 export const dict = { ko: dictKo, en: dictEn } as const;

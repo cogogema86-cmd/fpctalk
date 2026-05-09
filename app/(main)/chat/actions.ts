@@ -13,6 +13,7 @@ import {
 import { prisma } from "@/lib/db";
 import { askAI } from "@/lib/ai";
 import { sendPushToUsers } from "@/lib/push";
+import { extractEventFromMessage } from "@/lib/event-extract";
 
 // =====================================================
 // 직원 선택 → 1:1 채팅 시작
@@ -114,18 +115,42 @@ export async function sendMessageAction(
     });
     if (chat) {
       chatTitle = chat.name ?? chatTitle;
-      // 멤버십이 명시된 사람들 + 본인 제외
       const recipients = chat.members
         .map((m) => m.userId)
         .filter((id) => id !== me.id);
       if (recipients.length > 0) {
         const preview = content.trim().slice(0, 100);
-        // fire-and-forget — 응답 지연 방지
         void sendPushToUsers(recipients, {
           title: chat.name ?? me.name,
           body: `${me.name}: ${preview}`,
           url: `/chat/${chatId}`,
           tag: `chat-${chatId}`,
+        });
+      }
+    }
+
+    // 관리자 메시지면 AI 일정 추출 시도
+    const meWithRole = await prisma.user.findUnique({
+      where: { id: me.id },
+      include: { role: { select: { isAdmin: true } } },
+    });
+    if (meWithRole?.role.isAdmin) {
+      const extracted = await extractEventFromMessage(content);
+      if (extracted.hasEvent) {
+        await prisma.message.create({
+          data: {
+            chatId,
+            userId: me.id, // 작성자 = 메시지 보낸 사람 (확인 권한 체크용)
+            type: "EVENT_PROPOSAL",
+            content: `${extracted.title}`,
+            metadata: {
+              state: "PENDING",
+              title: extracted.title,
+              startDate: extracted.startDate,
+              endDate: extracted.endDate,
+              location: extracted.location ?? null,
+            },
+          },
         });
       }
     }

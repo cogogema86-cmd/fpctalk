@@ -76,6 +76,7 @@ export default async function ChatRoomPage({
           type: m.type,
           createdAt: m.createdAt.toISOString(),
           user: m.user,
+          metadata: m.metadata,
         }))}
       />
     </div>

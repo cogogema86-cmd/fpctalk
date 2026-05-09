@@ -18,6 +18,10 @@ import {
   type SendMessageState,
 } from "../actions";
 import { useT } from "@/lib/i18n/client";
+import {
+  approveEventProposalAction,
+  cancelEventProposalAction,
+} from "@/app/(main)/events/actions";
 
 const AI_TRIGGER = /^@(비서|ai|assistant)\s+/i;
 
@@ -29,6 +33,7 @@ type Message = {
   type: string;
   createdAt: string;
   user: { id: string; username: string; name: string } | null;
+  metadata?: unknown;
   /** 낙관적 UI: 전송 클릭 직후 임시 메시지 (Realtime 도착 시 교체) */
   pending?: boolean;
 };
@@ -551,6 +556,132 @@ const UnreadDivider = ({
   );
 };
 
+type ProposalMeta = {
+  state?: "PENDING" | "APPROVED" | "CANCELLED";
+  title?: string;
+  startDate?: string;
+  endDate?: string;
+  location?: string | null;
+  eventId?: string;
+};
+
+function EventProposalBubble({
+  message,
+  isMine,
+}: {
+  message: Message;
+  isMine: boolean;
+}) {
+  const t = useT();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const meta = (message.metadata ?? {}) as ProposalMeta;
+  const state = meta.state ?? "PENDING";
+
+  const dateRange = (() => {
+    if (!meta.startDate) return "";
+    const s = new Date(meta.startDate);
+    const e = meta.endDate ? new Date(meta.endDate) : null;
+    const fmt = new Intl.DateTimeFormat(undefined, {
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    if (!e || s.toDateString() === e.toDateString()) {
+      return fmt.format(s);
+    }
+    const fmtDay = new Intl.DateTimeFormat(undefined, {
+      month: "long",
+      day: "numeric",
+    });
+    return `${fmtDay.format(s)} ~ ${fmtDay.format(e)}`;
+  })();
+
+  const onApprove = () =>
+    startTransition(async () => {
+      const r = await approveEventProposalAction(message.id);
+      if (!r.ok) setError(r.error ?? t("common.error"));
+    });
+  const onCancel = () =>
+    startTransition(async () => {
+      const r = await cancelEventProposalAction(message.id);
+      if (!r.ok) setError(r.error ?? t("common.error"));
+    });
+
+  const stateBadge = (() => {
+    if (state === "APPROVED")
+      return (
+        <span className="text-[10px] rounded bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300 px-1.5 py-0.5">
+          ✓ {t("event.proposal.approved")}
+        </span>
+      );
+    if (state === "CANCELLED")
+      return (
+        <span className="text-[10px] rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 px-1.5 py-0.5">
+          {t("event.proposal.cancelled")}
+        </span>
+      );
+    return null;
+  })();
+
+  return (
+    <div className="flex justify-center">
+      <div className="max-w-[90%] rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm">
+        <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 mb-1">
+          🤖 <span>{t("event.proposal.aiSays")}</span>
+          {stateBadge}
+        </div>
+        <div className="font-semibold text-amber-900 dark:text-amber-100">
+          {meta.title ?? message.content}
+        </div>
+        {dateRange && (
+          <div className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+            📅 {dateRange}
+          </div>
+        )}
+        {meta.location && (
+          <div className="text-xs text-amber-800 dark:text-amber-200">
+            📍 {meta.location}
+          </div>
+        )}
+        <div className="text-xs text-amber-700 dark:text-amber-300 mt-2">
+          {t("event.proposal.question")}
+        </div>
+
+        {state === "PENDING" && isMine && (
+          <div className="flex gap-2 mt-2">
+            <button
+              type="button"
+              onClick={onApprove}
+              disabled={isPending}
+              className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3 py-1.5 disabled:opacity-50"
+            >
+              {isPending ? t("event.proposal.processing") : t("event.proposal.approve")}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isPending}
+              className="rounded-md border border-zinc-300 dark:border-zinc-700 text-xs font-medium px-3 py-1.5 disabled:opacity-50"
+            >
+              {t("event.proposal.cancel")}
+            </button>
+          </div>
+        )}
+        {state === "PENDING" && !isMine && (
+          <div className="text-[11px] text-amber-700 dark:text-amber-300 mt-2 italic">
+            {t("event.proposal.authorOnly")}
+          </div>
+        )}
+        {error && (
+          <div className="text-[11px] text-red-600 mt-1">{error}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   isMine,
@@ -567,6 +698,9 @@ function MessageBubble({
 
   if (message.type === "AI") {
     return <AiMessageBubble message={message} />;
+  }
+  if (message.type === "EVENT_PROPOSAL") {
+    return <EventProposalBubble message={message} isMine={isMine} />;
   }
 
   const isPending = !!message.pending;
