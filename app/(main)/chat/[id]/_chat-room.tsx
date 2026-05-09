@@ -14,19 +14,29 @@ type Message = {
   user: { id: string; username: string; name: string } | null;
 };
 
+type Member = {
+  id: string;
+  username: string;
+  name: string;
+};
+
 const initialState: SendMessageState = {};
 
 export function ChatRoom({
   chatId,
   meId,
   meName,
+  members,
   initialMessages,
 }: {
   chatId: string;
   meId: string;
   meName: string;
+  members: Member[];
   initialMessages: Message[];
 }) {
+  // 멤버 id → 정보 맵 (Realtime으로 들어오는 새 메시지에 작성자 이름 부착)
+  const memberMap = new Map(members.map((m) => [m.id, m]));
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [state, formAction, isPending] = useActionState(
     sendMessageAction,
@@ -43,6 +53,9 @@ export function ChatRoom({
       behavior: "smooth",
     });
   }, [messages.length]);
+
+  // memberMap을 effect 의존성에서 안정적으로 사용하기 위해 변환
+  // (지금은 매 렌더마다 새 Map이지만 effect 안에선 closure로 캡쳐)
 
   // Realtime 구독
   useEffect(() => {
@@ -70,6 +83,14 @@ export function ChatRoom({
           // 이미 있으면 무시 (중복 방지)
           setMessages((prev) => {
             if (prev.some((m) => m.id === row.id)) return prev;
+            // 작성자 정보: 본인이거나 멤버맵에서 찾음
+            let user: { id: string; username: string; name: string } | null = null;
+            if (row.userId === meId) {
+              user = { id: meId, username: "", name: meName };
+            } else if (row.userId) {
+              const m = memberMap.get(row.userId);
+              if (m) user = m;
+            }
             return [
               ...prev,
               {
@@ -79,10 +100,7 @@ export function ChatRoom({
                 content: row.content,
                 type: row.type,
                 createdAt: row.createdAt,
-                user:
-                  row.userId === meId
-                    ? { id: meId, username: "", name: meName }
-                    : null, // 다른 사용자 정보는 user 정보 부족 → 별도 fetch 가능. 일단 익명 표시.
+                user,
               },
             ];
           });
@@ -93,7 +111,9 @@ export function ChatRoom({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [chatId, meId, meName]);
+    // memberMap은 매 렌더마다 새로 생성되지만 effect 안에서 closure로 사용 — chatId가 같으면 재구독 불필요
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, meId, meName, members]);
 
   // 전송 후 입력칸 비우기
   const handleSubmit = (formData: FormData) => {

@@ -49,6 +49,11 @@ export default async function ChatRoomPage({
         chatId={chatId}
         meId={me.id}
         meName={me.name}
+        members={info.members.map((m) => ({
+          id: m.user.id,
+          username: m.user.username,
+          name: m.user.name,
+        }))}
         initialMessages={messages.map((m) => ({
           id: m.id,
           chatId: m.chatId,

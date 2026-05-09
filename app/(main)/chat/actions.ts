@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
+  createGroupChat,
   createOrGetDM,
   getMe,
   markAsRead,
@@ -20,6 +21,36 @@ export async function startDmAction(formData: FormData) {
   const chatId = await createOrGetDM(me.id, otherUserId);
   revalidatePath("/chat");
   redirect(`/chat/${chatId}`);
+}
+
+// =====================================================
+// 그룹 채팅 생성
+// =====================================================
+export type CreateGroupState = {
+  error?: string;
+};
+
+export async function createGroupChatAction(
+  _prev: CreateGroupState,
+  formData: FormData,
+): Promise<CreateGroupState> {
+  const me = await getMe();
+  if (!me) return { error: "로그인이 필요합니다." };
+
+  const name = formData.get("name") as string;
+  const memberIds = formData.getAll("memberIds") as string[];
+
+  try {
+    const chatId = await createGroupChat(name, memberIds, me.id);
+    revalidatePath("/chat");
+    redirect(`/chat/${chatId}`);
+  } catch (e) {
+    // redirect()는 NEXT_REDIRECT throw — 그건 그대로 통과
+    if (e instanceof Error && e.message === "NEXT_REDIRECT") throw e;
+    return {
+      error: e instanceof Error ? e.message : "생성 실패",
+    };
+  }
 }
 
 // =====================================================

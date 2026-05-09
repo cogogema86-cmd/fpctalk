@@ -89,6 +89,45 @@ export async function getMyChats(userId: string) {
 }
 
 // =====================================================
+// 그룹 채팅 생성
+// =====================================================
+export async function createGroupChat(
+  name: string,
+  memberIds: string[],
+  myUserId: string,
+) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("그룹 이름을 입력해주세요.");
+  if (trimmed.length > 50) throw new Error("그룹 이름은 50자 이하로 입력해주세요.");
+
+  // 본인 자동 포함, 중복 제거
+  const allMembers = [...new Set([myUserId, ...memberIds])];
+  if (allMembers.length < 3) {
+    throw new Error("그룹 채팅은 본인 포함 최소 3명이어야 합니다.");
+  }
+
+  // 멤버 모두 실제 존재 확인
+  const found = await prisma.user.count({
+    where: { id: { in: allMembers } },
+  });
+  if (found !== allMembers.length) {
+    throw new Error("일부 멤버를 찾을 수 없습니다.");
+  }
+
+  const chat = await prisma.chat.create({
+    data: {
+      type: "GROUP",
+      name: trimmed,
+      members: {
+        create: allMembers.map((userId) => ({ userId })),
+      },
+    },
+    select: { id: true },
+  });
+  return chat.id;
+}
+
+// =====================================================
 // 1:1 DM 가져오기/생성 (둘 다 멤버인 DM이 이미 있으면 그것 반환)
 // =====================================================
 export async function createOrGetDM(myUserId: string, otherUserId: string) {
