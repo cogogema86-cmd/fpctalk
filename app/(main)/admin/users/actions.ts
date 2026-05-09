@@ -206,6 +206,8 @@ export async function updateStaffAction(
 
 // =====================================================
 // 비밀번호 재설정 (관리자가 직원 비번 초기화)
+// - customPassword 제공 시 그 값으로 설정 (운영자가 직접 정함)
+// - 없거나 빈 문자열이면 자동 랜덤 생성 (10자)
 // =====================================================
 export type ResetPasswordResult = {
   error?: string;
@@ -215,6 +217,7 @@ export type ResetPasswordResult = {
 
 export async function resetPasswordAction(
   userId: string,
+  customPassword?: string,
 ): Promise<ResetPasswordResult> {
   const guard = await requireAdmin();
   if (!guard.ok) return { error: guard.error };
@@ -225,7 +228,20 @@ export async function resetPasswordAction(
   });
   if (!target) return { error: "직원을 찾을 수 없습니다." };
 
-  const newPassword = generatePassword();
+  let newPassword: string;
+  const trimmed = customPassword?.trim() ?? "";
+  if (trimmed.length > 0) {
+    if (trimmed.length < 6) {
+      return { error: "비밀번호는 6자 이상이어야 합니다." };
+    }
+    if (trimmed.length > 100) {
+      return { error: "비밀번호는 100자 이하로 입력해주세요." };
+    }
+    newPassword = trimmed;
+  } else {
+    newPassword = generatePassword();
+  }
+
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(target.authId, {
     password: newPassword,
