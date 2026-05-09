@@ -7,7 +7,6 @@ const ITEMS = [
   { href: "/dashboard", label: "홈", icon: "🏠" },
   { href: "/chat", label: "채팅", icon: "💬" },
   { href: "/assistant", label: "AI", icon: "🤖" },
-  { href: "/attendance", label: "근태", icon: "📅" },
   { href: "/documents", label: "문서", icon: "📄" },
 ];
 

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getMe } from "@/lib/chat";
+import { createClient } from "@/lib/supabase/server";
 import {
   calcLeaveDays,
   dayKey,
@@ -14,8 +14,22 @@ import { LeaveForm } from "./_leave-form";
 import { LeaveList } from "./_leave-list";
 
 export default async function AttendancePage() {
-  const me = await getMe();
+  // 관리자 전용 페이지
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) redirect("/login");
+
+  const me = await prisma.user.findUnique({
+    where: { authId: authUser.id },
+    include: { role: true },
+  });
   if (!me) redirect("/login");
+  if (!me.role.isAdmin) {
+    // 일반 직원은 대시보드로
+    redirect("/dashboard");
+  }
 
   const today = await getTodayAttendance(me.id);
   const checkInRow = today.find((a) => a.type === "CHECK_IN");

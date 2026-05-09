@@ -13,13 +13,13 @@ const BASE_NAV: NavItem[] = [
   { href: "/dashboard", label: "대시보드", icon: "🏠" },
   { href: "/chat", label: "채팅", icon: "💬" },
   { href: "/assistant", label: "AI 비서", icon: "🤖" },
-  { href: "/attendance", label: "근태", icon: "📅" },
   { href: "/documents", label: "문서", icon: "📄" },
 ];
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin/users", label: "직원 관리", icon: "👥" },
   { href: "/admin/roles", label: "역할 관리", icon: "🏷️" },
+  { href: "/attendance", label: "근태", icon: "📅" },
   { href: "/admin/leave", label: "연차 승인", icon: "✅" },
 ];
 
