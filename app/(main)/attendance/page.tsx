@@ -12,6 +12,7 @@ import { CheckCard } from "./_check-card";
 import { MonthCalendar } from "./_calendar";
 import { LeaveForm } from "./_leave-form";
 import { LeaveList } from "./_leave-list";
+import { getT } from "@/lib/i18n/server";
 
 export default async function AttendancePage() {
   // 관리자 전용 페이지
@@ -71,6 +72,7 @@ export default async function AttendancePage() {
     (userInfo?.annualLeaveUsed ?? 0) -
     reservedDays;
 
+  const t = await getT();
   const leaveRequests = await getMyLeaveRequests(me.id);
   const leaveItems = leaveRequests.map((r) => ({
     id: r.id,
@@ -89,10 +91,10 @@ export default async function AttendancePage() {
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          근태
+          {t("att.title")}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          출퇴근 체크 + 휴가 신청
+          {t("att.subtitle")}
         </p>
       </div>
 
@@ -112,12 +114,12 @@ export default async function AttendancePage() {
       {/* 휴가 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 space-y-3">
-          <h2 className="font-semibold">휴가 신청</h2>
+          <h2 className="font-semibold">{t("att.leaveRequest")}</h2>
           <LeaveForm remaining={Math.max(0, remaining)} />
         </section>
 
         <section className="space-y-2">
-          <h2 className="font-semibold">내 휴가 내역</h2>
+          <h2 className="font-semibold">{t("att.myLeaves")}</h2>
           <LeaveList items={leaveItems} />
         </section>
       </div>

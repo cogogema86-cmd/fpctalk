@@ -25,7 +25,9 @@ export function Sidebar({
   const showAssistant = userLevel >= 3;
 
   const baseNav: NavItem[] = [
-    { href: "/dashboard", label: t("nav.dashboard"), icon: "🏠" },
+    ...(isAdmin
+      ? [{ href: "/dashboard", label: t("nav.dashboard"), icon: "🏠" }]
+      : []),
     { href: "/chat", label: t("nav.chat"), icon: "💬" },
     {
       href: "/documents",

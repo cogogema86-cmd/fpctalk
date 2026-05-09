@@ -59,7 +59,7 @@ export default async function MainLayout({
     <div className="min-h-screen flex flex-col bg-white dark:bg-black">
       <header className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center justify-between bg-white dark:bg-black shrink-0">
         <Link
-          href="/dashboard"
+          href={isAdmin ? "/dashboard" : "/chat"}
           className="font-semibold text-zinc-900 dark:text-zinc-50"
         >
           FPCTalk
@@ -92,6 +92,7 @@ export default async function MainLayout({
       </div>
 
       <MobileNav
+        isAdmin={isAdmin}
         userLevel={userLevel}
         pendingSignsCount={pendingSignsCount}
       />

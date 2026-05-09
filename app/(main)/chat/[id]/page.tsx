@@ -7,6 +7,7 @@ import {
   markAsRead,
 } from "@/lib/chat";
 import { ChatRoom } from "./_chat-room";
+import { getT } from "@/lib/i18n/server";
 
 export default async function ChatRoomPage({
   params,
@@ -21,6 +22,7 @@ export default async function ChatRoomPage({
   if (!info) notFound();
 
   const messages = await getChatMessages(chatId, me.id);
+  const t = await getT();
 
   // markAsRead는 유저가 메시지를 다 본 다음에 호출해야 의미 있음.
   // 입장 시점에 미리 갱신하면 unread 카운트 즉시 0 되어버려 "마지막 읽음" 위치 표시가 망가짐.
@@ -41,16 +43,16 @@ export default async function ChatRoomPage({
             {info.title}
             {info.isLevelChat && (
               <span className="text-xs rounded bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 text-amber-800 dark:text-amber-200 font-normal">
-                ⭐ 레벨 {info.levelRequired}+
+                ⭐ {t("chat.levelTag")} {info.levelRequired}+
               </span>
             )}
           </div>
           <div className="text-xs text-zinc-500">
             {info.type === "DM"
-              ? "1:1 채팅"
+              ? t("chat.dmType")
               : info.isLevelChat
-                ? `레벨 ${info.levelRequired}+ 자동 공개`
-                : `그룹 · 멤버 ${info.members.length}명`}
+                ? `${t("chat.levelTag")} ${info.levelRequired}+ ${t("chat.levelAuto")}`
+                : `${t("chat.groupMembers")} ${info.members.length}${t("chat.memberUnit")}`}
           </div>
         </div>
       </div>

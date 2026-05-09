@@ -17,6 +17,7 @@ import {
   triggerChatAiAction,
   type SendMessageState,
 } from "../actions";
+import { useT } from "@/lib/i18n/client";
 
 const AI_TRIGGER = /^@(비서|ai|assistant)\s+/i;
 
@@ -55,6 +56,7 @@ export function ChatRoom({
   myLastReadAt: string | null;
   initialMessages: Message[];
 }) {
+  const t = useT();
   const memberMap = new Map(members.map((m) => [m.id, m]));
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   // 폴링에서 항상 최신 messages를 참조하기 위한 ref
@@ -349,7 +351,7 @@ export function ChatRoom({
       >
         {messages.length === 0 ? (
           <div className="text-center text-sm text-zinc-400 py-8">
-            첫 메시지를 보내보세요.
+            {t("chat.firstMessage")}
           </div>
         ) : (
           messages.map((m, i) => {
@@ -383,7 +385,7 @@ export function ChatRoom({
         {showMentionPicker && (
           <div className="absolute bottom-full left-3 mb-1 z-10 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-1 min-w-[200px]">
             <div className="text-[10px] text-zinc-400 px-2 py-1">
-              AI 비서 호출
+              {t("chat.aiSummonTitle")}
             </div>
             <button
               type="button"
@@ -391,7 +393,7 @@ export function ChatRoom({
               className="w-full text-left px-2 py-1.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm"
             >
               <span className="font-mono">@AI</span>{" "}
-              <span className="text-zinc-400 text-xs">— 영어로 호출</span>
+              <span className="text-zinc-400 text-xs">{t("chat.summonEn")}</span>
             </button>
             <button
               type="button"
@@ -399,7 +401,7 @@ export function ChatRoom({
               className="w-full text-left px-2 py-1.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm"
             >
               <span className="font-mono">@비서</span>{" "}
-              <span className="text-zinc-400 text-xs">— 한국어로 호출</span>
+              <span className="text-zinc-400 text-xs">{t("chat.summonKo")}</span>
             </button>
           </div>
         )}
@@ -413,7 +415,7 @@ export function ChatRoom({
           <textarea
             ref={inputRef}
             name="content"
-            placeholder="메시지 입력 (Enter 전송 / @ 입력 시 비서 호출)"
+            placeholder={t("chat.inputPh")}
             rows={1}
             disabled={isPending}
             onKeyDown={handleKeyDown}
@@ -429,7 +431,7 @@ export function ChatRoom({
             disabled={isPending}
             className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 shrink-0"
           >
-            {isPending ? "전송중" : "전송"}
+            {isPending ? t("chat.sendingShort") : t("chat.sendShort")}
           </button>
         </div>
       </form>
@@ -438,6 +440,7 @@ export function ChatRoom({
 }
 
 function AiMessageBubble({ message }: { message: Message }) {
+  const t = useT();
   type AiMeta = { model?: string; mode?: "fast" | "pro" };
   const meta = (message as Message & { metadata?: AiMeta }).metadata as
     | AiMeta
@@ -463,7 +466,7 @@ function AiMessageBubble({ message }: { message: Message }) {
       <div className="max-w-[85%] flex flex-col">
         <div className="text-xs mb-0.5 px-1 flex items-center gap-1.5">
           <span className="text-purple-700 dark:text-purple-300 font-medium">
-            🤖 AI 비서
+            {t("chat.aiBot")}
           </span>
           {meta?.mode && (
             <span className="text-[10px] text-zinc-400">
@@ -477,7 +480,7 @@ function AiMessageBubble({ message }: { message: Message }) {
 
         {translation && (
           <div className="mt-1 rounded-xl px-3 py-2 text-xs whitespace-pre-wrap bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-            <div className="text-[9px] text-zinc-500 mb-0.5">번역</div>
+            <div className="text-[9px] text-zinc-500 mb-0.5">{t("chat.translation")}</div>
             {translation}
           </div>
         )}
@@ -499,7 +502,7 @@ function AiMessageBubble({ message }: { message: Message }) {
                 onClick={() => handleTranslate("ko")}
                 className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
               >
-                한글
+                {t("chat.koreanShort")}
               </button>
               <button
                 type="button"
@@ -511,7 +514,7 @@ function AiMessageBubble({ message }: { message: Message }) {
             </>
           )}
           {isTransPending && (
-            <span className="text-zinc-500">번역 중...</span>
+            <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
           {translation && (
             <button
@@ -522,7 +525,7 @@ function AiMessageBubble({ message }: { message: Message }) {
               }}
               className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
             >
-              번역 닫기
+              {t("chat.translationClose")}
             </button>
           )}
         </div>
@@ -535,15 +538,18 @@ const UnreadDivider = ({
   ref,
 }: {
   ref: React.RefObject<HTMLDivElement | null>;
-}) => (
-  <div ref={ref} className="flex items-center gap-2 py-2">
-    <div className="flex-1 h-px bg-red-300 dark:bg-red-700" />
-    <span className="text-xs font-medium text-red-600 dark:text-red-400 px-2 bg-zinc-50 dark:bg-zinc-950">
-      여기서부터 안 읽음
-    </span>
-    <div className="flex-1 h-px bg-red-300 dark:bg-red-700" />
-  </div>
-);
+}) => {
+  const t = useT();
+  return (
+    <div ref={ref} className="flex items-center gap-2 py-2">
+      <div className="flex-1 h-px bg-red-300 dark:bg-red-700" />
+      <span className="text-xs font-medium text-red-600 dark:text-red-400 px-2 bg-zinc-50 dark:bg-zinc-950">
+        {t("chat.unreadDivider")}
+      </span>
+      <div className="flex-1 h-px bg-red-300 dark:bg-red-700" />
+    </div>
+  );
+};
 
 function MessageBubble({
   message,
@@ -554,15 +560,16 @@ function MessageBubble({
   isMine: boolean;
   showAuthor: boolean;
 }) {
-  // AI 비서 메시지는 별도 컴포넌트로 렌더
+  const t = useT();
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [transError, setTransError] = useState<string | null>(null);
+  const [isTransPending, startTransTransition] = useTransition();
+
   if (message.type === "AI") {
     return <AiMessageBubble message={message} />;
   }
 
   const isPending = !!message.pending;
-  const [translation, setTranslation] = useState<string | null>(null);
-  const [transError, setTransError] = useState<string | null>(null);
-  const [isTransPending, startTransTransition] = useTransition();
 
   const handleTranslate = (target: "ko" | "en") => {
     setTransError(null);
@@ -598,7 +605,6 @@ function MessageBubble({
           {message.content}
         </div>
 
-        {/* 번역 결과 */}
         {translation && (
           <div
             className={`mt-1 rounded-xl px-3 py-2 text-xs whitespace-pre-wrap ${
@@ -607,7 +613,7 @@ function MessageBubble({
                 : "bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
             }`}
           >
-            <div className="text-[9px] text-zinc-500 mb-0.5">번역</div>
+            <div className="text-[9px] text-zinc-500 mb-0.5">{t("chat.translation")}</div>
             {translation}
           </div>
         )}
@@ -616,7 +622,7 @@ function MessageBubble({
         )}
 
         <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
-          {isPending && <span className="text-zinc-400">전송 중...</span>}
+          {isPending && <span className="text-zinc-400">{t("chat.sending")}</span>}
           {!isPending && (
             <>
               <span>
@@ -632,7 +638,7 @@ function MessageBubble({
                     onClick={() => handleTranslate("ko")}
                     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
                   >
-                    한글
+                    {t("chat.koreanShort")}
                   </button>
                   <button
                     type="button"
@@ -644,7 +650,7 @@ function MessageBubble({
                 </>
               )}
               {isTransPending && (
-                <span className="text-zinc-500">번역 중...</span>
+                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
               )}
               {translation && (
                 <button
@@ -655,7 +661,7 @@ function MessageBubble({
                   }}
                   className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
                 >
-                  번역 닫기
+                  {t("chat.translationClose")}
                 </button>
               )}
             </>

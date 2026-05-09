@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { getT } from "@/lib/i18n/server";
@@ -17,6 +18,7 @@ export default async function DashboardPage() {
     : null;
 
   const isAdmin = !!user?.role.isAdmin;
+  if (!isAdmin) redirect("/chat");
 
   const t = await getT();
 
@@ -24,19 +26,13 @@ export default async function DashboardPage() {
   let totalUserCount = 0;
   let pendingSignsCount = 0;
   if (user) {
-    if (isAdmin) {
-      [pendingLeaveCount, totalUserCount, pendingSignsCount] = await Promise.all([
-        prisma.leaveRequest.count({ where: { status: "PENDING" } }),
-        prisma.user.count(),
-        prisma.signatureRequest.count({
-          where: { signerId: user.id, status: "PENDING" },
-        }),
-      ]);
-    } else {
-      pendingSignsCount = await prisma.signatureRequest.count({
+    [pendingLeaveCount, totalUserCount, pendingSignsCount] = await Promise.all([
+      prisma.leaveRequest.count({ where: { status: "PENDING" } }),
+      prisma.user.count(),
+      prisma.signatureRequest.count({
         where: { signerId: user.id, status: "PENDING" },
-      });
-    }
+      }),
+    ]);
   }
 
   const unitCases = t("dashboard.unitCases");
@@ -55,71 +51,44 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {isAdmin ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card
-            title={t("dashboard.totalStaff")}
-            value={`${totalUserCount}${unitPeople ? unitPeople : ""}`}
-            hint={t("dashboard.totalStaffHint")}
-            href="/admin/users"
-          />
-          <Card
-            title={t("dashboard.pendingLeaves")}
-            value={
-              pendingLeaveCount > 0
-                ? `${pendingLeaveCount}${unitCases}`
-                : `0${unitCases}`
-            }
-            hint={
-              pendingLeaveCount > 0
-                ? t("dashboard.pendingLeavesWaiting")
-                : t("dashboard.pendingLeavesAllDone")
-            }
-            href="/admin/leave"
-            highlight={pendingLeaveCount > 0}
-          />
-          <Card
-            title={t("dashboard.pendingSignsCard")}
-            value={
-              pendingSignsCount > 0
-                ? `${pendingSignsCount}${unitCases}`
-                : `0${unitCases}`
-            }
-            hint={
-              pendingSignsCount > 0
-                ? t("dashboard.pendingSignsHint")
-                : t("dashboard.pendingSignsAllDone")
-            }
-            href="/documents"
-            highlight={pendingSignsCount > 0}
-          />
-        </div>
-      ) : (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950 space-y-2">
-          <h2 className="font-semibold">{t("dashboard.staffMenu")}</h2>
-          <ul className="text-sm text-zinc-600 dark:text-zinc-400 space-y-1.5">
-            <li>
-              💬{" "}
-              <Link href="/chat" className="underline">
-                {t("dashboard.staffChatItem")}
-              </Link>
-            </li>
-            <li>
-              🤖{" "}
-              <Link href="/assistant" className="underline">
-                {t("dashboard.staffAssistantItem")}
-              </Link>
-            </li>
-            <li>
-              📄{" "}
-              <Link href="/documents" className="underline">
-                {t("dashboard.staffDocsItem")}
-              </Link>
-            </li>
-          </ul>
-          <p className="text-xs text-zinc-400 mt-4">{t("dashboard.staffNote")}</p>
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card
+          title={t("dashboard.totalStaff")}
+          value={`${totalUserCount}${unitPeople ? unitPeople : ""}`}
+          hint={t("dashboard.totalStaffHint")}
+          href="/admin/users"
+        />
+        <Card
+          title={t("dashboard.pendingLeaves")}
+          value={
+            pendingLeaveCount > 0
+              ? `${pendingLeaveCount}${unitCases}`
+              : `0${unitCases}`
+          }
+          hint={
+            pendingLeaveCount > 0
+              ? t("dashboard.pendingLeavesWaiting")
+              : t("dashboard.pendingLeavesAllDone")
+          }
+          href="/admin/leave"
+          highlight={pendingLeaveCount > 0}
+        />
+        <Card
+          title={t("dashboard.pendingSignsCard")}
+          value={
+            pendingSignsCount > 0
+              ? `${pendingSignsCount}${unitCases}`
+              : `0${unitCases}`
+          }
+          hint={
+            pendingSignsCount > 0
+              ? t("dashboard.pendingSignsHint")
+              : t("dashboard.pendingSignsAllDone")
+          }
+          href="/documents"
+          highlight={pendingSignsCount > 0}
+        />
+      </div>
     </div>
   );
 }

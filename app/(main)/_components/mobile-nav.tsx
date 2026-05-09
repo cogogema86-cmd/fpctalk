@@ -12,9 +12,11 @@ type Item = {
 };
 
 export function MobileNav({
+  isAdmin,
   userLevel,
   pendingSignsCount,
 }: {
+  isAdmin: boolean;
   userLevel: number;
   pendingSignsCount: number;
 }) {
@@ -29,7 +31,9 @@ export function MobileNav({
       icon: "📄",
       badge: pendingSignsCount > 0 ? pendingSignsCount : undefined,
     },
-    { href: "/dashboard", label: t("nav.home"), icon: "🏠" },
+    ...(isAdmin
+      ? [{ href: "/dashboard", label: t("nav.home"), icon: "🏠" }]
+      : []),
   ];
 
   const assistantItem: Item = {

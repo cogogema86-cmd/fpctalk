@@ -10,6 +10,7 @@ import {
   submitExternalSignatureAction,
   type ExtSignSubmitState,
 } from "./actions";
+import { useT } from "@/lib/i18n/client";
 
 const initialState: ExtSignSubmitState = {};
 
@@ -20,6 +21,7 @@ export function ExternalSignCanvas({
   token: string;
   signerName: string;
 }) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [state, formAction, isPending] = useActionState(
@@ -101,10 +103,10 @@ export function ExternalSignCanvas({
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas || !hasDrawn) {
-      alert("사인을 그려주세요.");
+      alert(t("sign.alertEmpty"));
       return;
     }
-    if (!confirm(`${signerName}님 본인의 사인이 맞으면 확인을 누르세요.`)) {
+    if (!confirm(`${signerName}${t("ext.confirmSelf")}`)) {
       return;
     }
     const dataUrl = canvas.toDataURL("image/png");
@@ -119,10 +121,11 @@ export function ExternalSignCanvas({
       <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 p-6 text-center">
         <div className="text-3xl mb-2">🎉</div>
         <div className="font-semibold text-green-800 dark:text-green-200">
-          사인이 완료되었습니다
+          {t("ext.successTitle")}
         </div>
         <p className="text-sm text-green-700 dark:text-green-300 mt-2">
-          {signerName}님, 감사합니다. 이 페이지는 닫으셔도 됩니다.
+          {signerName}
+          {t("ext.successBody")}
         </p>
       </div>
     );
@@ -153,14 +156,14 @@ export function ExternalSignCanvas({
           disabled={isPending}
           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50"
         >
-          🗑 지우기
+          {t("sign.clear")}
         </button>
         <button
           type="submit"
           disabled={isPending || !hasDrawn}
           className="rounded-md bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 text-sm font-medium disabled:opacity-50"
         >
-          {isPending ? "처리 중..." : "✍️ 사인 제출"}
+          {isPending ? t("sign.processing") : t("sign.submit")}
         </button>
       </div>
 
