@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
-import { getT } from "@/lib/i18n/server";
+import { getLocale, getT } from "@/lib/i18n/server";
+import { getUpcomingEventsForUser } from "@/lib/events";
+import { UpcomingEvents } from "./_upcoming-events";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -21,6 +23,7 @@ export default async function DashboardPage() {
   if (!isAdmin) redirect("/chat");
 
   const t = await getT();
+  const locale = await getLocale();
 
   let pendingLeaveCount = 0;
   let totalUserCount = 0;
@@ -34,6 +37,9 @@ export default async function DashboardPage() {
       }),
     ]);
   }
+
+  const upcomingEvents = user ? await getUpcomingEventsForUser(user.id, 7) : [];
+  const unackedCount = upcomingEvents.filter((e) => !e.acked).length;
 
   const unitCases = t("dashboard.unitCases");
   const unitPeople = t("dashboard.unitPeople");
@@ -50,6 +56,22 @@ export default async function DashboardPage() {
           {user?.title ? ` · ${user.title}` : ""} — {t("dashboard.tagline")}
         </p>
       </div>
+
+      {/* AI 비서 안내 — 미확인 행사가 있으면 강조 */}
+      {unackedCount > 0 && (
+        <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-4 flex items-start gap-3">
+          <div className="text-2xl">🤖</div>
+          <div className="flex-1 text-sm">
+            <div className="font-semibold text-red-900 dark:text-red-100">
+              {t("dashboard.unackedTitle")}
+            </div>
+            <div className="text-red-800 dark:text-red-200 mt-0.5">
+              {t("dashboard.unackedBody1")} <strong>{unackedCount}</strong>
+              {t("dashboard.unackedBody2")}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card
@@ -89,6 +111,9 @@ export default async function DashboardPage() {
           highlight={pendingSignsCount > 0}
         />
       </div>
+
+      {/* D-7 행사 카드 */}
+      <UpcomingEvents events={upcomingEvents} locale={locale} />
     </div>
   );
 }
