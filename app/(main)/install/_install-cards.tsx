@@ -19,6 +19,7 @@ import {
   subscribePushAction,
   unsubscribePushAction,
 } from "@/app/_actions/push";
+import { IosStepGuide } from "./_ios-step-guide";
 
 type Os = "ios" | "android" | "desktop" | "unknown";
 
@@ -145,6 +146,8 @@ export function InstallCards() {
       <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-200">
         {t("install.cards.badgeNote")}
       </div>
+
+      <IosStepGuide />
     </div>
   );
 }
