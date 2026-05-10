@@ -4,6 +4,46 @@
 
 ---
 
+## ✅ 2026-05-10/11 (관리자 근태 관리 시스템 구축)
+
+배경: 학원에서 사용 중이던 엑셀(`2403-2502 근태관리현황.xlsx`)을 시스템으로 옮김.
+노무사에게 매월 전달용 자료 자동 생성까지.
+
+| 커밋 | 내용 |
+|---|---|
+| `f2211fc` | 캘린더 헤더 month picker를 📅 이모지 버튼으로 (input 투명 오버레이, 라벨 중복 제거) |
+| `cce71c7` | **근태 관리 매트릭스 페이지 신규** — `/admin/attendance` 사이드바 메뉴 + 직원×1~31일 표 + 빈 셀 클릭 등록/채워진 셀 클릭 삭제 + 우측 합계(반차/연차/차감일/잔여) + 색상 범례 |
+| `a58d32b` | **다수 직원 × 다중 일자 일괄 등록** — `_bulk-add-modal.tsx` + `addLeavesBulkByAdminAction` (최대 100명, 부분 성공 허용) |
+| `361b84f` | **채워진 셀 클릭 시 메모 편집 모달** — `_cell-detail-modal.tsx` + `updateLeaveNoteByAdminAction` (사유 textarea 2000자, 저장/삭제 한 곳) |
+| `f3c0b15` | 메모 있는 셀 우측 하단 빨간 **+1** indicator (text-[8px], pointer-events-none) |
+| `8d238b6` | 월간 근태 엑셀 다운로드 — 처음엔 SheetJS(xlsx) |
+| `b6ca201` | **xlsx → exceljs 전환** — 학원 양식 색감 적용. 시트3개 (매트릭스/메모/잔여연차), 토일 회색·연차 파랑·병가 분홍·공가 보라·차감일 초록·잔여 빨강. freeze 좌측2열+첫행, thin border, numFmt 0.0 |
+
+### 주요 결정
+- **휴가 종류·기간 변경 안 함**: 메모 편집 모달에서는 `reason`만 갱신. 종류/기간 변경 시 차감 보정이 복잡해서 "삭제 후 재등록" 안내.
+- **결근(ABSENT) 컬럼**: 엑셀 호환 위해 컬럼은 살려뒀지만 LeaveType에는 미포함. 0으로 표시. 추후 필요 시 enum 추가.
+- **xlsx 제거 → exceljs**: SheetJS community는 셀 스타일 제한이 커서 학원 양식 못 맞춤. exceljs로 전환하며 보안 vulnerability도 해소.
+
+### 신규 파일
+- `app/(main)/admin/attendance/page.tsx`
+- `app/(main)/admin/attendance/_grid.tsx`
+- `app/(main)/admin/attendance/_bulk-add-modal.tsx`
+- `app/(main)/admin/attendance/_cell-detail-modal.tsx`
+- `app/api/admin/attendance/export/route.ts`
+
+### 신규 server action (attendance/actions.ts)
+- `addLeaveByAdminAction` — 단일 셀 등록
+- `addLeavesBulkByAdminAction` — 다수 직원 × 기간 일괄
+- `updateLeaveNoteByAdminAction` — 메모만 갱신
+- `deleteLeaveByAdminAction` — 기존 (재사용)
+
+### 다음 작업 후보 (사용자 의사결정 대기)
+- **D** — 채팅 첨부 (이미지 1년 / 동영상 60일 + 미리보기 + 자동 삭제 cron)
+- 결근/지각/조퇴 LeaveType 추가
+- 매트릭스 검색/필터 (직원 많아질 경우)
+
+---
+
 ## ✅ 2026-05-10 저녁 (운영 편의 기능 묶음 8건)
 
 | 커밋 | 내용 |
