@@ -14,6 +14,110 @@ import { prisma } from "@/lib/db";
 import { askAI, AI_GUARDRAIL } from "@/lib/ai";
 import { sendPushToUsers } from "@/lib/push";
 import { extractEventFromMessage } from "@/lib/event-extract";
+import { extractOrderIntent } from "@/lib/order-intent";
+
+// =====================================================
+// 주문/수요조사 — 응답 제출 + 마감
+// =====================================================
+type OrderResponse = {
+  userId: string;
+  name: string;
+  choice: string;
+  at: string;
+};
+
+type OrderMeta = {
+  title: string;
+  placeholder?: string;
+  status: "open" | "closed";
+  createdByName?: string;
+  closedAt?: string;
+  responses: OrderResponse[];
+};
+
+export async function submitOrderResponseAction(
+  messageId: string,
+  choice: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  const trimmed = choice.trim();
+  if (!trimmed) return { ok: false, error: "메뉴를 입력해주세요." };
+  if (trimmed.length > 100) {
+    return { ok: false, error: "100자 이내로 입력해주세요." };
+  }
+
+  const msg = await prisma.message.findUnique({ where: { id: messageId } });
+  if (!msg || msg.type !== "ORDER") {
+    return { ok: false, error: "주문 메시지가 아닙니다." };
+  }
+  const meta = (msg.metadata ?? {}) as OrderMeta;
+  if (meta.status === "closed") {
+    return { ok: false, error: "이미 마감된 주문입니다." };
+  }
+
+  // 본인 응답이 있으면 덮어쓰기
+  const existing = (meta.responses ?? []).filter((r) => r.userId !== me.id);
+  existing.push({
+    userId: me.id,
+    name: me.name,
+    choice: trimmed,
+    at: new Date().toISOString(),
+  });
+
+  await prisma.message.update({
+    where: { id: messageId },
+    data: {
+      metadata: {
+        ...meta,
+        responses: existing,
+      },
+    },
+  });
+
+  revalidatePath(`/chat/${msg.chatId}`);
+  return { ok: true };
+}
+
+export async function closeOrderAction(
+  messageId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const msg = await prisma.message.findUnique({
+    where: { id: messageId },
+    include: { user: { select: { id: true } } },
+  });
+  if (!msg || msg.type !== "ORDER") {
+    return { ok: false, error: "주문 메시지가 아닙니다." };
+  }
+
+  // 권한: 개설자 OR admin
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  const isAdmin = !!meWithRole?.role.isAdmin;
+  if (msg.userId !== me.id && !isAdmin) {
+    return { ok: false, error: "개설자 또는 관리자만 마감할 수 있습니다." };
+  }
+
+  const meta = (msg.metadata ?? {}) as OrderMeta;
+  await prisma.message.update({
+    where: { id: messageId },
+    data: {
+      metadata: {
+        ...meta,
+        status: "closed",
+        closedAt: new Date().toISOString(),
+      },
+    },
+  });
+
+  revalidatePath(`/chat/${msg.chatId}`);
+  return { ok: true };
+}
 
 // =====================================================
 // 메시지 본인 삭제
@@ -365,7 +469,29 @@ export async function triggerChatAiAction(
     return { error: "질문이 너무 깁니다 (2000자 제한)." };
   }
 
-  // 컨텍스트 수집
+  // 1) 주문/수요조사 의도면 ORDER 메시지 생성 (일반 AI 답변 대신)
+  const orderIntent = await extractOrderIntent(trimmed);
+  if (orderIntent.hasOrder) {
+    await prisma.message.create({
+      data: {
+        chatId,
+        userId: me.id, // 개설자 = 호출한 사람
+        type: "ORDER",
+        content: orderIntent.title,
+        metadata: {
+          title: orderIntent.title,
+          placeholder: orderIntent.placeholder,
+          status: "open",
+          createdByName: me.name,
+          responses: [],
+        },
+      },
+    });
+    revalidatePath(`/chat/${chatId}`);
+    return { ok: true };
+  }
+
+  // 2) 일반 AI 답변 — 컨텍스트 수집
   const context = await getUserChatContext(me.id, chatId);
   const contextSize = context ? context.split("\n").length : 0;
 

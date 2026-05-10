@@ -10,10 +10,12 @@ import {
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
+  closeOrderAction,
   deleteMessageAction,
   getMessagesSinceAction,
   markAsReadAction,
   sendMessageAction,
+  submitOrderResponseAction,
   translateMessageAction,
   triggerChatAiAction,
   type SendMessageState,
@@ -82,6 +84,7 @@ export function ChatRoom({
   chatId,
   meId,
   meName,
+  isAdmin,
   members,
   myLastReadAt,
   initialMessages,
@@ -89,6 +92,7 @@ export function ChatRoom({
   chatId: string;
   meId: string;
   meName: string;
+  isAdmin: boolean;
   members: Member[];
   myLastReadAt: string | null;
   initialMessages: Message[];
@@ -432,20 +436,30 @@ export function ChatRoom({
     setShowMentionPicker(false);
   };
 
+  // 활성 주문 (open 상태) — 채팅 흐름에서 빠지고 하단 sticky로 노출
+  const activeOrder = messages.find((m) => {
+    if (m.type !== "ORDER") return false;
+    const meta = (m.metadata ?? {}) as { status?: string };
+    return meta.status !== "closed";
+  });
+  const visibleMessages = activeOrder
+    ? messages.filter((m) => m.id !== activeOrder.id)
+    : messages;
+
   return (
     <>
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
       >
-        {messages.length === 0 ? (
+        {visibleMessages.length === 0 ? (
           <div className="text-center text-sm text-zinc-400 py-8">
             {t("chat.firstMessage")}
           </div>
         ) : (
-          messages.map((m, i) => {
+          visibleMessages.map((m, i) => {
             const isMine = m.userId === meId;
-            const prev = messages[i - 1];
+            const prev = visibleMessages[i - 1];
             const showAuthor =
               !isMine && (!prev || prev.userId !== m.userId);
             const showDivider = i === firstUnreadIdx;
@@ -463,6 +477,14 @@ export function ChatRoom({
           })
         )}
       </div>
+
+      {activeOrder && (
+        <ActiveOrderBar
+          message={activeOrder}
+          meId={meId}
+          isAdmin={isAdmin}
+        />
+      )}
 
       <form
         ref={formRef}
@@ -696,6 +718,190 @@ const UnreadDivider = ({
   );
 };
 
+type OrderMetaClient = {
+  title?: string;
+  placeholder?: string;
+  status?: "open" | "closed";
+  createdByName?: string;
+  closedAt?: string;
+  responses?: Array<{
+    userId: string;
+    name: string;
+    choice: string;
+    at: string;
+  }>;
+};
+
+function ActiveOrderBar({
+  message,
+  meId,
+  isAdmin,
+}: {
+  message: Message;
+  meId: string;
+  isAdmin: boolean;
+}) {
+  const t = useT();
+  const [choice, setChoice] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const meta = (message.metadata ?? {}) as OrderMetaClient;
+  const responses = meta.responses ?? [];
+  const myResponse = responses.find((r) => r.userId === meId);
+  const canClose = message.userId === meId || isAdmin;
+
+  // 마지막 본인 응답을 입력칸에 미리 채움 (재제출/수정 편의)
+  useEffect(() => {
+    if (myResponse && choice === "") {
+      setChoice(myResponse.choice);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myResponse?.choice]);
+
+  const submit = () => {
+    const c = choice.trim();
+    if (!c) {
+      setError(t("order.empty"));
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await submitOrderResponseAction(message.id, c);
+      if (!r.ok) setError(r.error ?? t("common.error"));
+    });
+  };
+
+  const close = () => {
+    if (!confirm(t("order.closeConfirm"))) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await closeOrderAction(message.id);
+      if (!r.ok) setError(r.error ?? t("common.error"));
+    });
+  };
+
+  return (
+    <div className="border-t border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-3 max-h-[55vh] overflow-y-auto">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-amber-900 dark:text-amber-100 flex items-center gap-1.5 flex-wrap">
+            <span>📋</span>
+            <span>{meta.title ?? message.content}</span>
+            <span className="text-[11px] font-normal text-amber-700 dark:text-amber-300">
+              ({meta.createdByName ?? message.user?.name ?? ""}{" "}
+              {t("order.createdBy")})
+            </span>
+          </div>
+          <div className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+            {t("order.participants")}: {responses.length}
+          </div>
+        </div>
+        {canClose && (
+          <button
+            type="button"
+            onClick={close}
+            disabled={isPending}
+            className="rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium px-3 py-1.5 disabled:opacity-50 shrink-0"
+          >
+            {isPending ? t("order.closing") : `✅ ${t("order.close")}`}
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 mb-2">
+        <input
+          type="text"
+          value={choice}
+          onChange={(e) => setChoice(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={meta.placeholder ?? t("order.placeholderDefault")}
+          disabled={isPending}
+          maxLength={100}
+          className="flex-1 rounded-md border border-amber-300 dark:border-amber-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={isPending}
+          className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-1.5 disabled:opacity-50 shrink-0"
+        >
+          {myResponse ? t("order.update") : t("order.submit")}
+        </button>
+      </div>
+
+      {error && (
+        <div className="text-[11px] text-red-600 dark:text-red-400 mb-1">
+          {error}
+        </div>
+      )}
+
+      {responses.length > 0 && (
+        <ul className="space-y-1 text-sm border-t border-amber-200 dark:border-amber-900 pt-2 mt-1">
+          {responses.map((r) => (
+            <li
+              key={r.userId}
+              className={`flex items-baseline gap-2 ${
+                r.userId === meId
+                  ? "text-amber-900 dark:text-amber-100 font-medium"
+                  : "text-zinc-700 dark:text-zinc-300"
+              }`}
+            >
+              <span className="min-w-[5rem] truncate">{r.name}</span>
+              <span className="text-zinc-400">→</span>
+              <span className="flex-1 truncate">{r.choice}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ClosedOrderBubble({ message }: { message: Message }) {
+  const t = useT();
+  const meta = (message.metadata ?? {}) as OrderMetaClient;
+  const responses = meta.responses ?? [];
+
+  return (
+    <div className="flex justify-center">
+      <div className="max-w-[95%] w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 p-3 text-sm">
+        <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 mb-1">
+          <span>✅</span>
+          <span className="font-semibold">{t("order.closed")}</span>
+          <span className="text-zinc-500">
+            · {meta.createdByName ?? message.user?.name ?? ""}
+          </span>
+        </div>
+        <div className="font-bold text-zinc-900 dark:text-zinc-50 mb-1.5">
+          {meta.title ?? message.content}
+        </div>
+        <div className="text-[11px] text-zinc-500 mb-1.5">
+          {t("order.participants")}: {responses.length}
+        </div>
+        {responses.length > 0 && (
+          <ul className="space-y-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+            {responses.map((r) => (
+              <li key={r.userId} className="flex items-baseline gap-2">
+                <span className="min-w-[5rem] truncate font-medium">
+                  {r.name}
+                </span>
+                <span className="text-zinc-400">→</span>
+                <span className="flex-1 truncate">{r.choice}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type ProposalMeta = {
   state?: "PENDING" | "APPROVED" | "CANCELLED";
   title?: string;
@@ -845,6 +1051,9 @@ function MessageBubble({
   }
   if (message.type === "EVENT_PROPOSAL") {
     return <EventProposalBubble message={message} isMine={isMine} />;
+  }
+  if (message.type === "ORDER") {
+    return <ClosedOrderBubble message={message} />;
   }
 
   const isPending = !!message.pending || isDeleting;

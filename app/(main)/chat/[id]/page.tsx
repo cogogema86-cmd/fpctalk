@@ -75,6 +75,7 @@ export default async function ChatRoomPage({
         chatId={chatId}
         meId={me.id}
         meName={me.name}
+        isAdmin={isAdmin}
         members={info.members.map((m) => ({
           id: m.user.id,
           username: m.user.username,
