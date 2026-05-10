@@ -1575,17 +1575,21 @@ function MessageBubble({
   const meta = (message.metadata ?? {}) as {
     replyTo?: { messageId: string; userName: string; contentPreview: string };
     attachment?: {
-      kind: "image" | "video" | "file";
-      path: string;
-      mime: string;
-      size: number;
-      name: string;
-      expiresAt: string;
+      kind?: "image" | "video" | "file";
+      path?: string;
+      mime?: string;
+      size?: number;
+      name?: string;
+      expiresAt?: string;
+      expired?: boolean;
     };
   };
   const attachment = meta.attachment;
-  const fileSrc = attachment ? `/api/chat/file/${message.id}` : null;
-  const downloadHref = attachment ? `/api/chat/file/${message.id}?download=1` : null;
+  const isExpired = !!attachment?.expired;
+  const fileSrc =
+    attachment && !isExpired ? `/api/chat/file/${message.id}` : null;
+  const downloadHref =
+    attachment && !isExpired ? `/api/chat/file/${message.id}?download=1` : null;
   // 첨부 메시지인데 본문이 파일명과 같으면 본문 텍스트는 숨김 (파일명은 첨부 영역에 자동 표시)
   const showContentText =
     !attachment ||
@@ -1652,6 +1656,15 @@ function MessageBubble({
             </div>
           </div>
         )}
+        {/* 만료된 첨부 — 회색 placeholder */}
+        {attachment && isExpired && (
+          <div className="mb-1 rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs text-zinc-500 inline-flex items-center gap-2">
+            <span>{attachment.kind === "image" ? "🖼" : attachment.kind === "video" ? "🎬" : "📎"}</span>
+            <span className="truncate max-w-[14rem]">{attachment.name ?? "첨부"}</span>
+            <span className="text-zinc-400">· 만료됨</span>
+          </div>
+        )}
+
         {/* 첨부 미디어 (이미지·동영상) — 본문 위에 노출 */}
         {attachment && fileSrc && !isPending && (
           <div className="mb-1 max-w-full">
