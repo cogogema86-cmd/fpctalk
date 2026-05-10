@@ -171,6 +171,65 @@ export async function clearChatRoomAction(
 }
 
 // =====================================================
+// 채팅방 나가기
+// 정책:
+// - 레벨 기반 자동 공개 채팅(levelRequired != null): 나갈 수 없음 (레벨 충족 시 자동 재가입됨)
+// - DM / 명시적 그룹: 멤버에서 자기 자신 제거 → 채팅 목록에서 사라짐
+// 그룹의 경우 시스템 메시지로 다른 멤버에게 알림.
+// =====================================================
+export async function leaveChatAction(
+  chatId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { type: true, levelRequired: true },
+  });
+  if (!chat) return { ok: false, error: "채팅방을 찾을 수 없습니다." };
+
+  if (chat.levelRequired !== null) {
+    return {
+      ok: false,
+      error: "레벨 기반 자동 공개 채팅방은 나갈 수 없습니다.",
+    };
+  }
+
+  const membership = await prisma.chatMember.findUnique({
+    where: { chatId_userId: { chatId, userId: me.id } },
+  });
+  if (!membership) {
+    return { ok: false, error: "이 채팅방의 멤버가 아닙니다." };
+  }
+
+  // 그룹은 다른 멤버에게 시스템 메시지로 알림 (DM은 의미 없음)
+  if (chat.type === "GROUP") {
+    await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          chatId,
+          userId: null,
+          type: "SYSTEM",
+          content: `${me.name} 님이 나갔습니다.`,
+        },
+      }),
+      prisma.chatMember.delete({
+        where: { chatId_userId: { chatId, userId: me.id } },
+      }),
+    ]);
+  } else {
+    await prisma.chatMember.delete({
+      where: { chatId_userId: { chatId, userId: me.id } },
+    });
+  }
+
+  revalidatePath("/chat");
+  revalidatePath(`/chat/${chatId}`);
+  return { ok: true };
+}
+
+// =====================================================
 // 직원 선택 → 1:1 채팅 시작
 // =====================================================
 export async function startDmAction(formData: FormData) {

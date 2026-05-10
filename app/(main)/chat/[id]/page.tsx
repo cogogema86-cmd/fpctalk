@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/db";
 import { ChatRoom } from "./_chat-room";
 import { ClearChatButton } from "./_clear-chat-button";
+import { LeaveChatButton } from "./_leave-chat-button";
 import { getT } from "@/lib/i18n/server";
 
 export default async function ChatRoomPage({
@@ -68,6 +69,10 @@ export default async function ChatRoomPage({
           </div>
         </div>
         {isAdmin && <ClearChatButton chatId={chatId} />}
+        {/* 레벨 채팅이 아닌 경우(DM 또는 명시적 그룹)에만 나가기 버튼 노출 */}
+        {!info.isLevelChat && (
+          <LeaveChatButton chatId={chatId} isDm={info.type === "DM"} />
+        )}
       </div>
 
       {/* 채팅 본체 */}
