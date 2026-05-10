@@ -769,6 +769,14 @@ function AiMessageBubble({ message }: { message: Message }) {
         )}
 
         <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
+          {(message.unreadCount ?? 0) > 0 && (
+            <span
+              className="text-amber-600 dark:text-amber-400 font-semibold"
+              title={t("chat.unreadCount")}
+            >
+              {message.unreadCount}
+            </span>
+          )}
           <span>
             {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
               hour: "2-digit",
@@ -1463,7 +1471,7 @@ function MessageBubble({
           {isPending && <span className="text-zinc-400">{t("chat.sending")}</span>}
           {!isPending && (
             <>
-              {isMine && (message.unreadCount ?? 0) > 0 && (
+              {(message.unreadCount ?? 0) > 0 && (
                 <span
                   className="text-amber-600 dark:text-amber-400 font-semibold"
                   title={t("chat.unreadCount")}

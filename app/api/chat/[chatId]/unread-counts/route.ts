@@ -38,14 +38,14 @@ export async function GET(
     }
   }
 
-  // 본인이 발송한 메시지만 unread 계산 (다른 메시지는 0으로 간주)
-  const myMessages = await prisma.message.findMany({
-    where: { chatId, userId: me.id },
+  // 모든 메시지 unread 계산 (카톡 스타일 — 누가 보냈든 안 읽은 인원수 동일하게 표시)
+  const recentMessages = await prisma.message.findMany({
+    where: { chatId },
     select: { id: true, userId: true, createdAt: true },
     orderBy: { createdAt: "desc" },
-    take: 100, // 최근 100개만
+    take: 100,
   });
 
-  const counts = await computeUnreadCounts(chatId, myMessages);
+  const counts = await computeUnreadCounts(chatId, recentMessages);
   return NextResponse.json(counts);
 }

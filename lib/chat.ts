@@ -401,14 +401,15 @@ export async function computeUnreadCounts(
 
   const result: Record<string, number> = {};
   for (const m of messages) {
-    if (!m.userId || totalEligible <= 1) {
+    if (totalEligible <= 1) {
       result[m.id] = 0;
       continue;
     }
-    const others = totalEligible - 1; // 발신자 제외
+    // userId 있으면 발신자 제외, 없으면(AI/SYSTEM) 모든 사람이 잠재 독자
+    const others = m.userId ? totalEligible - 1 : totalEligible;
     let readers = 0;
     for (const mb of members) {
-      if (mb.userId === m.userId) continue;
+      if (m.userId && mb.userId === m.userId) continue;
       if (!mb.lastReadAt) continue;
       if (mb.lastReadAt.getTime() >= m.createdAt.getTime()) readers += 1;
     }

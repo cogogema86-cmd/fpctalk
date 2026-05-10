@@ -26,10 +26,13 @@ export default async function ChatRoomPage({
   if (!info) notFound();
 
   const messages = await getChatMessages(chatId, me.id);
-  const myMessages = messages
-    .filter((m) => m.userId === me.id)
-    .map((m) => ({ id: m.id, userId: m.userId, createdAt: m.createdAt }));
-  const unreadMap = await computeUnreadCounts(chatId, myMessages);
+  // 카톡 스타일: 모든 메시지에 안 읽은 인원수 표시 (본인/타인/AI/시스템 무관)
+  const allMessages = messages.map((m) => ({
+    id: m.id,
+    userId: m.userId,
+    createdAt: m.createdAt,
+  }));
+  const unreadMap = await computeUnreadCounts(chatId, allMessages);
   const t = await getT();
   const meWithRole = await prisma.user.findUnique({
     where: { id: me.id },
