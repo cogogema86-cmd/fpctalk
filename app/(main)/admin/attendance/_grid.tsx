@@ -236,7 +236,7 @@ export function AttendanceGrid({
                           type="button"
                           disabled={isPending}
                           onClick={() => handleCellClick(u.id, u.name, d, cell)}
-                          className={`w-full h-7 text-center transition-colors disabled:opacity-50 ${
+                          className={`relative w-full h-7 text-center transition-colors disabled:opacity-50 ${
                             cell
                               ? `${TYPE_COLOR[cell.type] ?? ""} font-medium`
                               : "hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-300 dark:text-zinc-700"
@@ -250,6 +250,14 @@ export function AttendanceGrid({
                           }
                         >
                           {cell ? TYPE_BADGE[cell.type] ?? "·" : "·"}
+                          {cell?.reason && (
+                            <span
+                              className="absolute bottom-0 right-0.5 text-[8px] font-bold text-red-500 dark:text-red-400 leading-none pointer-events-none"
+                              aria-label="메모 있음"
+                            >
+                              +1
+                            </span>
+                          )}
                         </button>
                       </td>
                     );
