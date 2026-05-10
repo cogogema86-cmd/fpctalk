@@ -18,6 +18,7 @@ import {
   sendMessageAction,
   submitOrderResponseAction,
   translateMessageAction,
+  translateTextsAction,
   triggerChatAiAction,
   type SendMessageState,
 } from "../actions";
@@ -812,15 +813,51 @@ function ActiveOrderBar({
   // 본인 응답 즉시 반영용 local override (server action 결과)
   const [localMeta, setLocalMeta] = useState<OrderMetaClient | null>(null);
 
-  // props로 들어온 message.metadata가 갱신되면 local override 초기화
+  // 번역 결과 (toggle): null이면 원문, 있으면 번역본
+  const [translation, setTranslation] = useState<{
+    title: string;
+    placeholder: string;
+    responses: string[];
+  } | null>(null);
+  const [transPending, startTransPending] = useTransition();
+
+  // props로 들어온 message.metadata가 갱신되면 local override 초기화 + 번역도 stale 방지
   useEffect(() => {
     setLocalMeta(null);
+    setTranslation(null);
   }, [message.metadata]);
 
   const meta = (localMeta ?? (message.metadata ?? {})) as OrderMetaClient;
   const responses = meta.responses ?? [];
   const myResponse = responses.find((r) => r.userId === meId);
   const canClose = message.userId === meId || isAdmin;
+
+  // 표시값 — 번역본 있으면 그것, 없으면 원문
+  const displayTitle = translation?.title ?? meta.title ?? message.content;
+  const displayPlaceholder =
+    translation?.placeholder ?? meta.placeholder ?? "";
+  const displayResponses = responses.map((r, i) => ({
+    ...r,
+    choice: translation?.responses[i] ?? r.choice,
+  }));
+
+  const onTranslate = (target: "ko" | "en") => {
+    const texts = [
+      meta.title ?? "",
+      meta.placeholder ?? "",
+      ...responses.map((r) => r.choice),
+    ];
+    startTransPending(async () => {
+      const r = await translateTextsAction(texts, target);
+      if (r.translations) {
+        setTranslation({
+          title: r.translations[0] ?? "",
+          placeholder: r.translations[1] ?? "",
+          responses: r.translations.slice(2),
+        });
+      }
+    });
+  };
 
   // 마지막 본인 응답을 입력칸에 미리 채움 (재제출/수정 편의)
   useEffect(() => {
@@ -870,7 +907,7 @@ function ActiveOrderBar({
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold text-amber-900 dark:text-amber-100 flex items-center gap-1.5 flex-wrap">
             <span>📋</span>
-            <span>{meta.title ?? message.content}</span>
+            <span>{displayTitle}</span>
             <span className="text-[11px] font-normal text-amber-700 dark:text-amber-300">
               ({meta.createdByName ?? message.user?.name ?? ""}{" "}
               {t("order.createdBy")})
@@ -903,7 +940,7 @@ function ActiveOrderBar({
               submit();
             }
           }}
-          placeholder={meta.placeholder ?? t("order.placeholderDefault")}
+          placeholder={displayPlaceholder || t("order.placeholderDefault")}
           disabled={isPending}
           maxLength={100}
           className="flex-1 rounded-md border border-amber-300 dark:border-amber-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -918,15 +955,51 @@ function ActiveOrderBar({
         </button>
       </div>
 
+      {/* 번역 토글 */}
+      <div className="flex items-center gap-2 mb-2 text-[11px]">
+        {!translation ? (
+          <>
+            <span className="text-zinc-500">🌐</span>
+            <button
+              type="button"
+              onClick={() => onTranslate("ko")}
+              disabled={transPending}
+              className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+            >
+              {t("chat.koreanShort")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onTranslate("en")}
+              disabled={transPending}
+              className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+            >
+              English
+            </button>
+            {transPending && (
+              <span className="text-zinc-500">{t("chat.translatingShort")}</span>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setTranslation(null)}
+            className="text-zinc-600 dark:text-zinc-400 hover:underline"
+          >
+            ↺ {t("chat.translationClose")}
+          </button>
+        )}
+      </div>
+
       {error && (
         <div className="text-[11px] text-red-600 dark:text-red-400 mb-1">
           {error}
         </div>
       )}
 
-      {responses.length > 0 && (
+      {displayResponses.length > 0 && (
         <ul className="space-y-1 text-sm border-t border-amber-200 dark:border-amber-900 pt-2 mt-1">
-          {responses.map((r) => (
+          {displayResponses.map((r) => (
             <li
               key={r.userId}
               className={`flex items-baseline gap-2 ${
@@ -951,6 +1024,31 @@ function ClosedOrderBubble({ message }: { message: Message }) {
   const meta = (message.metadata ?? {}) as OrderMetaClient;
   const responses = meta.responses ?? [];
 
+  const [translation, setTranslation] = useState<{
+    title: string;
+    responses: string[];
+  } | null>(null);
+  const [transPending, startTransPending] = useTransition();
+
+  const displayTitle = translation?.title ?? meta.title ?? message.content;
+  const displayResponses = responses.map((r, i) => ({
+    ...r,
+    choice: translation?.responses[i] ?? r.choice,
+  }));
+
+  const onTranslate = (target: "ko" | "en") => {
+    const texts = [meta.title ?? "", ...responses.map((r) => r.choice)];
+    startTransPending(async () => {
+      const r = await translateTextsAction(texts, target);
+      if (r.translations) {
+        setTranslation({
+          title: r.translations[0] ?? "",
+          responses: r.translations.slice(1),
+        });
+      }
+    });
+  };
+
   return (
     <div className="flex justify-center">
       <div className="max-w-[95%] w-full rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 p-3 text-sm">
@@ -962,14 +1060,14 @@ function ClosedOrderBubble({ message }: { message: Message }) {
           </span>
         </div>
         <div className="font-bold text-zinc-900 dark:text-zinc-50 mb-1.5">
-          {meta.title ?? message.content}
+          {displayTitle}
         </div>
         <div className="text-[11px] text-zinc-500 mb-1.5">
           {t("order.participants")}: {responses.length}
         </div>
-        {responses.length > 0 && (
+        {displayResponses.length > 0 && (
           <ul className="space-y-0.5 text-xs text-zinc-700 dark:text-zinc-300">
-            {responses.map((r) => (
+            {displayResponses.map((r) => (
               <li key={r.userId} className="flex items-baseline gap-2">
                 <span className="min-w-[5rem] truncate font-medium">
                   {r.name}
@@ -980,6 +1078,40 @@ function ClosedOrderBubble({ message }: { message: Message }) {
             ))}
           </ul>
         )}
+        <div className="flex items-center gap-2 mt-2 text-[10px]">
+          {!translation ? (
+            <>
+              <span className="text-zinc-500">🌐</span>
+              <button
+                type="button"
+                onClick={() => onTranslate("ko")}
+                disabled={transPending}
+                className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
+              >
+                {t("chat.koreanShort")}
+              </button>
+              <button
+                type="button"
+                onClick={() => onTranslate("en")}
+                disabled={transPending}
+                className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
+              >
+                English
+              </button>
+              {transPending && (
+                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTranslation(null)}
+              className="text-zinc-500 hover:underline"
+            >
+              ↺ {t("chat.translationClose")}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1006,6 +1138,28 @@ function EventProposalBubble({
   const [error, setError] = useState<string | null>(null);
   const meta = (message.metadata ?? {}) as ProposalMeta;
   const state = meta.state ?? "PENDING";
+
+  const [translation, setTranslation] = useState<{
+    title: string;
+    location: string;
+  } | null>(null);
+  const [transPending, startTransPending] = useTransition();
+
+  const displayTitle = translation?.title ?? meta.title ?? message.content;
+  const displayLocation = translation?.location ?? meta.location ?? "";
+
+  const onTranslate = (target: "ko" | "en") => {
+    const texts = [meta.title ?? "", meta.location ?? ""];
+    startTransPending(async () => {
+      const r = await translateTextsAction(texts, target);
+      if (r.translations) {
+        setTranslation({
+          title: r.translations[0] ?? "",
+          location: r.translations[1] ?? "",
+        });
+      }
+    });
+  };
 
   const dateRange = (() => {
     if (!meta.startDate) return "";
@@ -1062,20 +1216,54 @@ function EventProposalBubble({
           {stateBadge}
         </div>
         <div className="font-semibold text-amber-900 dark:text-amber-100">
-          {meta.title ?? message.content}
+          {displayTitle}
         </div>
         {dateRange && (
           <div className="text-xs text-amber-800 dark:text-amber-200 mt-1">
             📅 {dateRange}
           </div>
         )}
-        {meta.location && (
+        {displayLocation && (
           <div className="text-xs text-amber-800 dark:text-amber-200">
-            📍 {meta.location}
+            📍 {displayLocation}
           </div>
         )}
         <div className="text-xs text-amber-700 dark:text-amber-300 mt-2">
           {t("event.proposal.question")}
+        </div>
+        <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+          {!translation ? (
+            <>
+              <span className="text-amber-600 dark:text-amber-400">🌐</span>
+              <button
+                type="button"
+                onClick={() => onTranslate("ko")}
+                disabled={transPending}
+                className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+              >
+                {t("chat.koreanShort")}
+              </button>
+              <button
+                type="button"
+                onClick={() => onTranslate("en")}
+                disabled={transPending}
+                className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+              >
+                English
+              </button>
+              {transPending && (
+                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTranslation(null)}
+              className="text-amber-700 dark:text-amber-300 hover:underline"
+            >
+              ↺ {t("chat.translationClose")}
+            </button>
+          )}
         </div>
 
         {state === "PENDING" && isMine && (

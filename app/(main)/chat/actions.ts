@@ -544,6 +544,68 @@ ${context || "(아직 채팅 기록이 없습니다)"}
 }
 
 // =====================================================
+// 다중 텍스트 일괄 번역 (ORDER 응답들, EVENT_PROPOSAL 필드 등)
+// =====================================================
+export async function translateTextsAction(
+  texts: string[],
+  target: "ko" | "en",
+): Promise<{ translations?: string[]; error?: string }> {
+  const me = await getMe();
+  if (!me) return { error: "로그인이 필요합니다." };
+
+  if (!Array.isArray(texts) || texts.length === 0) {
+    return { translations: [] };
+  }
+  if (texts.length > 60) {
+    return { error: "한 번에 60개까지만 번역 가능합니다." };
+  }
+
+  // 빈 항목은 원문 그대로
+  const work = texts.map((t, i) => ({
+    idx: i,
+    text: typeof t === "string" ? t.trim() : "",
+  }));
+  const nonEmpty = work.filter((w) => w.text.length > 0);
+  if (nonEmpty.length === 0) {
+    return { translations: texts.map(() => "") };
+  }
+
+  const lines = nonEmpty.map((w) => `L${w.idx}: ${w.text}`).join("\n");
+  const targetLabel = target === "ko" ? "Korean" : "English";
+
+  const systemPrompt = `You translate each line to ${targetLabel}.
+Output ONLY one line per input, prefixed with the EXACT same "Lnumber:" tag.
+- Preserve names, numbers, emoji, special characters.
+- If a line is already in ${targetLabel}, output it as-is.
+- No explanations, no quotes, no extra lines.`;
+
+  try {
+    const r = await askAI(lines, {
+      mode: "fast",
+      system: systemPrompt,
+      maxTokens: 2048,
+    });
+
+    const out: string[] = texts.map((t) => (typeof t === "string" ? t : ""));
+    const responseLines = r.text.split("\n");
+    for (const ln of responseLines) {
+      const m = ln.match(/^L(\d+):\s*(.*)$/);
+      if (!m) continue;
+      const idx = parseInt(m[1], 10);
+      if (idx >= 0 && idx < texts.length) {
+        const value = m[2].trim();
+        if (value.length > 0) out[idx] = value;
+      }
+    }
+    return { translations: out };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "번역 실패",
+    };
+  }
+}
+
+// =====================================================
 // 메시지 번역
 
 export type TranslateResult = {
