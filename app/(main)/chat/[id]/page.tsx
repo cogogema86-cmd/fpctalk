@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import {
+  computeUnreadCounts,
   getChatInfo,
   getChatMessages,
   getMe,
@@ -24,6 +25,10 @@ export default async function ChatRoomPage({
   if (!info) notFound();
 
   const messages = await getChatMessages(chatId, me.id);
+  const myMessages = messages
+    .filter((m) => m.userId === me.id)
+    .map((m) => ({ id: m.id, userId: m.userId, createdAt: m.createdAt }));
+  const unreadMap = await computeUnreadCounts(chatId, myMessages);
   const t = await getT();
   const meWithRole = await prisma.user.findUnique({
     where: { id: me.id },
@@ -85,6 +90,7 @@ export default async function ChatRoomPage({
           createdAt: m.createdAt.toISOString(),
           user: m.user,
           metadata: m.metadata,
+          unreadCount: unreadMap[m.id] ?? 0,
         }))}
       />
     </div>

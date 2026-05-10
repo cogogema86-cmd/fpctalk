@@ -64,6 +64,8 @@ type Message = {
   createdAt: string;
   user: { id: string; username: string; name: string } | null;
   metadata?: unknown;
+  /** 본인 메시지에 대해서만 의미 있음 — 안 읽은 인원 수 */
+  unreadCount?: number;
   /** 낙관적 UI: 전송 클릭 직후 임시 메시지 (Realtime 도착 시 교체) */
   pending?: boolean;
 };
@@ -155,6 +157,33 @@ export function ChatRoom({
       behavior: "smooth",
     });
   }, [messages.length]);
+
+  // 본인 메시지의 안 읽은 인원 수 폴링 (다른 멤버가 읽으면 카운트 줄어듦)
+  useEffect(() => {
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/chat/${chatId}/unread-counts`, {
+          cache: "no-store",
+        });
+        if (!res.ok || stopped) return;
+        const data = (await res.json()) as Record<string, number>;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id in data ? { ...m, unreadCount: data[m.id] } : m,
+          ),
+        );
+      } catch {
+        // 무시
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, [chatId]);
 
   // 5초 폴링 백업: Realtime이 끊겨도 새 메시지 catch-up
   useEffect(() => {
@@ -914,6 +943,14 @@ function MessageBubble({
           {isPending && <span className="text-zinc-400">{t("chat.sending")}</span>}
           {!isPending && (
             <>
+              {isMine && (message.unreadCount ?? 0) > 0 && (
+                <span
+                  className="text-amber-600 dark:text-amber-400 font-semibold"
+                  title={t("chat.unreadCount")}
+                >
+                  {message.unreadCount}
+                </span>
+              )}
               <span>
                 {new Date(message.createdAt).toLocaleTimeString("ko-KR", {
                   hour: "2-digit",

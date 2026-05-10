@@ -362,6 +362,40 @@ export async function getChatMessages(chatId: string, userId: string) {
   return messages;
 }
 
+/**
+ * 메시지마다 "안 읽은 인원수" 계산해서 반환.
+ * - DM: 보낸 사람 외 1명, 그 사람 lastReadAt이 메시지 createdAt 이후면 0, 아니면 1
+ * - 그룹: 멤버 - 1(발신자) - 읽은 사람 수
+ * - 본인 발송 메시지에만 의미 있음 (받은 메시지는 0으로 클라이언트에서 무시)
+ */
+export async function computeUnreadCounts(
+  chatId: string,
+  messages: Array<{ id: string; userId: string | null; createdAt: Date }>,
+): Promise<Record<string, number>> {
+  const members = await prisma.chatMember.findMany({
+    where: { chatId },
+    select: { userId: true, lastReadAt: true },
+  });
+  const memberCount = members.length;
+  const result: Record<string, number> = {};
+
+  for (const m of messages) {
+    if (!m.userId || memberCount <= 1) {
+      result[m.id] = 0;
+      continue;
+    }
+    const others = memberCount - 1; // 발신자 제외
+    let readers = 0;
+    for (const mb of members) {
+      if (mb.userId === m.userId) continue;
+      if (!mb.lastReadAt) continue;
+      if (mb.lastReadAt.getTime() >= m.createdAt.getTime()) readers += 1;
+    }
+    result[m.id] = Math.max(0, others - readers);
+  }
+  return result;
+}
+
 // =====================================================
 // 채팅방 정보
 // =====================================================
