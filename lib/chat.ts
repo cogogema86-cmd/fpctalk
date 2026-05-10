@@ -460,6 +460,8 @@ export type ReplyToMeta = {
 export type SendMessageOptions = {
   /** 답글 대상 (있으면 metadata.replyTo에 저장) */
   replyTo?: ReplyToMeta;
+  /** 클라이언트가 미리 생성한 ID — 임시/실제 메시지 ID 동일하게 만들어 React key 안정화용 */
+  clientMessageId?: string;
 };
 
 /**
@@ -529,8 +531,16 @@ export async function sendMessage(
   if (options.replyTo) meta.replyTo = options.replyTo;
   const hasMeta = Object.keys(meta).length > 0;
 
+  // 클라이언트 ID가 유효하면 그것 사용 (UUID v4 형식 검증)
+  const isValidUuid =
+    typeof options.clientMessageId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      options.clientMessageId,
+    );
+
   return prisma.message.create({
     data: {
+      ...(isValidUuid ? { id: options.clientMessageId } : {}),
       chatId,
       userId,
       type: "TEXT",

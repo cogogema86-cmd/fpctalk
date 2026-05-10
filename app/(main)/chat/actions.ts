@@ -269,9 +269,16 @@ export async function sendMessageAction(
     }
   }
 
+  // 클라이언트가 미리 생성한 메시지 ID (UUID) — React key 안정화용
+  const clientMessageId =
+    (formData.get("clientMessageId") as string | null)?.trim() || undefined;
+
   let chatTitle = "FPCTalk";
   try {
-    const created = await sendMessage(chatId, me.id, content, { replyTo });
+    const created = await sendMessage(chatId, me.id, content, {
+      replyTo,
+      clientMessageId,
+    });
     await markAsRead(chatId, me.id);
 
     const meta = (created.metadata ?? {}) as { mentions?: string[] };

@@ -296,8 +296,18 @@ export function ChatRoom({
             metadata?: unknown;
           };
           setMessages((prev) => {
-            // 이미 있으면 무시 (중복 방지)
-            if (prev.some((m) => m.id === row.id)) return prev;
+            // 이미 같은 ID 있으면 (= 본인 임시 메시지 = 클라이언트 ID 사용)
+            // → in-place 갱신: metadata 첨부 + pending 해제. React key 변경 안 됨.
+            const existingIdx = prev.findIndex((m) => m.id === row.id);
+            if (existingIdx >= 0) {
+              const next = prev.slice();
+              next[existingIdx] = {
+                ...prev[existingIdx],
+                metadata: row.metadata ?? prev[existingIdx].metadata,
+                pending: false,
+              };
+              return next;
+            }
 
             let user: { id: string; username: string; name: string } | null =
               null;
@@ -308,16 +318,8 @@ export function ChatRoom({
               if (m) user = m;
             }
 
-            // 본인 메시지가 도착하면 같은 내용의 pending 임시 메시지 제거 (교체)
-            const filtered =
-              row.userId === meId
-                ? prev.filter(
-                    (m) => !(m.pending && m.content === row.content),
-                  )
-                : prev;
-
             return [
-              ...filtered,
+              ...prev,
               {
                 id: row.id,
                 chatId: row.chatId,
@@ -390,12 +392,19 @@ export function ChatRoom({
       formData.set("replyTo", JSON.stringify(replyTo));
     }
 
-    // 낙관적 UI: 임시 메시지 즉시 추가 (Realtime 도착 시 교체됨)
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // 클라이언트가 메시지 ID 미리 생성 → server에 전달 → 임시/실제 ID 동일.
+    // React key가 변경되지 않으므로 컴포넌트 unmount 안 됨 (번역 등 state 보존).
+    const clientId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+    formData.set("clientMessageId", clientId);
+
+    // 낙관적 UI: 임시 메시지 즉시 추가 (Realtime 도착 시 동일 ID로 교체)
     setMessages((prev) => [
       ...prev,
       {
-        id: tempId,
+        id: clientId,
         chatId,
         userId: meId,
         content,
