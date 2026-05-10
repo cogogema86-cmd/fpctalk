@@ -4,6 +4,36 @@
 
 ---
 
+## ✅ 2026-05-10 추가 (입사일 + 연차 직접 조정 — A·B 완료)
+
+배경: 학원에서 사용 중인 근태 엑셀(`C:\Users\cogog\OneDrive\Desktop\2403-2502 근태관리현황.xlsx`) 분석.
+- 시트 구조: 월별(1~12) + 정산 시트, 컬럼 = `사원정보 | 입사일자 | 1..31일 | 반차 | 연차 | 결근 | 차감일 | 잔여연차(전월/당월)`
+- 정산 시트는 운영 중 잔여연차를 수동 정산/이월/육아휴직/퇴사 처리한 흔적 → 사용자 요청과 일치
+
+### A — 입사일자 (joinDate)
+- **`a8fa98c`** feat(admin): 입사일자 + 연차 잔여 직접 조정 (감사 로그)
+- prisma `User.joinDate DateTime?` 추가
+- `/admin/users/new` 폼에 date picker + 연차 한도 초기 입력
+- `/admin/users/[id]/edit` 폼에 입사일자 입력 (빈 값으로 저장하면 null로 클리어)
+
+### B — 연차 잔여 직접 조정 (관리자 전용)
+- prisma `LeaveAdjustment` 모델 + `LeaveAdjustmentField` enum (TOTAL / USED)
+- `User.annualLeaveTotal/Used`: **Int → Float** 변경 (반차 0.5단위가 Int에 increment되던 잠재 버그 해결)
+- `adjustLeaveAction(userId, field, newValue, reason)` — 트랜잭션으로 User 업데이트 + 감사로그 동시 생성
+- 편집 페이지 하단에 amber `LeaveAdjustPanel`:
+  - 카드 3개: 한도 / 사용 / 잔여 (PENDING 예약 일수 차감 표시)
+  - field 선택(USED/TOTAL) → 새 값(0.5 step) → 사유 입력 → 저장
+  - 최근 10건 변경 이력 (날짜·필드·before→after·사유·관리자명)
+- 변경된 파일: `prisma/schema.prisma`, `app/(main)/admin/users/actions.ts`, `app/(main)/admin/users/new/_form.tsx`, `app/(main)/admin/users/[id]/edit/page.tsx`, `app/(main)/admin/users/[id]/edit/_form.tsx`, **신규** `app/(main)/admin/users/[id]/edit/_leave-adjust-panel.tsx`
+
+DB: `prisma db push` 완료 (Int→Float 무손실 변환).
+
+### 다음 작업 후보 (사용자 의사 결정 대기)
+- **D** — 채팅 첨부: 이미지 1년 / 동영상 60일 보관, 미리보기, 자동 삭제 (Vercel cron)
+- **C** — 월간 근태 매트릭스 페이지 (엑셀과 같은 직원행 × 일자열 표)
+
+---
+
 ## ✅ 2026-05-10 후속 (채팅 안정화 마지막)
 
 - **`d345718`** fix(chat): 번역 원복 회귀 + ✕ 항상 표시
