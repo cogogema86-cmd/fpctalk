@@ -159,3 +159,88 @@ export async function cancelLeaveAction(
   revalidatePath("/admin/leave");
   return {};
 }
+
+// =====================================================
+// 관리자: 휴가 삭제 (어떤 상태든)
+// - APPROVED + ANNUAL/HALF_AM/HALF_PM이었다면 annualLeaveUsed 자동 보정
+// - LeaveAdjustment 감사로그 자동 기록
+// - LeaveRequest는 status=CANCELLED + decidedNote에 "관리자 삭제" 기록 (흔적 보존)
+// =====================================================
+export async function deleteLeaveByAdminAction(
+  leaveId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 삭제할 수 있습니다." };
+  }
+
+  const target = await prisma.leaveRequest.findUnique({
+    where: { id: leaveId },
+  });
+  if (!target) return { ok: false, error: "휴가를 찾을 수 없습니다." };
+  if (target.status === "CANCELLED" || target.status === "REJECTED") {
+    return { ok: false, error: "이미 취소된 휴가입니다." };
+  }
+
+  const isCountedLeave =
+    target.type === "ANNUAL" ||
+    target.type === "HALF_AM" ||
+    target.type === "HALF_PM";
+
+  // APPROVED + 차감 대상이었으면 annualLeaveUsed 보정 + 감사 로그
+  if (target.status === "APPROVED" && isCountedLeave) {
+    const days = calcLeaveDays(target.type, target.startDate, target.endDate);
+    const u = await prisma.user.findUnique({
+      where: { id: target.requesterId },
+      select: { annualLeaveUsed: true },
+    });
+    const before = u?.annualLeaveUsed ?? 0;
+    const after = Math.max(0, before - days);
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: target.requesterId },
+        data: { annualLeaveUsed: after },
+      }),
+      prisma.leaveAdjustment.create({
+        data: {
+          userId: target.requesterId,
+          adminId: me.id,
+          field: "USED",
+          before,
+          after,
+          reason: `휴가 삭제 — ${target.type} ${days}일 (${target.startDate.toISOString().slice(0, 10)} ~ ${target.endDate.toISOString().slice(0, 10)})`,
+        },
+      }),
+      prisma.leaveRequest.update({
+        where: { id: leaveId },
+        data: {
+          status: "CANCELLED",
+          decidedAt: new Date(),
+          decidedNote: "관리자가 삭제",
+          approverId: me.id,
+        },
+      }),
+    ]);
+  } else {
+    // PENDING / APPROVED-비차감 → 단순 CANCELLED 처리
+    await prisma.leaveRequest.update({
+      where: { id: leaveId },
+      data: {
+        status: "CANCELLED",
+        decidedAt: new Date(),
+        decidedNote: "관리자가 삭제",
+        approverId: me.id,
+      },
+    });
+  }
+
+  revalidatePath("/attendance");
+  revalidatePath("/admin/leave");
+  return { ok: true };
+}

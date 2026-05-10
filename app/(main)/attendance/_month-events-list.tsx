@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteEventAction } from "@/app/(main)/events/actions";
+import { deleteLeaveByAdminAction } from "./actions";
 import { useT } from "@/lib/i18n/client";
 
 type EventItem = {
@@ -103,6 +104,28 @@ export function MonthEventsList({
     });
   };
 
+  const handleDeleteLeave = (id: string, name: string, typeLabel: string) => {
+    if (
+      !confirm(
+        locale === "en"
+          ? `Delete leave: ${name} · ${typeLabel}?\nIf approved, the staff's used leave count will be auto-corrected.`
+          : `${name} · ${typeLabel} 휴가를 삭제하시겠습니까?\n승인된 휴가는 사용 일수가 자동으로 차감됩니다.`,
+      )
+    ) {
+      return;
+    }
+    setPendingId(id);
+    startTransition(async () => {
+      const r = await deleteLeaveByAdminAction(id);
+      setPendingId(null);
+      if (!r.ok) {
+        alert(r.error ?? "삭제 실패");
+        return;
+      }
+      router.refresh();
+    });
+  };
+
   return (
     <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
       <button
@@ -152,18 +175,38 @@ export function MonthEventsList({
                   )}
                 </>
               ) : (
-                <span
-                  className={`text-sm flex-1 min-w-0 truncate ${
-                    it.isMine
-                      ? "text-blue-700 dark:text-blue-300 font-medium"
-                      : "text-zinc-700 dark:text-zinc-300"
-                  }`}
-                >
-                  🏖 {it.name}{" "}
-                  <span className="text-xs text-zinc-500">
-                    · {typeBadge[it.type] ?? it.type}
+                <>
+                  <span
+                    className={`text-sm flex-1 min-w-0 truncate ${
+                      it.isMine
+                        ? "text-blue-700 dark:text-blue-300 font-medium"
+                        : "text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    🏖 {it.name}{" "}
+                    <span className="text-xs text-zinc-500">
+                      · {typeBadge[it.type] ?? it.type}
+                    </span>
                   </span>
-                </span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDeleteLeave(
+                          it.id,
+                          it.name,
+                          typeBadge[it.type] ?? it.type,
+                        )
+                      }
+                      disabled={pendingId === it.id}
+                      className="text-xs rounded-md border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 shrink-0"
+                    >
+                      {pendingId === it.id
+                        ? `${t("common.delete")}...`
+                        : `🗑 ${t("common.delete")}`}
+                    </button>
+                  )}
+                </>
               )}
             </li>
           ))}
