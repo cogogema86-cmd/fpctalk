@@ -253,19 +253,41 @@ export function ChatRoom({
         const newOnes = await getMessagesSinceAction(chatId, last);
         if (stopped || newOnes.length === 0) return;
         setMessages((prev) => {
-          const existing = new Set(prev.map((m) => m.id));
-          const filtered = newOnes.filter((n) => !existing.has(n.id));
-          if (filtered.length === 0) return prev;
-          // 본인 메시지가 도착하면 같은 내용의 pending 제거
-          let next = prev;
-          for (const n of filtered) {
-            if (n.userId === meId) {
-              next = next.filter(
-                (m) => !(m.pending && m.content === n.content),
-              );
+          let changed = false;
+          const next = prev.slice();
+
+          for (const n of newOnes) {
+            const idx = next.findIndex((m) => m.id === n.id);
+            if (idx >= 0) {
+              // 같은 ID 존재 (옵티미스틱 메시지가 clientMessageId로 미리 추가됨)
+              // → pending 해제 + 서버 데이터로 갱신. Realtime이 막혀도 5초 안에 풀림.
+              if (next[idx].pending) {
+                next[idx] = {
+                  ...next[idx],
+                  content: n.content,
+                  type: n.type,
+                  createdAt: n.createdAt,
+                  metadata: n.metadata,
+                  pending: false,
+                };
+                changed = true;
+              }
+            } else {
+              // 새 메시지 — content 매칭으로 legacy pending 제거 후 추가
+              if (n.userId === meId) {
+                const pendingIdx = next.findIndex(
+                  (m) => m.pending && m.content === n.content,
+                );
+                if (pendingIdx >= 0) {
+                  next.splice(pendingIdx, 1);
+                }
+              }
+              next.push(n);
+              changed = true;
             }
           }
-          return [...next, ...filtered];
+
+          return changed ? next : prev;
         });
       } catch {
         // 무시
@@ -427,6 +449,16 @@ export function ChatRoom({
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
     setReplyTo(null);
+
+    // Realtime이 광고 차단/방화벽에 막힌 환경(특히 크롬 확장) 대비 fallback:
+    // 1.5초 안에 pending이 안 풀렸으면 강제 해제. (서버 저장은 이미 완료됐을 가능성 큼)
+    setTimeout(() => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === clientId && m.pending ? { ...m, pending: false } : m,
+        ),
+      );
+    }, 1500);
 
     // @비서 / @AI / @ 단독 호출 감지 → AI 비서에게 별도 요청
     const aiMatch = AI_TRIGGER.exec(content);
