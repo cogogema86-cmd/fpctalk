@@ -709,6 +709,51 @@ export async function deleteTemplate(uploaderId: string, templateId: string) {
   await prisma.documentTemplate.delete({ where: { id: templateId } });
 }
 
+/**
+ * 사인 캠페인(Document) 삭제 — 관리자가 본인이 만든 캠페인만 삭제 가능.
+ *
+ * 함께 정리되는 것:
+ * - 사인 결과 PDF (signedPdfPath) — 사인본은 캠페인 단위 결과물이라 같이 삭제
+ * - 사인 이미지 (signaturePath) — 캠페인 결과물
+ * - SignatureRequest 행 — Prisma onDelete: Cascade
+ *
+ * 보존되는 것:
+ * - 양식 원본(template.koPath/enPath) — DocumentTemplate 보관함에 그대로
+ *   (Document.storagePath는 template.koPath와 동일한 경로일 수 있어 직접 삭제 안 함)
+ *
+ * 실패 시: 일부 파일 삭제 실패해도 DB는 삭제 진행 (orphan 파일은 R2/Supabase에 남음).
+ */
+export async function deleteCampaign(uploaderId: string, documentId: string) {
+  if (!(await isUserAdmin(uploaderId))) {
+    throw new Error("관리자만 캠페인을 삭제할 수 있습니다.");
+  }
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    include: {
+      signatureRequests: {
+        select: { signedPdfPath: true, signaturePath: true },
+      },
+    },
+  });
+  if (!doc) throw new Error("캠페인을 찾을 수 없습니다.");
+  if (doc.uploaderId !== uploaderId) {
+    throw new Error("본인이 만든 캠페인만 삭제할 수 있습니다.");
+  }
+
+  const storageType = (doc.storageType ?? "supabase") as StorageType;
+  const paths: string[] = [];
+  for (const r of doc.signatureRequests) {
+    if (r.signedPdfPath) paths.push(r.signedPdfPath);
+    if (r.signaturePath) paths.push(r.signaturePath);
+  }
+  if (paths.length > 0) {
+    await deleteFiles(storageType, paths).catch(() => {});
+  }
+
+  // SignatureRequest는 onDelete: Cascade 로 자동 삭제됨
+  await prisma.document.delete({ where: { id: documentId } });
+}
+
 export async function requestSignaturesFromTemplate(
   uploaderId: string,
   templateId: string,

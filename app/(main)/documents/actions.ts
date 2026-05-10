@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getMe } from "@/lib/chat";
-import { cancelSignatureRequest, submitSignature } from "@/lib/documents";
+import {
+  cancelSignatureRequest,
+  deleteCampaign,
+  submitSignature,
+} from "@/lib/documents";
 
 // =====================================================
 // 직원: 사인 제출
@@ -80,4 +84,24 @@ export async function cancelSignatureRequestAction(
     return { error: e instanceof Error ? e.message : "취소 실패" };
   }
   return { ok: true };
+}
+
+// =====================================================
+// 관리자: 사인 캠페인(Document) 삭제 — 본인이 만든 캠페인만
+// SignatureRequest는 Cascade. 사인 결과물 파일은 함께 정리.
+// 양식 원본(DocumentTemplate)은 보존됨.
+// =====================================================
+export async function deleteCampaignAction(
+  documentId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  try {
+    await deleteCampaign(me.id, documentId);
+    revalidatePath("/documents");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "삭제 실패" };
+  }
 }

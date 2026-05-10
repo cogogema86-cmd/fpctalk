@@ -10,6 +10,7 @@ import {
 } from "@/lib/documents";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { DeleteTemplateButton } from "./_delete-template-button";
+import { DeleteCampaignButton } from "./_delete-campaign-button";
 import { PreviewButton } from "./[id]/_preview-button";
 import { DownloadButton } from "./[id]/_download-button";
 
@@ -161,36 +162,38 @@ export default async function DocumentsPage() {
               return (
                 <li
                   key={d.id}
-                  className="px-4 py-3 bg-white dark:bg-zinc-950"
+                  className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center gap-3"
                 >
                   <Link
                     href={`/documents/${d.id}`}
-                    className="block hover:bg-zinc-50 dark:hover:bg-zinc-900 -mx-4 -my-3 px-4 py-3"
+                    className="min-w-0 flex-1 flex items-center justify-between gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-900 -my-3 py-3 -mx-2 px-2 rounded-md"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium truncate">{d.title}</div>
-                        <div className="text-xs text-zinc-400 mt-0.5">
-                          {d.createdAt.toLocaleDateString(dateLocale)}
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{d.title}</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {d.createdAt.toLocaleDateString(dateLocale)}
                       </div>
-                      <div className="text-right shrink-0 flex items-center gap-2">
-                        {isComplete && (
-                          <span className="text-xs text-green-600 dark:text-green-400">
-                            {t("documents.completed")}
-                          </span>
-                        )}
-                        <div>
-                          <div className="text-sm font-semibold">
-                            {signed} / {total}
-                          </div>
-                          <div className="text-xs text-zinc-400">
-                            {t("documents.signedCount")}
-                          </div>
+                    </div>
+                    <div className="text-right shrink-0 flex items-center gap-2">
+                      {isComplete && (
+                        <span className="text-xs text-green-600 dark:text-green-400">
+                          {t("documents.completed")}
+                        </span>
+                      )}
+                      <div>
+                        <div className="text-sm font-semibold">
+                          {signed} / {total}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          {t("documents.signedCount")}
                         </div>
                       </div>
                     </div>
                   </Link>
+                  <DeleteCampaignButton
+                    documentId={d.id}
+                    campaignTitle={d.title}
+                  />
                 </li>
               );
             })}
