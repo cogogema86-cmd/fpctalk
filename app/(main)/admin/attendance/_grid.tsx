@@ -87,6 +87,7 @@ export function AttendanceGrid({
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
+  const exportHref = `/api/admin/attendance/export?ym=${monthStr}`;
 
   // 일별 요일
   const dayOfWeek = (d: number) => new Date(year, monthIdx, d).getDay();
@@ -154,7 +155,14 @@ export function AttendanceGrid({
 
   return (
     <>
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        <a
+          href={exportHref}
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm font-medium px-3 py-1.5"
+          title="이 달의 근태표를 .xlsx로 다운로드 (노무사 전달용)"
+        >
+          📥 엑셀 다운로드
+        </a>
         <button
           type="button"
           onClick={() => setShowBulk(true)}
