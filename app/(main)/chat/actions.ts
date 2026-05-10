@@ -276,6 +276,7 @@ export type PolledMessage = {
   type: string;
   createdAt: string;
   user: { id: string; username: string; name: string } | null;
+  metadata: unknown;
 };
 
 // =====================================================
@@ -502,5 +503,6 @@ export async function getMessagesSinceAction(
     type: m.type,
     createdAt: m.createdAt.toISOString(),
     user: m.user,
+    metadata: m.metadata,
   }));
 }

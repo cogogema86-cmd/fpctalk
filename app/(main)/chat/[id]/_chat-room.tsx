@@ -227,6 +227,7 @@ export function ChatRoom({
             content: string;
             type: string;
             createdAt: string;
+            metadata?: unknown;
           };
           setMessages((prev) => {
             // 이미 있으면 무시 (중복 방지)
@@ -259,6 +260,7 @@ export function ChatRoom({
                 type: row.type,
                 createdAt: row.createdAt,
                 user,
+                metadata: row.metadata,
               },
             ];
           });
