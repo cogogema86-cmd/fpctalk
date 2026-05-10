@@ -48,6 +48,44 @@ export type AiResponse = {
   mode: AiMode;
 };
 
+/**
+ * AI 호출 에러를 사용자 친화적 메시지로 변환.
+ * - 429 / quota 초과: 한도 안내
+ * - 401 / 403: 인증 안내
+ * - 그 외: 일반 메시지 + 짧게 요약
+ */
+export function friendlyAiError(error: unknown, locale: "ko" | "en" = "ko"): string {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const lower = raw.toLowerCase();
+
+  const isQuota =
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    lower.includes("quota") ||
+    lower.includes("rate limit");
+  const isAuth =
+    lower.includes("401") ||
+    lower.includes("403") ||
+    lower.includes("api key") ||
+    lower.includes("permission denied");
+
+  if (isQuota) {
+    return locale === "en"
+      ? "⏱ AI usage limit reached for today. Please ask the admin to upgrade billing."
+      : "⏱ AI 호출 한도(무료 일일 20회)에 도달했습니다. 관리자에게 Gemini 결제 활성화를 요청하세요.";
+  }
+  if (isAuth) {
+    return locale === "en"
+      ? "🔑 AI API key issue. Please ask the admin to check the configuration."
+      : "🔑 AI API 키 문제입니다. 관리자에게 설정 확인을 요청하세요.";
+  }
+  // 일반 에러는 80자로 자르고 안내 문구
+  const head = raw.replace(/\s+/g, " ").trim().slice(0, 80);
+  return locale === "en"
+    ? `❌ AI response failed${head ? ` (${head})` : ""}`
+    : `❌ AI 응답 실패${head ? ` (${head})` : ""}`;
+}
+
 // =====================================================
 // 자동 라우팅: prompt를 보고 fast/pro 결정
 // 학원 비서의 주 업무에 맞춘 키워드 (문서 작성·정리 위주)

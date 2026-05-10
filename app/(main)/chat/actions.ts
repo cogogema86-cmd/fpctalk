@@ -11,7 +11,7 @@ import {
   sendMessage,
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
-import { askAI, AI_GUARDRAIL } from "@/lib/ai";
+import { askAI, AI_GUARDRAIL, friendlyAiError } from "@/lib/ai";
 import { sendPushToUsers } from "@/lib/push";
 import { extractEventFromMessage } from "@/lib/event-extract";
 import { extractOrderIntent } from "@/lib/order-intent";
@@ -532,7 +532,7 @@ ${context || "(아직 채팅 기록이 없습니다)"}
     modelUsed = result.modelUsed;
     aiMode = result.mode;
   } catch (e) {
-    aiText = `❌ AI 응답 실패: ${e instanceof Error ? e.message : "알 수 없는 에러"}`;
+    aiText = friendlyAiError(e);
   }
 
   // type=AI Message로 저장 → Realtime이 모든 멤버에게 전파
@@ -622,7 +622,7 @@ Output ONLY one line per input, prefixed with the EXACT same "Lnumber:" tag.
     return { translations: out };
   } catch (e) {
     return {
-      error: e instanceof Error ? e.message : "번역 실패",
+      error: friendlyAiError(e),
     };
   }
 }
@@ -674,7 +674,7 @@ Rules:
     };
   } catch (e) {
     return {
-      error: e instanceof Error ? e.message : "번역 실패",
+      error: friendlyAiError(e),
     };
   }
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { askAI, classifyMode, AI_GUARDRAIL, type AiMode } from "@/lib/ai";
+import { askAI, classifyMode, AI_GUARDRAIL, friendlyAiError, type AiMode } from "@/lib/ai";
 import { getMe } from "@/lib/chat";
 import { prisma } from "@/lib/db";
 
@@ -152,7 +152,7 @@ ${chatContext || "(아직 채팅 기록이 없습니다)"}
     console.error("[assistant] AI 호출 실패:", e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "AI 호출 실패",
+      error: friendlyAiError(e),
     };
   }
 }
