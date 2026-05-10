@@ -29,6 +29,32 @@ const AI_TRIGGER = /^@(?:비서|ai|assistant)?\s+\S/i;
 // 사용자 입력에서 @ 트리거 부분 제거하는 정규식 (시작에 @[키워드?]+공백)
 const AI_TRIGGER_STRIP = /^@(?:비서|ai|assistant)?\s+/i;
 
+/**
+ * 메시지 본문에서 @이름 멘션을 파란색으로 강조해서 렌더.
+ * - @ + 한글/영문 (공백·구두점·줄바꿈 전까지)을 매칭
+ * - isMine(파란 배경 안)이면 흰색 굵게, 아니면 파란색
+ */
+function renderWithMentions(content: string, isMine: boolean): React.ReactNode {
+  const parts = content.split(/(@[\p{L}\p{N}_가-힣]+)/gu);
+  return parts.map((p, i) => {
+    if (p.startsWith("@")) {
+      return (
+        <span
+          key={i}
+          className={
+            isMine
+              ? "font-semibold underline decoration-white/60"
+              : "font-semibold text-blue-600 dark:text-blue-400"
+          }
+        >
+          {p}
+        </span>
+      );
+    }
+    return <span key={i}>{p}</span>;
+  });
+}
+
 type Message = {
   id: string;
   chatId: string;
@@ -260,6 +286,11 @@ export function ChatRoom({
     const content = raw?.trim();
     if (!content) return;
 
+    // 답글 대상 attach
+    if (replyTo) {
+      formData.set("replyTo", JSON.stringify(replyTo));
+    }
+
     // 낙관적 UI: 임시 메시지 즉시 추가 (Realtime 도착 시 교체됨)
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setMessages((prev) => [
@@ -272,12 +303,14 @@ export function ChatRoom({
         type: "TEXT",
         createdAt: new Date().toISOString(),
         user: { id: meId, username: "", name: meName },
+        metadata: replyTo ? { replyTo } : undefined,
         pending: true,
       },
     ]);
 
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
+    setReplyTo(null);
 
     // @비서 / @AI / @ 단독 호출 감지 → AI 비서에게 별도 요청
     const aiMatch = AI_TRIGGER.exec(content);
@@ -315,6 +348,22 @@ export function ChatRoom({
   // @ 입력 감지: 시작 또는 공백 다음의 "@" → 픽커
   const [showMentionPicker, setShowMentionPicker] = useState(false);
 
+  // 답글 대상 (있으면 입력창 위에 인용 박스 표시 + 전송 시 metadata.replyTo)
+  const [replyTo, setReplyTo] = useState<{
+    messageId: string;
+    userName: string;
+    contentPreview: string;
+  } | null>(null);
+
+  const startReply = (msg: Message) => {
+    setReplyTo({
+      messageId: msg.id,
+      userName: msg.user?.name ?? "",
+      contentPreview: msg.content.slice(0, 100),
+    });
+    inputRef.current?.focus();
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const ta = e.target;
     const cursor = ta.selectionStart;
@@ -338,14 +387,14 @@ export function ChatRoom({
     setShowMentionPicker(isAtStart);
   };
 
-  const insertMention = (mention: "AI" | "비서") => {
+  const insertMention = (label: string) => {
     const ta = inputRef.current;
     if (!ta) return;
     const cursor = ta.selectionStart;
     const before = ta.value.slice(0, cursor);
     const after = ta.value.slice(cursor);
-    // 마지막 @ 를 제거하고 @{mention} 삽입
-    const newBefore = before.slice(0, -1) + `@${mention} `;
+    // 마지막 @ 를 제거하고 @{label} 삽입
+    const newBefore = before.slice(0, -1) + `@${label} `;
     ta.value = newBefore + after;
     ta.setSelectionRange(newBefore.length, newBefore.length);
     ta.focus();
@@ -376,6 +425,7 @@ export function ChatRoom({
                   message={m}
                   isMine={isMine}
                   showAuthor={showAuthor}
+                  onReply={startReply}
                 />
               </Fragment>
             );
@@ -390,9 +440,30 @@ export function ChatRoom({
       >
         <input type="hidden" name="chatId" value={chatId} />
 
+        {replyTo && (
+          <div className="mb-2 flex items-stretch gap-2 rounded-md border-l-4 border-blue-500 bg-zinc-50 dark:bg-zinc-900 px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                ↩ {t("chat.replyingTo")}: {replyTo.userName}
+              </div>
+              <div className="text-xs text-zinc-600 dark:text-zinc-400 truncate mt-0.5">
+                {replyTo.contentPreview}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xs px-1"
+              aria-label={t("chat.replyCancel")}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* @ 자동완성 픽커 */}
         {showMentionPicker && (
-          <div className="absolute bottom-full left-3 mb-1 z-10 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-1 min-w-[200px]">
+          <div className="absolute bottom-full left-3 mb-1 z-10 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-1 min-w-[220px] max-h-72 overflow-y-auto">
             <div className="text-[10px] text-zinc-400 px-2 py-1">
               {t("chat.aiSummonTitle")}
             </div>
@@ -412,6 +483,32 @@ export function ChatRoom({
               <span className="font-mono">@비서</span>{" "}
               <span className="text-zinc-400 text-xs">{t("chat.summonKo")}</span>
             </button>
+
+            {members.filter((m) => m.id !== meId).length > 0 && (
+              <>
+                <div className="border-t border-zinc-100 dark:border-zinc-800 my-1" />
+                <div className="text-[10px] text-zinc-400 px-2 py-1">
+                  {t("chat.mentionMember")}
+                </div>
+                {members
+                  .filter((m) => m.id !== meId)
+                  .map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => insertMention(m.name)}
+                      className="w-full text-left px-2 py-1.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm flex items-center gap-2"
+                    >
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">
+                        @{m.name}
+                      </span>
+                      <span className="text-zinc-400 text-xs truncate">
+                        {m.username}
+                      </span>
+                    </button>
+                  ))}
+              </>
+            )}
           </div>
         )}
 
@@ -690,10 +787,12 @@ function MessageBubble({
   message,
   isMine,
   showAuthor,
+  onReply,
 }: {
   message: Message;
   isMine: boolean;
   showAuthor: boolean;
+  onReply: (m: Message) => void;
 }) {
   const t = useT();
   const [translation, setTranslation] = useState<string | null>(null);
@@ -710,6 +809,9 @@ function MessageBubble({
   }
 
   const isPending = !!message.pending || isDeleting;
+  const meta = (message.metadata ?? {}) as {
+    replyTo?: { messageId: string; userName: string; contentPreview: string };
+  };
 
   const handleDelete = () => {
     if (!confirm(t("chat.deleteConfirm"))) return;
@@ -753,6 +855,18 @@ function MessageBubble({
             {message.user.name}
           </div>
         )}
+        {meta.replyTo && (
+          <div
+            className={`mb-1 rounded-md border-l-4 border-blue-400 px-2 py-1 text-[11px] max-w-full ${
+              isMine
+                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100"
+                : "bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+            }`}
+          >
+            <div className="font-medium">↩ {meta.replyTo.userName}</div>
+            <div className="truncate">{meta.replyTo.contentPreview}</div>
+          </div>
+        )}
         <div
           className={`rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${
             isMine
@@ -760,7 +874,7 @@ function MessageBubble({
               : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700"
           }`}
         >
-          {message.content}
+          {renderWithMentions(message.content, isMine)}
         </div>
 
         {translation && (
@@ -822,6 +936,14 @@ function MessageBubble({
                   {t("chat.translationClose")}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => onReply(message)}
+                title={t("chat.replyTo")}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
+              >
+                ↩ {t("chat.replyTo")}
+              </button>
               {isMine && (
                 <button
                   type="button"

@@ -417,10 +417,63 @@ export async function getChatInfo(chatId: string, userId: string) {
 // =====================================================
 // 메시지 전송
 // =====================================================
+export type ReplyToMeta = {
+  messageId: string;
+  userName: string;
+  contentPreview: string;
+};
+
+export type SendMessageOptions = {
+  /** 답글 대상 (있으면 metadata.replyTo에 저장) */
+  replyTo?: ReplyToMeta;
+};
+
+/**
+ * 메시지 텍스트에서 @이름 멘션을 찾아 userId 배열 반환.
+ * 채팅 멤버 + 레벨 채팅이면 자격 있는 모든 사용자 대상.
+ */
+export async function extractMentionsFromContent(
+  chatId: string,
+  content: string,
+): Promise<string[]> {
+  // 채팅 멤버 후보 — DM/그룹은 명시 멤버, 레벨 채팅은 자격 있는 직원
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    include: {
+      members: { include: { user: { select: { id: true, name: true } } } },
+    },
+  });
+  if (!chat) return [];
+
+  const candidates = new Map<string, string>(); // userId → name
+  for (const m of chat.members) {
+    if (m.user) candidates.set(m.user.id, m.user.name);
+  }
+  // 레벨 채팅이면 자격 있는 사용자도 멘션 가능 — 메시지에 이름 들어 있으면
+  if (chat.levelRequired !== null) {
+    const eligible = await prisma.user.findMany({
+      where: { role: { defaultLevel: { gte: chat.levelRequired } } },
+      select: { id: true, name: true },
+    });
+    for (const u of eligible) candidates.set(u.id, u.name);
+  }
+
+  const mentioned: string[] = [];
+  for (const [uid, name] of candidates) {
+    if (!name) continue;
+    // 정확한 이름 매칭 (단어 경계). 한글은 \b가 안 먹어서 lookahead로 보조
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`@${escaped}(?=$|[\\s\\p{P}])`, "u");
+    if (re.test(content)) mentioned.push(uid);
+  }
+  return mentioned;
+}
+
 export async function sendMessage(
   chatId: string,
   userId: string,
   content: string,
+  options: SendMessageOptions = {},
 ) {
   const access = await canAccess(chatId, userId);
   if (!access.ok) throw new Error("이 채팅에 접근 권한이 없습니다.");
@@ -434,12 +487,21 @@ export async function sendMessage(
   if (trimmed.length > 4000)
     throw new Error("메시지가 너무 깁니다 (4000자 제한).");
 
+  // 멘션 추출
+  const mentions = await extractMentionsFromContent(chatId, trimmed);
+
+  const meta: { mentions?: string[]; replyTo?: ReplyToMeta } = {};
+  if (mentions.length > 0) meta.mentions = mentions;
+  if (options.replyTo) meta.replyTo = options.replyTo;
+  const hasMeta = Object.keys(meta).length > 0;
+
   return prisma.message.create({
     data: {
       chatId,
       userId,
       type: "TEXT",
       content: trimmed,
+      ...(hasMeta ? { metadata: meta } : {}),
     },
     include: {
       user: { select: { id: true, username: true, name: true } },

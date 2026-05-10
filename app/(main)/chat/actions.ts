@@ -147,10 +147,31 @@ export async function sendMessageAction(
   const content = formData.get("content") as string;
   if (!chatId || !content?.trim()) return {};
 
+  // 답글 메타 (옵션)
+  const replyToRaw = formData.get("replyTo") as string | null;
+  let replyTo: { messageId: string; userName: string; contentPreview: string } | undefined;
+  if (replyToRaw) {
+    try {
+      const parsed = JSON.parse(replyToRaw);
+      if (parsed?.messageId && parsed?.userName) {
+        replyTo = {
+          messageId: String(parsed.messageId),
+          userName: String(parsed.userName).slice(0, 50),
+          contentPreview: String(parsed.contentPreview ?? "").slice(0, 100),
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   let chatTitle = "FPCTalk";
   try {
-    await sendMessage(chatId, me.id, content);
+    const created = await sendMessage(chatId, me.id, content, { replyTo });
     await markAsRead(chatId, me.id);
+
+    const meta = (created.metadata ?? {}) as { mentions?: string[] };
+    const mentionedIds = Array.isArray(meta.mentions) ? meta.mentions : [];
 
     // 채팅 정보 (제목 + 멤버 수신자 목록)
     const chat = await prisma.chat.findUnique({
@@ -169,9 +190,22 @@ export async function sendMessageAction(
       const recipients = chat.members
         .map((m) => m.userId)
         .filter((id) => id !== me.id);
-      if (recipients.length > 0) {
-        const preview = content.trim().slice(0, 100);
-        void sendPushToUsers(recipients, {
+      const preview = content.trim().slice(0, 100);
+
+      // 멘션된 사용자에게는 별도 푸시 (제목에 @ 표시)
+      const mentionedRecipients = mentionedIds.filter((id) => id !== me.id);
+      if (mentionedRecipients.length > 0) {
+        void sendPushToUsers(mentionedRecipients, {
+          title: `📢 @ ${chat.name ?? me.name}`,
+          body: `${me.name}: ${preview}`,
+          url: `/chat/${chatId}`,
+          tag: `chat-mention-${chatId}`,
+        });
+      }
+      // 일반 푸시 (멘션된 사람 제외 — 중복 알림 방지)
+      const others = recipients.filter((id) => !mentionedRecipients.includes(id));
+      if (others.length > 0) {
+        void sendPushToUsers(others, {
           title: chat.name ?? me.name,
           body: `${me.name}: ${preview}`,
           url: `/chat/${chatId}`,
