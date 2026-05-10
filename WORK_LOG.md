@@ -4,6 +4,36 @@
 
 ---
 
+## ✅ 2026-05-10 저녁 (운영 편의 기능 묶음 8건)
+
+| 커밋 | 내용 |
+|---|---|
+| `87d2d70` | **채팅방 나가기** — DM + 명시적 그룹만, 레벨 자동 채팅은 ❌. 그룹은 SYSTEM "XX 님이 나갔습니다" 전송 |
+| `4803f72` | **진행 캠페인 삭제** — `/documents` 페이지 캠페인 라인 우측 삭제 버튼. 사인 결과 PDF/이미지 R2 정리, 양식 원본은 보존 |
+| `761f44d` | **레벨 채팅 unread 정확 계산** — `User.level >= levelRequired` 인 직원 전체를 잠재 독자로. 들어와본 사람만 카운트하던 버그 수정 |
+| `72905bf` | **크롬에서 메시지 "전송 중..." 영영 안 풀리던 버그** — 광고 차단이 Realtime WebSocket 막음. 폴링 핸들러를 in-place 갱신으로 변경 + 1.5초 fallback 타임아웃 |
+| `dfa3d29` | **모든 메시지에 unread 표시 (카톡 스타일)** — `isMine` 조건 제거. 본인/타인/AI 모두 노란 카운트. API/SSR 모두 전체 메시지 대상 |
+| `32eef08` | **행사 삭제 + "📋 이번 달 일정" 접기 섹션** — `_month-events-list.tsx` 신규. 캘린더 셀이 일정 많아도 화면 안 깨짐, 관리자에게 행사 🗑 |
+| `de81189` | **관리자 휴가 삭제 + 연차 사용량 자동 보정** — APPROVED 휴가 삭제 시 `User.annualLeaveUsed` 차감 + LeaveAdjustment 감사로그 동시 트랜잭션. 흔적 보존 (status=CANCELLED) |
+| `8415d30` | **채팅방 초기화 실시간 반영** — `clearChatRoomAction`이 SYSTEM 메시지(`metadata.kind="ROOM_CLEARED"`) INSERT → 클라이언트 핸들러가 그것 감지 시 `setMessages([only])`로 비움. **캘린더 월/년 이동** — `_calendar-nav.tsx` 신규, ◀ 라벨 picker ▶ 형태, `?ym=YYYY-MM` URL state |
+
+### 마이그레이션 / 신규 모델
+- `LeaveAdjustment` (이전 a8fa98c) — 휴가 삭제 시 자동 기록되는 감사 로그
+- `User.joinDate`, `annualLeaveTotal/Used Float` (이전 a8fa98c)
+
+### 신규 컴포넌트 위치 메모
+- `app/(main)/chat/[id]/_leave-chat-button.tsx`
+- `app/(main)/documents/_delete-campaign-button.tsx`
+- `app/(main)/admin/users/[id]/edit/_leave-adjust-panel.tsx`
+- `app/(main)/attendance/_month-events-list.tsx`
+- `app/(main)/attendance/_calendar-nav.tsx`
+
+### 다음 작업 후보
+- **D** — 채팅 첨부 (이미지 1년 / 동영상 60일 보관, 미리보기, 자동 삭제 cron)
+- **C** — 월간 근태 매트릭스 페이지 (엑셀과 같은 직원행 × 일자열 표)
+
+---
+
 ## ✅ 2026-05-10 추가 (입사일 + 연차 직접 조정 — A·B 완료)
 
 배경: 학원에서 사용 중인 근태 엑셀(`C:\Users\cogog\OneDrive\Desktop\2403-2502 근태관리현황.xlsx`) 분석.
