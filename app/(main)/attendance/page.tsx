@@ -10,6 +10,7 @@ import {
 import { MonthCalendar } from "./_calendar";
 import { LeaveForm } from "./_leave-form";
 import { LeaveList } from "./_leave-list";
+import { MonthEventsList } from "./_month-events-list";
 import { getLocale, getT } from "@/lib/i18n/server";
 
 export default async function AttendancePage() {
@@ -81,7 +82,13 @@ export default async function AttendancePage() {
       startDate: { lte: monthEnd },
       endDate: { gte: monthStart },
     },
-    select: { id: true, title: true, startDate: true, endDate: true },
+    select: {
+      id: true,
+      title: true,
+      startDate: true,
+      endDate: true,
+      location: true,
+    },
     orderBy: { startDate: "asc" },
   });
   const eventsByDay: Record<string, Array<{ id: string; title: string }>> = {};
@@ -173,6 +180,28 @@ export default async function AttendancePage() {
         leavesByDay={leavesByDay}
         eventsByDay={eventsByDay}
         locale={locale}
+      />
+
+      {/* 이번 달 일정 (접기 가능) — 일정 많아져도 캘린더 셀이 안 보일 때 활용 */}
+      <MonthEventsList
+        events={events.map((e) => ({
+          id: e.id,
+          title: e.title,
+          startDate: e.startDate.toISOString(),
+          endDate: e.endDate.toISOString(),
+          location: e.location,
+        }))}
+        leaves={monthlyLeaves.map((lv) => ({
+          id: lv.id,
+          name: lv.requester.name,
+          type: lv.type,
+          startDate: lv.startDate.toISOString(),
+          endDate: lv.endDate.toISOString(),
+          isMine: lv.requesterId === me.id,
+        }))}
+        isAdmin={isAdmin}
+        locale={locale}
+        defaultOpen={false}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

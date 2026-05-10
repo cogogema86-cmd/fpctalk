@@ -146,3 +146,46 @@ export async function ackEventAction(
   revalidatePath("/attendance");
   return { ok: true };
 }
+
+/** 행사 삭제 — 관리자 전용. 관련 EventAcknowledgement는 Cascade. */
+export async function deleteEventAction(
+  eventId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  const u = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!u?.role.isAdmin) {
+    return { ok: false, error: "관리자만 행사를 삭제할 수 있습니다." };
+  }
+
+  const ev = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { sourceMessageId: true },
+  });
+  if (!ev) return { ok: false, error: "행사를 찾을 수 없습니다." };
+
+  // 채팅 EVENT_PROPOSAL 메시지의 metadata가 있으면 CANCELLED로 갱신 (등록 흔적 정리)
+  if (ev.sourceMessageId) {
+    const msg = await prisma.message.findUnique({
+      where: { id: ev.sourceMessageId },
+      select: { metadata: true, chatId: true },
+    });
+    if (msg) {
+      const meta = (msg.metadata ?? {}) as Record<string, unknown>;
+      await prisma.message.update({
+        where: { id: ev.sourceMessageId },
+        data: { metadata: { ...meta, state: "CANCELLED", eventId: undefined } },
+      });
+      revalidatePath(`/chat/${msg.chatId}`);
+    }
+  }
+
+  await prisma.event.delete({ where: { id: eventId } });
+
+  revalidatePath("/attendance");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
