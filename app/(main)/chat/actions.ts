@@ -550,6 +550,21 @@ ${context || "(아직 채팅 기록이 없습니다)"}
   return { ok: true };
 }
 
+/**
+ * 번역 응답에서 마크다운 코드 펜스 / 앞뒤 따옴표 제거.
+ * Gemini가 가끔 ```...``` 또는 "..."로 감싸서 반환하는 케이스 대응.
+ */
+function cleanTranslation(raw: string): string {
+  let out = raw.trim();
+  // ```\n...\n``` 또는 ```lang\n...\n``` 펜스 제거
+  out = out.replace(/^```[a-z]*\s*\n?/i, "").replace(/\n?\s*```\s*$/i, "");
+  // 앞뒤 매칭되는 큰/작은 따옴표 제거 (양쪽이 같은 따옴표일 때만)
+  // /s flag 대신 [\s\S]로 멀티라인 매칭
+  const m = out.match(/^["']([\s\S]+)["']$/);
+  if (m && m[1]) out = m[1];
+  return out.trim();
+}
+
 // =====================================================
 // 다중 텍스트 일괄 번역 (ORDER 응답들, EVENT_PROPOSAL 필드 등)
 // =====================================================
@@ -600,7 +615,7 @@ Output ONLY one line per input, prefixed with the EXACT same "Lnumber:" tag.
       if (!m) continue;
       const idx = parseInt(m[1], 10);
       if (idx >= 0 && idx < texts.length) {
-        const value = m[2].trim();
+        const value = cleanTranslation(m[2]);
         if (value.length > 0) out[idx] = value;
       }
     }
@@ -653,7 +668,7 @@ Rules:
       maxTokens: 1024,
     });
     return {
-      translation: result.text.trim(),
+      translation: cleanTranslation(result.text),
       fromLang: fromLabel,
       toLang: targetLabel,
     };

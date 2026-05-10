@@ -735,27 +735,22 @@ function AiMessageBubble({ message }: { message: Message }) {
               minute: "2-digit",
             })}
           </span>
-          {!translation && !isTransPending && (
-            <>
-              <button
-                type="button"
-                onClick={() => handleTranslate("ko")}
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
-              >
-                {t("chat.koreanShort")}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTranslate("en")}
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
-              >
-                English
-              </button>
-            </>
-          )}
-          {isTransPending && (
-            <span className="text-zinc-500">{t("chat.translatingShort")}</span>
-          )}
+          <button
+            type="button"
+            onClick={() => handleTranslate("ko")}
+            disabled={isTransPending}
+            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline disabled:opacity-50"
+          >
+            {t("chat.koreanShort")}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTranslate("en")}
+            disabled={isTransPending}
+            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline disabled:opacity-50"
+          >
+            English
+          </button>
           {translation && (
             <button
               type="button"
@@ -763,10 +758,14 @@ function AiMessageBubble({ message }: { message: Message }) {
                 setTranslation(null);
                 setTransError(null);
               }}
+              title={t("chat.translationClose")}
               className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
             >
-              {t("chat.translationClose")}
+              ✕
             </button>
+          )}
+          {isTransPending && (
+            <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
         </div>
       </div>
@@ -966,37 +965,35 @@ function ActiveOrderBar({
 
       {/* 번역 토글 */}
       <div className="flex items-center gap-2 mb-2 text-[11px]">
-        {!translation ? (
-          <>
-            <span className="text-zinc-500">🌐</span>
-            <button
-              type="button"
-              onClick={() => onTranslate("ko")}
-              disabled={transPending}
-              className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
-            >
-              {t("chat.koreanShort")}
-            </button>
-            <button
-              type="button"
-              onClick={() => onTranslate("en")}
-              disabled={transPending}
-              className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
-            >
-              English
-            </button>
-            {transPending && (
-              <span className="text-zinc-500">{t("chat.translatingShort")}</span>
-            )}
-          </>
-        ) : (
+        <span className="text-zinc-500">🌐</span>
+        <button
+          type="button"
+          onClick={() => onTranslate("ko")}
+          disabled={transPending}
+          className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+        >
+          {t("chat.koreanShort")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onTranslate("en")}
+          disabled={transPending}
+          className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+        >
+          English
+        </button>
+        {translation && (
           <button
             type="button"
             onClick={() => setTranslation(null)}
+            title={t("chat.translationClose")}
             className="text-zinc-600 dark:text-zinc-400 hover:underline"
           >
-            ↺ {t("chat.translationClose")}
+            ✕
           </button>
+        )}
+        {transPending && (
+          <span className="text-zinc-500">{t("chat.translatingShort")}</span>
         )}
       </div>
 
@@ -1088,37 +1085,35 @@ function ClosedOrderBubble({ message }: { message: Message }) {
           </ul>
         )}
         <div className="flex items-center gap-2 mt-2 text-[10px]">
-          {!translation ? (
-            <>
-              <span className="text-zinc-500">🌐</span>
-              <button
-                type="button"
-                onClick={() => onTranslate("ko")}
-                disabled={transPending}
-                className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
-              >
-                {t("chat.koreanShort")}
-              </button>
-              <button
-                type="button"
-                onClick={() => onTranslate("en")}
-                disabled={transPending}
-                className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
-              >
-                English
-              </button>
-              {transPending && (
-                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
-              )}
-            </>
-          ) : (
+          <span className="text-zinc-500">🌐</span>
+          <button
+            type="button"
+            onClick={() => onTranslate("ko")}
+            disabled={transPending}
+            className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
+          >
+            {t("chat.koreanShort")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onTranslate("en")}
+            disabled={transPending}
+            className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
+          >
+            English
+          </button>
+          {translation && (
             <button
               type="button"
               onClick={() => setTranslation(null)}
+              title={t("chat.translationClose")}
               className="text-zinc-500 hover:underline"
             >
-              ↺ {t("chat.translationClose")}
+              ✕
             </button>
+          )}
+          {transPending && (
+            <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
         </div>
       </div>
@@ -1241,37 +1236,35 @@ function EventProposalBubble({
           {t("event.proposal.question")}
         </div>
         <div className="flex items-center gap-2 mt-1.5 text-[10px]">
-          {!translation ? (
-            <>
-              <span className="text-amber-600 dark:text-amber-400">🌐</span>
-              <button
-                type="button"
-                onClick={() => onTranslate("ko")}
-                disabled={transPending}
-                className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
-              >
-                {t("chat.koreanShort")}
-              </button>
-              <button
-                type="button"
-                onClick={() => onTranslate("en")}
-                disabled={transPending}
-                className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
-              >
-                English
-              </button>
-              {transPending && (
-                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
-              )}
-            </>
-          ) : (
+          <span className="text-amber-600 dark:text-amber-400">🌐</span>
+          <button
+            type="button"
+            onClick={() => onTranslate("ko")}
+            disabled={transPending}
+            className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+          >
+            {t("chat.koreanShort")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onTranslate("en")}
+            disabled={transPending}
+            className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+          >
+            English
+          </button>
+          {translation && (
             <button
               type="button"
               onClick={() => setTranslation(null)}
+              title={t("chat.translationClose")}
               className="text-amber-700 dark:text-amber-300 hover:underline"
             >
-              ↺ {t("chat.translationClose")}
+              ✕
             </button>
+          )}
+          {transPending && (
+            <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
         </div>
 
@@ -1446,27 +1439,22 @@ function MessageBubble({
                   minute: "2-digit",
                 })}
               </span>
-              {!translation && !isTransPending && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleTranslate("ko")}
-                    className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
-                  >
-                    {t("chat.koreanShort")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTranslate("en")}
-                    className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
-                  >
-                    English
-                  </button>
-                </>
-              )}
-              {isTransPending && (
-                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
-              )}
+              <button
+                type="button"
+                onClick={() => handleTranslate("ko")}
+                disabled={isTransPending}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline disabled:opacity-50"
+              >
+                {t("chat.koreanShort")}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTranslate("en")}
+                disabled={isTransPending}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline disabled:opacity-50"
+              >
+                English
+              </button>
               {translation && (
                 <button
                   type="button"
@@ -1474,10 +1462,14 @@ function MessageBubble({
                     setTranslation(null);
                     setTransError(null);
                   }}
+                  title={t("chat.translationClose")}
                   className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
                 >
-                  {t("chat.translationClose")}
+                  ✕
                 </button>
+              )}
+              {isTransPending && (
+                <span className="text-zinc-500">{t("chat.translatingShort")}</span>
               )}
               <button
                 type="button"
