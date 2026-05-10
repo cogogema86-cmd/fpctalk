@@ -2,6 +2,44 @@
 
 다음 세션에서 이어 작업할 때 참고하세요. 모든 변경은 main 브랜치에 푸시되어 Vercel(www.fpctalk.com)에 자동 배포됨.
 
+> **새 학원 재현이 필요하면**: 같은 위치의 `SETUP_GUIDE.md` 참고. 처음부터 셋업하는 단계별 안내.
+
+---
+
+## ✅ 2026-05-11 (D — 채팅 첨부 + 자동 삭제 cron)
+
+| 커밋 | 내용 |
+|---|---|
+| `a009f9f` | **Phase 1 — 채팅 첨부 핵심 흐름** — 입력창 📎 버튼 + 드래그·드롭 + R2 업로드 + 인라인 미리보기. 이미지 10MB·동영상 30MB 제한, 만료일 metadata에 박힘 (이미지 365일/동영상 60일) |
+| `ca6b2eb` | **Phase 2 — 자동 삭제 cron** — `vercel.json` cron 매일 KST 01:00 (`0 16 * * *`), `/api/cron/cleanup-attachments` 만료된 첨부 R2 파일 삭제 + DB 메시지는 보존(metadata expired 마커 + content="[만료된 첨부파일]") |
+| `a3a429c` | TS18048 가드 (attachment.size optional) |
+
+### 신규 파일
+- `app/api/chat/[chatId]/upload/route.ts` (multipart 업로드)
+- `app/api/chat/file/[messageId]/route.ts` (signed URL 302 redirect, ?download=1)
+- `app/api/cron/cleanup-attachments/route.ts` (만료 자동 삭제)
+
+### lib/chat.ts 확장
+- `AttachmentMeta` 타입 추가
+- `SendMessageOptions.attachment` 추가
+- `sendMessage`가 첨부 있으면 빈 본문 허용, type=IMAGE/FILE 자동, content fallback=파일명
+
+### MessageBubble
+- `attachment.kind === image` → `<img>` (max 320px, 클릭 시 새 탭)
+- `video` → `<video controls preload=metadata>`
+- 만료된 첨부 (`expired: true`) → 회색 점선 박스 placeholder
+- 사이즈 + 다운로드 링크
+
+### 사용자 액션 (선택)
+- Vercel Settings → Environment Variables → `CRON_SECRET=<openssl rand -hex 32>` 등록 → Redeploy
+- 미설정이어도 cron 동작은 함 (외부 호출 가능 — 보안 약함)
+
+### 다음 작업 후보
+- 결근/지각/조퇴 LeaveType 추가
+- 매트릭스 검색/필터 (직원 많아질 때)
+- 파일·문서 첨부 (현재 image/video만, image/* 외 파일 415 거부)
+- 이미지 자동 압축 (현재 원본 그대로 R2 저장)
+
 ---
 
 ## ✅ 2026-05-10/11 (관리자 근태 관리 시스템 구축)
