@@ -38,7 +38,7 @@ type OrderMeta = {
 export async function submitOrderResponseAction(
   messageId: string,
   choice: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; metadata?: unknown }> {
   const me = await getMe();
   if (!me) return { ok: false, error: "로그인이 필요합니다." };
   const trimmed = choice.trim();
@@ -65,7 +65,7 @@ export async function submitOrderResponseAction(
     at: new Date().toISOString(),
   });
 
-  await prisma.message.update({
+  const updated = await prisma.message.update({
     where: { id: messageId },
     data: {
       metadata: {
@@ -76,12 +76,12 @@ export async function submitOrderResponseAction(
   });
 
   revalidatePath(`/chat/${msg.chatId}`);
-  return { ok: true };
+  return { ok: true, metadata: updated.metadata };
 }
 
 export async function closeOrderAction(
   messageId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; metadata?: unknown }> {
   const me = await getMe();
   if (!me) return { ok: false, error: "로그인이 필요합니다." };
 
@@ -104,7 +104,7 @@ export async function closeOrderAction(
   }
 
   const meta = (msg.metadata ?? {}) as OrderMeta;
-  await prisma.message.update({
+  const updated = await prisma.message.update({
     where: { id: messageId },
     data: {
       metadata: {
@@ -116,7 +116,7 @@ export async function closeOrderAction(
   });
 
   revalidatePath(`/chat/${msg.chatId}`);
-  return { ok: true };
+  return { ok: true, metadata: updated.metadata };
 }
 
 // =====================================================
@@ -593,6 +593,29 @@ Rules:
       error: e instanceof Error ? e.message : "번역 실패",
     };
   }
+}
+
+/**
+ * 채팅방의 ORDER 메시지 metadata 동기화용 (5초 폴링).
+ * Realtime UPDATE가 REPLICA IDENTITY 설정 없으면 metadata 못 보내는 경우 백업.
+ * 활성 + 최근 마감된 ORDER 5개까지만 반환.
+ */
+export async function getOrderMessagesAction(
+  chatId: string,
+): Promise<Array<{ id: string; metadata: unknown; content: string; type: string }>> {
+  const me = await getMe();
+  if (!me) return [];
+
+  const okAccess = await canAccessForPolling(chatId, me.id);
+  if (!okAccess) return [];
+
+  const orders = await prisma.message.findMany({
+    where: { chatId, type: "ORDER" },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: { id: true, metadata: true, content: true, type: true },
+  });
+  return orders;
 }
 
 export async function getMessagesSinceAction(

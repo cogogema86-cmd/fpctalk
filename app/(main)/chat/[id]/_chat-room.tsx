@@ -13,6 +13,7 @@ import {
   closeOrderAction,
   deleteMessageAction,
   getMessagesSinceAction,
+  getOrderMessagesAction,
   markAsReadAction,
   sendMessageAction,
   submitOrderResponseAction,
@@ -162,6 +163,37 @@ export function ChatRoom({
     });
   }, [messages.length]);
 
+  // ORDER 메시지 metadata 폴링 (Realtime UPDATE가 metadata를 못 보내는 경우 백업)
+  useEffect(() => {
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const orders = await getOrderMessagesAction(chatId);
+        if (stopped || orders.length === 0) return;
+        setMessages((prev) =>
+          prev.map((m) => {
+            const order = orders.find((o) => o.id === m.id);
+            if (!order) return m;
+            return {
+              ...m,
+              metadata: order.metadata,
+              content: order.content,
+              type: order.type,
+            };
+          }),
+        );
+      } catch {
+        // 무시
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(id);
+    };
+  }, [chatId]);
+
   // 본인 메시지의 안 읽은 인원 수 폴링 (다른 멤버가 읽으면 카운트 줄어듦)
   useEffect(() => {
     let stopped = false;
@@ -302,6 +334,37 @@ export function ChatRoom({
           if (row.userId !== meId) {
             markAsReadAction(chatId).catch(() => {});
           }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "Message",
+          filter: `chatId=eq.${chatId}`,
+        },
+        async (payload) => {
+          const row = payload.new as {
+            id: string;
+            content?: string;
+            type?: string;
+            metadata?: unknown;
+          };
+          if (!row.id) return;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === row.id
+                ? {
+                    ...m,
+                    content: row.content ?? m.content,
+                    type: row.type ?? m.type,
+                    metadata:
+                      row.metadata !== undefined ? row.metadata : m.metadata,
+                  }
+                : m,
+            ),
+          );
         },
       )
       .subscribe((status) => {
@@ -746,7 +809,15 @@ function ActiveOrderBar({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const meta = (message.metadata ?? {}) as OrderMetaClient;
+  // 본인 응답 즉시 반영용 local override (server action 결과)
+  const [localMeta, setLocalMeta] = useState<OrderMetaClient | null>(null);
+
+  // props로 들어온 message.metadata가 갱신되면 local override 초기화
+  useEffect(() => {
+    setLocalMeta(null);
+  }, [message.metadata]);
+
+  const meta = (localMeta ?? (message.metadata ?? {})) as OrderMetaClient;
   const responses = meta.responses ?? [];
   const myResponse = responses.find((r) => r.userId === meId);
   const canClose = message.userId === meId || isAdmin;
@@ -768,7 +839,13 @@ function ActiveOrderBar({
     setError(null);
     startTransition(async () => {
       const r = await submitOrderResponseAction(message.id, c);
-      if (!r.ok) setError(r.error ?? t("common.error"));
+      if (!r.ok) {
+        setError(r.error ?? t("common.error"));
+        return;
+      }
+      if (r.metadata) {
+        setLocalMeta(r.metadata as OrderMetaClient);
+      }
     });
   };
 
@@ -777,7 +854,13 @@ function ActiveOrderBar({
     setError(null);
     startTransition(async () => {
       const r = await closeOrderAction(message.id);
-      if (!r.ok) setError(r.error ?? t("common.error"));
+      if (!r.ok) {
+        setError(r.error ?? t("common.error"));
+        return;
+      }
+      if (r.metadata) {
+        setLocalMeta(r.metadata as OrderMetaClient);
+      }
     });
   };
 
