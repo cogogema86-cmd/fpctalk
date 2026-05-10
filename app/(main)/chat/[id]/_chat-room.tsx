@@ -441,19 +441,27 @@ export function ChatRoom({
         <input type="hidden" name="chatId" value={chatId} />
 
         {replyTo && (
-          <div className="mb-2 flex items-stretch gap-2 rounded-md border-l-4 border-blue-500 bg-zinc-50 dark:bg-zinc-900 px-3 py-2">
+          <div className="mb-2 flex items-stretch gap-2 rounded-lg border-l-4 border-zinc-400 dark:border-zinc-500 bg-zinc-200/80 dark:bg-zinc-800 px-3 py-2">
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+              <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                 ↩ {t("chat.replyingTo")}: {replyTo.userName}
               </div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400 truncate mt-0.5">
+              <div
+                className="text-xs text-zinc-700 dark:text-zinc-300 mt-0.5 leading-snug overflow-hidden"
+                style={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  wordBreak: "break-word",
+                }}
+              >
                 {replyTo.contentPreview}
               </div>
             </div>
             <button
               type="button"
               onClick={() => setReplyTo(null)}
-              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xs px-1"
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-sm px-1 self-start"
               aria-label={t("chat.replyCancel")}
             >
               ✕
@@ -856,15 +864,22 @@ function MessageBubble({
           </div>
         )}
         {meta.replyTo && (
-          <div
-            className={`mb-1 rounded-md border-l-4 border-blue-400 px-2 py-1 text-[11px] max-w-full ${
-              isMine
-                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100"
-                : "bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
-            }`}
-          >
-            <div className="font-medium">↩ {meta.replyTo.userName}</div>
-            <div className="truncate">{meta.replyTo.contentPreview}</div>
+          <div className="mb-1 max-w-full rounded-lg border-l-4 border-zinc-400 dark:border-zinc-500 bg-zinc-200/80 dark:bg-zinc-800 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300">
+            <div className="font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5 flex items-center gap-1">
+              <span>↩</span>
+              <span>{meta.replyTo.userName}</span>
+            </div>
+            <div
+              className="leading-snug overflow-hidden"
+              style={{
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                wordBreak: "break-word",
+              }}
+            >
+              {meta.replyTo.contentPreview}
+            </div>
           </div>
         )}
         <div
