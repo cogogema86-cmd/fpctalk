@@ -13,7 +13,11 @@ import { LeaveList } from "./_leave-list";
 import { MonthEventsList } from "./_month-events-list";
 import { getLocale, getT } from "@/lib/i18n/server";
 
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ym?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user: authUser },
@@ -31,9 +35,22 @@ export default async function AttendancePage() {
   const t = await getT();
   const locale = await getLocale();
 
+  // searchParams.ym = "YYYY-MM" 으로 이동. 없으면 현재 달.
+  const sp = await searchParams;
   const now = new Date();
-  const year = now.getFullYear();
-  const monthIdx = now.getMonth();
+  let year = now.getFullYear();
+  let monthIdx = now.getMonth();
+  if (sp.ym) {
+    const m = sp.ym.match(/^(\d{4})-(\d{2})$/);
+    if (m) {
+      const y = parseInt(m[1], 10);
+      const mo = parseInt(m[2], 10) - 1;
+      if (y >= 2000 && y <= 2100 && mo >= 0 && mo <= 11) {
+        year = y;
+        monthIdx = mo;
+      }
+    }
+  }
 
   // 캘린더용 휴가: 관리자=전체, 직원=본인
   const monthlyLeaves = await getMonthlyApprovedLeaves(

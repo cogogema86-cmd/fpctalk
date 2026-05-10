@@ -166,6 +166,19 @@ export async function clearChatRoomAction(
   }
 
   const result = await prisma.message.deleteMany({ where: { chatId } });
+
+  // 시스템 메시지 1개 INSERT → Realtime이 모든 클라이언트에 전파
+  // 클라이언트는 metadata.kind === "ROOM_CLEARED" 감지 시 messages 배열을 이 메시지만 남기고 비움
+  await prisma.message.create({
+    data: {
+      chatId,
+      userId: null,
+      type: "SYSTEM",
+      content: "관리자가 채팅방을 초기화했습니다.",
+      metadata: { kind: "ROOM_CLEARED" } as object,
+    },
+  });
+
   revalidatePath(`/chat/${chatId}`);
   return { ok: true, deletedCount: result.count };
 }

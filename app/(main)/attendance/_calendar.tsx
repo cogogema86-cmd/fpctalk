@@ -7,6 +7,8 @@
  *   - 행사 (Stage B에서 추가)
  */
 
+import { CalendarNav } from "./_calendar-nav";
+
 type LeaveEntry = {
   id: string;
   name: string;
@@ -76,15 +78,10 @@ export function MonthCalendar({
 
   const typeBadge = locale === "en" ? TYPE_BADGE_EN : TYPE_BADGE;
 
-  const monthLabel = locale === "en"
-    ? `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][monthIdx]} ${year}`
-    : `${year}년 ${monthIdx + 1}월`;
-
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="font-semibold">{monthLabel}</h2>
-      </div>
+      <CalendarNav year={year} monthIdx={monthIdx} locale={locale} />
+
 
       <div className="grid grid-cols-7 text-xs text-center border-b border-zinc-200 dark:border-zinc-800">
         {weekdays.map((w, i) => (

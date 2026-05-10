@@ -325,6 +325,24 @@ export function ChatRoom({
             createdAt: string;
             metadata?: unknown;
           };
+          // 채팅방 초기화 시스템 메시지 — 모든 메시지 비우고 이 메시지만 남기기
+          const meta = (row.metadata ?? {}) as { kind?: string };
+          if (meta.kind === "ROOM_CLEARED") {
+            setMessages([
+              {
+                id: row.id,
+                chatId: row.chatId,
+                userId: null,
+                content: row.content,
+                type: row.type,
+                createdAt: row.createdAt,
+                user: null,
+                metadata: row.metadata,
+              },
+            ]);
+            return;
+          }
+
           setMessages((prev) => {
             // 이미 같은 ID 있으면 (= 본인 임시 메시지 = 클라이언트 ID 사용)
             // → in-place 갱신: metadata 첨부 + pending 해제. React key 변경 안 됨.
