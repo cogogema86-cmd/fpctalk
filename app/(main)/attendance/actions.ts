@@ -161,6 +161,109 @@ export async function cancelLeaveAction(
 }
 
 // =====================================================
+// 관리자: 직원 대신 휴가 등록 (직접 못하는 직원 대신)
+// - 자동 APPROVED, decidedNote = "관리자 직접 입력"
+// - ANNUAL/HALF면 annualLeaveUsed 자동 차감 + LeaveAdjustment 감사 로그
+// =====================================================
+export async function addLeaveByAdminAction(input: {
+  userId: string;
+  type: LeaveType;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string;
+  reason?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 등록할 수 있습니다." };
+  }
+
+  if (!VALID_LEAVE_TYPES.includes(input.type)) {
+    return { ok: false, error: "휴가 종류가 올바르지 않습니다." };
+  }
+  const start = new Date(input.startDate);
+  const end =
+    input.type === "HALF_AM" || input.type === "HALF_PM"
+      ? start
+      : new Date(input.endDate || input.startDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return { ok: false, error: "날짜 형식이 잘못되었습니다." };
+  }
+  if (end < start) {
+    return { ok: false, error: "종료일은 시작일 이후여야 합니다." };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { id: true, annualLeaveUsed: true },
+  });
+  if (!target) return { ok: false, error: "직원을 찾을 수 없습니다." };
+
+  const days = calcLeaveDays(input.type, start, end);
+  const isCounted =
+    input.type === "ANNUAL" ||
+    input.type === "HALF_AM" ||
+    input.type === "HALF_PM";
+
+  if (isCounted) {
+    const before = target.annualLeaveUsed;
+    const after = before + days;
+    await prisma.$transaction([
+      prisma.leaveRequest.create({
+        data: {
+          requesterId: input.userId,
+          approverId: me.id,
+          type: input.type,
+          startDate: start,
+          endDate: end,
+          reason: input.reason?.trim() || null,
+          status: "APPROVED",
+          decidedAt: new Date(),
+          decidedNote: "관리자 직접 입력",
+        },
+      }),
+      prisma.user.update({
+        where: { id: input.userId },
+        data: { annualLeaveUsed: after },
+      }),
+      prisma.leaveAdjustment.create({
+        data: {
+          userId: input.userId,
+          adminId: me.id,
+          field: "USED",
+          before,
+          after,
+          reason: `관리자 직접 등록 — ${input.type} ${days}일 (${start.toISOString().slice(0, 10)} ~ ${end.toISOString().slice(0, 10)})`,
+        },
+      }),
+    ]);
+  } else {
+    await prisma.leaveRequest.create({
+      data: {
+        requesterId: input.userId,
+        approverId: me.id,
+        type: input.type,
+        startDate: start,
+        endDate: end,
+        reason: input.reason?.trim() || null,
+        status: "APPROVED",
+        decidedAt: new Date(),
+        decidedNote: "관리자 직접 입력",
+      },
+    });
+  }
+
+  revalidatePath("/admin/attendance");
+  revalidatePath("/attendance");
+  revalidatePath("/admin/leave");
+  return { ok: true };
+}
+
+// =====================================================
 // 관리자: 휴가 삭제 (어떤 상태든)
 // - APPROVED + ANNUAL/HALF_AM/HALF_PM이었다면 annualLeaveUsed 자동 보정
 // - LeaveAdjustment 감사로그 자동 기록

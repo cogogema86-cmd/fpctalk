@@ -60,6 +60,7 @@ export function Sidebar({
     { href: "/admin/users", label: t("nav.adminUsers"), icon: "👥" },
     { href: "/admin/roles", label: t("nav.adminRoles"), icon: "🏷️" },
     { href: "/admin/leave", label: t("nav.adminLeave"), icon: "✅" },
+    { href: "/admin/attendance", label: t("nav.adminAttendance"), icon: "📋" },
   ];
 
   return (
