@@ -1701,7 +1701,9 @@ function MessageBubble({
               </a>
             )}
             <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
-              <span>{(attachment.size / 1024).toFixed(0)}KB</span>
+              {typeof attachment.size === "number" && attachment.size > 0 && (
+                <span>{(attachment.size / 1024).toFixed(0)}KB</span>
+              )}
               {downloadHref && (
                 <a href={downloadHref} className="hover:underline">
                   📥 다운로드
