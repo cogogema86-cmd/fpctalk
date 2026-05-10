@@ -432,12 +432,18 @@ export function ChatRoom({
 
   const handleSubmit = (formData: FormData) => {
     const raw = formData.get("content") as string;
-    const content = raw?.trim();
-    if (!content) return;
+    const content = (raw ?? "").trim();
+    // 본문 또는 첨부 둘 중 하나는 있어야 함
+    if (!content && !pendingAttachment) return;
 
     // 답글 대상 attach
     if (replyTo) {
       formData.set("replyTo", JSON.stringify(replyTo));
+    }
+
+    // 첨부 attach
+    if (pendingAttachment) {
+      formData.set("attachment", JSON.stringify(pendingAttachment));
     }
 
     // 클라이언트가 메시지 ID 미리 생성 → server에 전달 → 임시/실제 ID 동일.
@@ -448,6 +454,18 @@ export function ChatRoom({
         : `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
     formData.set("clientMessageId", clientId);
 
+    // 옵티미스틱 메시지 type/content/metadata 결정
+    const optimisticType: "TEXT" | "IMAGE" | "FILE" = pendingAttachment
+      ? pendingAttachment.kind === "image"
+        ? "IMAGE"
+        : "FILE"
+      : "TEXT";
+    const optimisticContent =
+      content || pendingAttachment?.name || "[첨부]";
+    const optimisticMeta: Record<string, unknown> = {};
+    if (replyTo) optimisticMeta.replyTo = replyTo;
+    if (pendingAttachment) optimisticMeta.attachment = pendingAttachment;
+
     // 낙관적 UI: 임시 메시지 즉시 추가 (Realtime 도착 시 동일 ID로 교체)
     setMessages((prev) => [
       ...prev,
@@ -455,11 +473,11 @@ export function ChatRoom({
         id: clientId,
         chatId,
         userId: meId,
-        content,
-        type: "TEXT",
+        content: optimisticContent,
+        type: optimisticType,
         createdAt: new Date().toISOString(),
         user: { id: meId, username: "", name: meName },
-        metadata: replyTo ? { replyTo } : undefined,
+        metadata: Object.keys(optimisticMeta).length > 0 ? optimisticMeta : undefined,
         pending: true,
       },
     ]);
@@ -467,6 +485,8 @@ export function ChatRoom({
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
     setReplyTo(null);
+    setPendingAttachment(null);
+    setUploadStatus(null);
 
     // Realtime이 광고 차단/방화벽에 막힌 환경(특히 크롬 확장) 대비 fallback:
     // 1.5초 안에 pending이 안 풀렸으면 강제 해제. (서버 저장은 이미 완료됐을 가능성 큼)
@@ -520,6 +540,74 @@ export function ChatRoom({
     userName: string;
     contentPreview: string;
   } | null>(null);
+
+  // 첨부 파일 (이미지/동영상) — 업로드 완료된 attachment metadata
+  type Attach = {
+    kind: "image" | "video" | "file";
+    path: string;
+    mime: string;
+    size: number;
+    name: string;
+    expiresAt: string;
+  };
+  const [pendingAttachment, setPendingAttachment] = useState<Attach | null>(
+    null,
+  );
+  const [uploadStatus, setUploadStatus] = useState<{
+    isUploading: boolean;
+    fileName?: string;
+    error?: string;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (file: File) => {
+    setUploadStatus({ isUploading: false, error: undefined, fileName: file.name });
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      setUploadStatus({
+        isUploading: false,
+        error: "이미지/동영상만 첨부할 수 있습니다.",
+      });
+      return;
+    }
+    const maxBytes = isImage ? 10 * 1024 * 1024 : 30 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      const limitMb = Math.round(maxBytes / 1024 / 1024);
+      setUploadStatus({
+        isUploading: false,
+        error: `파일이 너무 큽니다 (최대 ${limitMb}MB)`,
+      });
+      return;
+    }
+    setUploadStatus({ isUploading: true, fileName: file.name });
+    setPendingAttachment(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch(`/api/chat/${chatId}/upload`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setUploadStatus({
+          isUploading: false,
+          error: err?.error ?? "업로드 실패",
+        });
+        return;
+      }
+      const data = (await res.json()) as { attachment: Attach };
+      setPendingAttachment(data.attachment);
+      setUploadStatus(null);
+    } catch (e) {
+      setUploadStatus({
+        isUploading: false,
+        error: e instanceof Error ? e.message : "업로드 실패",
+      });
+    }
+  };
 
   const startReply = (msg: Message) => {
     setReplyTo({
@@ -709,7 +797,97 @@ export function ChatRoom({
             {state.error}
           </div>
         )}
-        <div className="flex items-end gap-2">
+
+        {/* 첨부 진행/오류 표시 */}
+        {uploadStatus && (
+          <div
+            className={`mb-2 text-xs flex items-center gap-2 ${
+              uploadStatus.error
+                ? "text-red-600 dark:text-red-400"
+                : "text-zinc-500"
+            }`}
+          >
+            {uploadStatus.isUploading
+              ? `📎 ${uploadStatus.fileName} 업로드 중...`
+              : uploadStatus.error}
+            {uploadStatus.error && (
+              <button
+                type="button"
+                onClick={() => setUploadStatus(null)}
+                className="text-zinc-400 hover:text-zinc-600"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 첨부 미리보기 pill (업로드 완료, 전송 대기) */}
+        {pendingAttachment && (
+          <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 text-xs">
+            <span className="text-base leading-none">
+              {pendingAttachment.kind === "image" ? "🖼" : pendingAttachment.kind === "video" ? "🎬" : "📎"}
+            </span>
+            <span className="truncate max-w-[16rem]">{pendingAttachment.name}</span>
+            <span className="text-zinc-400">
+              {(pendingAttachment.size / 1024).toFixed(0)}KB
+            </span>
+            <button
+              type="button"
+              onClick={() => setPendingAttachment(null)}
+              className="text-zinc-400 hover:text-red-500 ml-1"
+              aria-label="첨부 취소"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) {
+              void handleFileSelect(f);
+              // 동일 파일 재선택 가능하도록 reset
+              e.target.value = "";
+            }
+          }}
+        />
+
+        <div
+          className={`flex items-end gap-2 rounded-md transition-colors ${
+            isDragging
+              ? "ring-2 ring-blue-400 bg-blue-50/50 dark:bg-blue-950/30"
+              : ""
+          }`}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes("Files")) {
+              e.preventDefault();
+              setIsDragging(true);
+            }
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) void handleFileSelect(f);
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isPending || uploadStatus?.isUploading}
+            title="이미지/동영상 첨부 (드래그도 가능)"
+            className="shrink-0 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3 py-2 text-lg disabled:opacity-50"
+          >
+            📎
+          </button>
           <textarea
             ref={inputRef}
             name="content"
@@ -726,7 +904,7 @@ export function ChatRoom({
           />
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || uploadStatus?.isUploading}
             className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 shrink-0"
           >
             {isPending ? t("chat.sendingShort") : t("chat.sendShort")}
@@ -1396,7 +1574,22 @@ function MessageBubble({
   const isPending = !!message.pending || isDeleting;
   const meta = (message.metadata ?? {}) as {
     replyTo?: { messageId: string; userName: string; contentPreview: string };
+    attachment?: {
+      kind: "image" | "video" | "file";
+      path: string;
+      mime: string;
+      size: number;
+      name: string;
+      expiresAt: string;
+    };
   };
+  const attachment = meta.attachment;
+  const fileSrc = attachment ? `/api/chat/file/${message.id}` : null;
+  const downloadHref = attachment ? `/api/chat/file/${message.id}?download=1` : null;
+  // 첨부 메시지인데 본문이 파일명과 같으면 본문 텍스트는 숨김 (파일명은 첨부 영역에 자동 표시)
+  const showContentText =
+    !attachment ||
+    (message.content && message.content !== attachment.name);
 
   const handleDelete = () => {
     if (!confirm(t("chat.deleteConfirm"))) return;
@@ -1459,15 +1652,70 @@ function MessageBubble({
             </div>
           </div>
         )}
-        <div
-          className={`rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${
-            isMine
-              ? "bg-blue-500 text-white"
-              : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700"
-          }`}
-        >
-          {renderWithMentions(message.content, isMine)}
-        </div>
+        {/* 첨부 미디어 (이미지·동영상) — 본문 위에 노출 */}
+        {attachment && fileSrc && !isPending && (
+          <div className="mb-1 max-w-full">
+            {attachment.kind === "image" ? (
+              <a
+                href={fileSrc}
+                target="_blank"
+                rel="noreferrer"
+                className="block"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={fileSrc}
+                  alt={attachment.name}
+                  className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                  loading="lazy"
+                />
+              </a>
+            ) : attachment.kind === "video" ? (
+              <video
+                src={fileSrc}
+                controls
+                preload="metadata"
+                className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] bg-black border border-zinc-200 dark:border-zinc-800"
+              >
+                {attachment.name}
+              </video>
+            ) : (
+              <a
+                href={downloadHref ?? "#"}
+                className="inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                📎 {attachment.name}
+              </a>
+            )}
+            <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
+              <span>{(attachment.size / 1024).toFixed(0)}KB</span>
+              {downloadHref && (
+                <a href={downloadHref} className="hover:underline">
+                  📥 다운로드
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+        {attachment && isPending && (
+          <div className="mb-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-3 text-xs text-zinc-500 inline-flex items-center gap-2">
+            <span>{attachment.kind === "image" ? "🖼" : "🎬"}</span>
+            <span>{attachment.name}</span>
+            <span className="text-zinc-400">{t("chat.sending")}</span>
+          </div>
+        )}
+
+        {showContentText && (
+          <div
+            className={`rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap ${
+              isMine
+                ? "bg-blue-500 text-white"
+                : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700"
+            }`}
+          >
+            {renderWithMentions(message.content, isMine)}
+          </div>
+        )}
 
         {translation && (
           <div

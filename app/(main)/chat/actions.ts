@@ -320,8 +320,47 @@ export async function sendMessageAction(
   if (!me) return { error: "로그인이 필요합니다." };
 
   const chatId = formData.get("chatId") as string;
-  const content = formData.get("content") as string;
-  if (!chatId || !content?.trim()) return {};
+  const content = (formData.get("content") as string) ?? "";
+
+  // 첨부 (이미지/동영상) — 업로드 endpoint 응답을 JSON으로 받아 그대로 전달
+  const attachmentRaw = formData.get("attachment") as string | null;
+  let attachment:
+    | {
+        kind: "image" | "video" | "file";
+        path: string;
+        mime: string;
+        size: number;
+        name: string;
+        expiresAt: string;
+      }
+    | undefined;
+  if (attachmentRaw) {
+    try {
+      const parsed = JSON.parse(attachmentRaw);
+      if (
+        parsed &&
+        typeof parsed.path === "string" &&
+        typeof parsed.kind === "string" &&
+        typeof parsed.mime === "string" &&
+        typeof parsed.expiresAt === "string"
+      ) {
+        attachment = {
+          kind: parsed.kind,
+          path: parsed.path,
+          mime: parsed.mime,
+          size: typeof parsed.size === "number" ? parsed.size : 0,
+          name: typeof parsed.name === "string" ? parsed.name : "attachment",
+          expiresAt: parsed.expiresAt,
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 본문 또는 첨부 둘 중 하나는 있어야 함
+  if (!chatId) return {};
+  if (!content.trim() && !attachment) return {};
 
   // 답글 메타 (옵션)
   const replyToRaw = formData.get("replyTo") as string | null;
@@ -350,6 +389,7 @@ export async function sendMessageAction(
     const created = await sendMessage(chatId, me.id, content, {
       replyTo,
       clientMessageId,
+      attachment,
     });
     await markAsRead(chatId, me.id);
 
