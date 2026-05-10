@@ -7,6 +7,7 @@ import {
   deleteLeaveByAdminAction,
 } from "@/app/(main)/attendance/actions";
 import type { LeaveType } from "@prisma/client";
+import { BulkAddModal } from "./_bulk-add-modal";
 
 type Cell = {
   leaveId: string;
@@ -72,6 +73,7 @@ export function AttendanceGrid({
   } | null>(null);
   const [pickerType, setPickerType] = useState<LeaveType>("ANNUAL");
   const [error, setError] = useState<string | null>(null);
+  const [showBulk, setShowBulk] = useState(false);
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
@@ -148,6 +150,16 @@ export function AttendanceGrid({
 
   return (
     <>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setShowBulk(true)}
+          className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-1.5 shadow-sm"
+        >
+          ＋ 일괄 등록
+        </button>
+      </div>
+
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-x-auto">
         <table className="text-xs border-collapse w-full">
           <thead className="bg-zinc-50 dark:bg-zinc-900 sticky top-0 z-10">
@@ -273,7 +285,21 @@ export function AttendanceGrid({
         ))}
       </div>
 
-      {/* 휴가 등록 modal */}
+      {/* 일괄 등록 modal */}
+      {showBulk && (
+        <BulkAddModal
+          users={users.map((u) => ({
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            roleLabel: u.roleLabel,
+          }))}
+          defaultStartDate={`${year}-${String(monthIdx + 1).padStart(2, "0")}-01`}
+          onClose={() => setShowBulk(false)}
+        />
+      )}
+
+      {/* 단일 셀 휴가 등록 modal */}
       {picker && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"

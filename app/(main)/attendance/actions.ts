@@ -264,6 +264,140 @@ export async function addLeaveByAdminAction(input: {
 }
 
 // =====================================================
+// 관리자: 다수 직원 × 기간 일괄 휴가 등록
+// 각 직원별로 LeaveRequest 1건씩 (start~end). 부분 성공 가능.
+// 차감 휴가면 트랜잭션으로 User/LeaveAdjustment도 같이 처리.
+// =====================================================
+export async function addLeavesBulkByAdminAction(input: {
+  userIds: string[];
+  type: LeaveType;
+  startDate: string;
+  endDate?: string;
+  reason?: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  created?: number;
+  failed?: Array<{ userId: string; reason: string }>;
+}> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 등록할 수 있습니다." };
+  }
+
+  if (!Array.isArray(input.userIds) || input.userIds.length === 0) {
+    return { ok: false, error: "직원을 1명 이상 선택해주세요." };
+  }
+  if (input.userIds.length > 100) {
+    return { ok: false, error: "한 번에 최대 100명까지 등록할 수 있습니다." };
+  }
+  if (!VALID_LEAVE_TYPES.includes(input.type)) {
+    return { ok: false, error: "휴가 종류가 올바르지 않습니다." };
+  }
+  const start = new Date(input.startDate);
+  const end =
+    input.type === "HALF_AM" || input.type === "HALF_PM"
+      ? start
+      : new Date(input.endDate || input.startDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return { ok: false, error: "날짜 형식이 잘못되었습니다." };
+  }
+  if (end < start) {
+    return { ok: false, error: "종료일은 시작일 이후여야 합니다." };
+  }
+
+  const days = calcLeaveDays(input.type, start, end);
+  const isCounted =
+    input.type === "ANNUAL" ||
+    input.type === "HALF_AM" ||
+    input.type === "HALF_PM";
+
+  const reason = input.reason?.trim() || null;
+  const failed: Array<{ userId: string; reason: string }> = [];
+  let created = 0;
+
+  // 직원 정보 한 번에
+  const targets = await prisma.user.findMany({
+    where: { id: { in: input.userIds } },
+    select: { id: true, name: true, annualLeaveUsed: true },
+  });
+  const targetMap = new Map(targets.map((u) => [u.id, u]));
+
+  for (const userId of input.userIds) {
+    const target = targetMap.get(userId);
+    if (!target) {
+      failed.push({ userId, reason: "직원을 찾을 수 없음" });
+      continue;
+    }
+    try {
+      if (isCounted) {
+        const before = target.annualLeaveUsed;
+        const after = before + days;
+        await prisma.$transaction([
+          prisma.leaveRequest.create({
+            data: {
+              requesterId: userId,
+              approverId: me.id,
+              type: input.type,
+              startDate: start,
+              endDate: end,
+              reason,
+              status: "APPROVED",
+              decidedAt: new Date(),
+              decidedNote: "관리자 일괄 등록",
+            },
+          }),
+          prisma.user.update({
+            where: { id: userId },
+            data: { annualLeaveUsed: after },
+          }),
+          prisma.leaveAdjustment.create({
+            data: {
+              userId,
+              adminId: me.id,
+              field: "USED",
+              before,
+              after,
+              reason: `관리자 일괄 등록 — ${input.type} ${days}일 (${start.toISOString().slice(0, 10)} ~ ${end.toISOString().slice(0, 10)})`,
+            },
+          }),
+        ]);
+      } else {
+        await prisma.leaveRequest.create({
+          data: {
+            requesterId: userId,
+            approverId: me.id,
+            type: input.type,
+            startDate: start,
+            endDate: end,
+            reason,
+            status: "APPROVED",
+            decidedAt: new Date(),
+            decidedNote: "관리자 일괄 등록",
+          },
+        });
+      }
+      created += 1;
+    } catch (e) {
+      failed.push({
+        userId,
+        reason: e instanceof Error ? e.message : "알 수 없는 오류",
+      });
+    }
+  }
+
+  revalidatePath("/admin/attendance");
+  revalidatePath("/attendance");
+  revalidatePath("/admin/leave");
+  return { ok: true, created, failed };
+}
+
+// =====================================================
 // 관리자: 휴가 삭제 (어떤 상태든)
 // - APPROVED + ANNUAL/HALF_AM/HALF_PM이었다면 annualLeaveUsed 자동 보정
 // - LeaveAdjustment 감사로그 자동 기록
