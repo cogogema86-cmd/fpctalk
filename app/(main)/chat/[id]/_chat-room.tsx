@@ -165,6 +165,7 @@ export function ChatRoom({
   }, [messages.length]);
 
   // ORDER 메시지 metadata 폴링 (Realtime UPDATE가 metadata를 못 보내는 경우 백업)
+  // 구조적으로 동일한 데이터면 reference 유지 — 번역 등 자식 state 보존.
   useEffect(() => {
     let stopped = false;
     const tick = async () => {
@@ -175,6 +176,13 @@ export function ChatRoom({
           prev.map((m) => {
             const order = orders.find((o) => o.id === m.id);
             if (!order) return m;
+            // 구조적 동일성 — 같으면 reference 유지(React가 sub-tree 재렌더 안 하도록).
+            const sameMeta =
+              JSON.stringify(m.metadata ?? null) ===
+              JSON.stringify(order.metadata ?? null);
+            const sameContent = m.content === order.content;
+            const sameType = m.type === order.type;
+            if (sameMeta && sameContent && sameType) return m;
             return {
               ...m,
               metadata: order.metadata,
@@ -751,19 +759,18 @@ function AiMessageBubble({ message }: { message: Message }) {
           >
             English
           </button>
-          {translation && (
-            <button
-              type="button"
-              onClick={() => {
-                setTranslation(null);
-                setTransError(null);
-              }}
-              title={t("chat.translationClose")}
-              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setTranslation(null);
+              setTransError(null);
+            }}
+            disabled={!translation}
+            title={t("chat.translationClose")}
+            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ✕
+          </button>
           {isTransPending && (
             <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
@@ -829,11 +836,13 @@ function ActiveOrderBar({
   } | null>(null);
   const [transPending, startTransPending] = useTransition();
 
-  // props로 들어온 message.metadata가 갱신되면 local override 초기화 + 번역도 stale 방지
+  // props로 들어온 metadata가 "구조적으로" 갱신되면 local override 초기화 + 번역 stale 방지.
+  // 폴링이 같은 내용을 반환할 때 reference만 바뀌어 번역이 reset되는 회귀 방지.
+  const metaSig = JSON.stringify(message.metadata ?? null);
   useEffect(() => {
     setLocalMeta(null);
     setTranslation(null);
-  }, [message.metadata]);
+  }, [metaSig]);
 
   const meta = (localMeta ?? (message.metadata ?? {})) as OrderMetaClient;
   const responses = meta.responses ?? [];
@@ -963,7 +972,7 @@ function ActiveOrderBar({
         </button>
       </div>
 
-      {/* 번역 토글 */}
+      {/* 번역 토글 — 한글 / English / ✕ 모두 항상 표시 */}
       <div className="flex items-center gap-2 mb-2 text-[11px]">
         <span className="text-zinc-500">🌐</span>
         <button
@@ -982,16 +991,15 @@ function ActiveOrderBar({
         >
           English
         </button>
-        {translation && (
-          <button
-            type="button"
-            onClick={() => setTranslation(null)}
-            title={t("chat.translationClose")}
-            className="text-zinc-600 dark:text-zinc-400 hover:underline"
-          >
-            ✕
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setTranslation(null)}
+          disabled={!translation}
+          title={t("chat.translationClose")}
+          className="text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          ✕
+        </button>
         {transPending && (
           <span className="text-zinc-500">{t("chat.translatingShort")}</span>
         )}
@@ -1102,16 +1110,15 @@ function ClosedOrderBubble({ message }: { message: Message }) {
           >
             English
           </button>
-          {translation && (
-            <button
-              type="button"
-              onClick={() => setTranslation(null)}
-              title={t("chat.translationClose")}
-              className="text-zinc-500 hover:underline"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setTranslation(null)}
+            disabled={!translation}
+            title={t("chat.translationClose")}
+            className="text-zinc-500 hover:underline disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ✕
+          </button>
           {transPending && (
             <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
@@ -1253,16 +1260,15 @@ function EventProposalBubble({
           >
             English
           </button>
-          {translation && (
-            <button
-              type="button"
-              onClick={() => setTranslation(null)}
-              title={t("chat.translationClose")}
-              className="text-amber-700 dark:text-amber-300 hover:underline"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setTranslation(null)}
+            disabled={!translation}
+            title={t("chat.translationClose")}
+            className="text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            ✕
+          </button>
           {transPending && (
             <span className="text-zinc-500">{t("chat.translatingShort")}</span>
           )}
@@ -1455,19 +1461,18 @@ function MessageBubble({
               >
                 English
               </button>
-              {translation && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTranslation(null);
-                    setTransError(null);
-                  }}
-                  title={t("chat.translationClose")}
-                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline"
-                >
-                  ✕
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setTranslation(null);
+                  setTransError(null);
+                }}
+                disabled={!translation}
+                title={t("chat.translationClose")}
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:underline disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ✕
+              </button>
               {isTransPending && (
                 <span className="text-zinc-500">{t("chat.translatingShort")}</span>
               )}
