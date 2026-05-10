@@ -363,28 +363,49 @@ export async function getChatMessages(chatId: string, userId: string) {
 }
 
 /**
- * 메시지마다 "안 읽은 인원수" 계산해서 반환.
- * - DM: 보낸 사람 외 1명, 그 사람 lastReadAt이 메시지 createdAt 이후면 0, 아니면 1
- * - 그룹: 멤버 - 1(발신자) - 읽은 사람 수
- * - 본인 발송 메시지에만 의미 있음 (받은 메시지는 0으로 클라이언트에서 무시)
+ * 메시지마다 "안 읽은 인원수" 계산해서 반환 — 카카오톡 스타일.
+ *
+ * 잠재 독자 수 결정:
+ * - DM / 명시적 그룹: ChatMember 등록된 사람 수
+ * - 레벨 자동 공개 채팅: 레벨 충족하는 직원 **전체** (들어와 본 적 없는 사람도 포함)
+ *   → 안 들어온 직원 = "안 읽은 사람"으로 카운트, 들어와서 markAsRead 하면 1씩 감소
+ *
+ * 읽은 사람 수 = ChatMember 중 lastReadAt이 메시지 createdAt 이후인 사람 (발신자 제외)
+ * unread = max(0, 잠재독자 - 1(발신자) - 읽은사람수)
+ *
+ * 본인 발송 메시지에만 의미 있음 (받은 메시지는 0으로 클라이언트에서 무시)
  */
 export async function computeUnreadCounts(
   chatId: string,
   messages: Array<{ id: string; userId: string | null; createdAt: Date }>,
 ): Promise<Record<string, number>> {
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { levelRequired: true },
+  });
   const members = await prisma.chatMember.findMany({
     where: { chatId },
     select: { userId: true, lastReadAt: true },
   });
-  const memberCount = members.length;
-  const result: Record<string, number> = {};
 
+  // 잠재 독자 수
+  let totalEligible: number;
+  if (chat?.levelRequired !== null && chat?.levelRequired !== undefined) {
+    // 레벨 채팅 — 레벨 충족 직원 전체 (User.level은 입사 시 role.defaultLevel 복사값)
+    totalEligible = await prisma.user.count({
+      where: { level: { gte: chat.levelRequired } },
+    });
+  } else {
+    totalEligible = members.length;
+  }
+
+  const result: Record<string, number> = {};
   for (const m of messages) {
-    if (!m.userId || memberCount <= 1) {
+    if (!m.userId || totalEligible <= 1) {
       result[m.id] = 0;
       continue;
     }
-    const others = memberCount - 1; // 발신자 제외
+    const others = totalEligible - 1; // 발신자 제외
     let readers = 0;
     for (const mb of members) {
       if (mb.userId === m.userId) continue;
