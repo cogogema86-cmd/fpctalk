@@ -2,18 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  addLeaveByAdminAction,
-  deleteLeaveByAdminAction,
-} from "@/app/(main)/attendance/actions";
+import { addLeaveByAdminAction } from "@/app/(main)/attendance/actions";
 import type { LeaveType } from "@prisma/client";
 import { BulkAddModal } from "./_bulk-add-modal";
+import { CellDetailModal } from "./_cell-detail-modal";
 
 type Cell = {
   leaveId: string;
   type: string;
   isFullDay: boolean;
   days: number;
+  reason: string | null;
+  startDate: string;
+  endDate: string;
 };
 
 type UserRow = {
@@ -74,6 +75,15 @@ export function AttendanceGrid({
   const [pickerType, setPickerType] = useState<LeaveType>("ANNUAL");
   const [error, setError] = useState<string | null>(null);
   const [showBulk, setShowBulk] = useState(false);
+  const [detail, setDetail] = useState<{
+    leaveId: string;
+    userName: string;
+    type: string;
+    startDate: string;
+    endDate: string;
+    days: number;
+    reason: string | null;
+  } | null>(null);
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
@@ -105,21 +115,15 @@ export function AttendanceGrid({
   ) => {
     setError(null);
     if (cell) {
-      // 기존 휴가 삭제
-      if (
-        !confirm(
-          `${userName} ${monthIdx + 1}/${day} (${TYPE_BADGE[cell.type] ?? cell.type}) 휴가를 삭제하시겠습니까?`,
-        )
-      ) {
-        return;
-      }
-      startTransition(async () => {
-        const r = await deleteLeaveByAdminAction(cell.leaveId);
-        if (!r.ok) {
-          alert(r.error ?? "삭제 실패");
-          return;
-        }
-        router.refresh();
+      // 채워진 셀 → 상세/메모 modal (사유 작성 + 삭제 가능)
+      setDetail({
+        leaveId: cell.leaveId,
+        userName,
+        type: cell.type,
+        startDate: cell.startDate,
+        endDate: cell.endDate,
+        days: cell.days,
+        reason: cell.reason,
       });
     } else {
       // 빈 셀 → 휴가 등록 picker
@@ -239,7 +243,9 @@ export function AttendanceGrid({
                           }`}
                           title={
                             cell
-                              ? `${TYPE_BADGE[cell.type] ?? cell.type} (클릭하여 삭제)`
+                              ? `${TYPE_BADGE[cell.type] ?? cell.type}${
+                                  cell.reason ? ` — ${cell.reason}` : ""
+                                } (클릭하여 메모/삭제)`
                               : "클릭하여 휴가 등록"
                           }
                         >
@@ -284,6 +290,14 @@ export function AttendanceGrid({
           </span>
         ))}
       </div>
+
+      {/* 셀 상세/메모 modal (채워진 셀 클릭 시) */}
+      {detail && (
+        <CellDetailModal
+          cell={detail}
+          onClose={() => setDetail(null)}
+        />
+      )}
 
       {/* 일괄 등록 modal */}
       {showBulk && (

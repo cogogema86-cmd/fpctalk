@@ -398,6 +398,42 @@ export async function addLeavesBulkByAdminAction(input: {
 }
 
 // =====================================================
+// 관리자: 휴가 메모(reason) 갱신
+// 차감/기간/종류 변경은 안 함 (변경 필요하면 삭제 후 새로 등록)
+// =====================================================
+export async function updateLeaveNoteByAdminAction(
+  leaveId: string,
+  reason: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 수정할 수 있습니다." };
+  }
+  const trimmed = reason.trim();
+  if (trimmed.length > 2000) {
+    return { ok: false, error: "메모는 2000자 이하로 입력해주세요." };
+  }
+  const target = await prisma.leaveRequest.findUnique({
+    where: { id: leaveId },
+    select: { id: true },
+  });
+  if (!target) return { ok: false, error: "휴가를 찾을 수 없습니다." };
+
+  await prisma.leaveRequest.update({
+    where: { id: leaveId },
+    data: { reason: trimmed || null },
+  });
+  revalidatePath("/admin/attendance");
+  revalidatePath("/attendance");
+  return { ok: true };
+}
+
+// =====================================================
 // 관리자: 휴가 삭제 (어떤 상태든)
 // - APPROVED + ANNUAL/HALF_AM/HALF_PM이었다면 annualLeaveUsed 자동 보정
 // - LeaveAdjustment 감사로그 자동 기록

@@ -79,6 +79,9 @@ export default async function AdminAttendancePage({
     type: string; // ANNUAL/HALF_AM/...
     isFullDay: boolean;
     days: number;
+    reason: string | null;
+    startDate: string; // ISO
+    endDate: string;
   };
   const matrix: Record<string, Record<number, Cell>> = {};
   for (const lv of monthLeaves) {
@@ -99,6 +102,9 @@ export default async function AdminAttendancePage({
         type: lv.type,
         isFullDay: lv.type !== "HALF_AM" && lv.type !== "HALF_PM",
         days,
+        reason: lv.reason ?? null,
+        startDate: lv.startDate.toISOString(),
+        endDate: lv.endDate.toISOString(),
       };
     }
   }
