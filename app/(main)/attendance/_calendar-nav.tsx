@@ -60,19 +60,25 @@ export function CalendarNav({
 
       <div className="flex items-center gap-2 flex-wrap justify-center">
         <h2 className="font-semibold text-base">{monthLabel}</h2>
-        {/* native month picker — 클릭 시 달력에서 년·월 직접 선택 */}
-        <input
-          type="month"
-          value={ym}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v && /^\d{4}-\d{2}$/.test(v)) {
-              router.push(`?ym=${v}`);
-            }
-          }}
-          aria-label="Select year and month"
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-xs"
-        />
+        {/* 달력 이모지 — 클릭 시 native month picker. input은 투명 오버레이로 숨김 */}
+        <label
+          className="relative inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer text-base leading-none"
+          title={locale === "en" ? "Pick year & month" : "년·월 선택"}
+          aria-label={locale === "en" ? "Pick year and month" : "년·월 선택"}
+        >
+          <span aria-hidden="true">📅</span>
+          <input
+            type="month"
+            value={ym}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v && /^\d{4}-\d{2}$/.test(v)) {
+                router.push(`?ym=${v}`);
+              }
+            }}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </label>
         {!isCurrent && (
           <button
             type="button"
