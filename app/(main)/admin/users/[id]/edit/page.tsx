@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { EditStaffForm } from "./_form";
+import { LeaveAdjustPanel } from "./_leave-adjust-panel";
 
 export default async function EditStaffPage({
   params,
@@ -39,8 +40,28 @@ export default async function EditStaffPage({
     select: { id: true, label: true, isAdmin: true },
   });
 
+  // 최근 조정 이력 (감사 로그)
+  const adjustments = await prisma.leaveAdjustment.findMany({
+    where: { userId: target.id },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    include: { admin: { select: { name: true, username: true } } },
+  });
+
+  // 잔여 연차 (예약된 PENDING 휴가는 제외 — 표시용)
+  const reserved = await prisma.leaveRequest.findMany({
+    where: { requesterId: target.id, status: "PENDING" },
+    select: { type: true, startDate: true, endDate: true },
+  });
+  const reservedDays = reserved.reduce((sum, r) => {
+    if (r.type === "HALF_AM" || r.type === "HALF_PM") return sum + 0.5;
+    const ms =
+      new Date(r.endDate).getTime() - new Date(r.startDate).getTime();
+    return sum + Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+  }, 0);
+
   return (
-    <div className="max-w-xl mx-auto p-6 space-y-4">
+    <div className="max-w-xl mx-auto p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
           직원 편집
@@ -56,9 +77,28 @@ export default async function EditStaffPage({
           name: target.name,
           roleId: target.roleId,
           title: target.title,
+          joinDate: target.joinDate
+            ? target.joinDate.toISOString().slice(0, 10)
+            : "",
         }}
         roles={roles}
         isSelf={target.id === me.id}
+      />
+
+      <LeaveAdjustPanel
+        userId={target.id}
+        annualLeaveTotal={target.annualLeaveTotal}
+        annualLeaveUsed={target.annualLeaveUsed}
+        reservedDays={reservedDays}
+        adjustments={adjustments.map((a) => ({
+          id: a.id,
+          field: a.field,
+          before: a.before,
+          after: a.after,
+          reason: a.reason,
+          createdAt: a.createdAt.toISOString(),
+          adminName: a.admin.name,
+        }))}
       />
     </div>
   );

@@ -132,6 +132,34 @@ function FormInstance({
         />
       </Field>
 
+      <Field label="입사일자 (선택)">
+        <input
+          name="joinDate"
+          type="date"
+          disabled={isPending}
+          className="input"
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          연차 발생 기준일. 비우면 나중에 편집 페이지에서 추가할 수 있습니다.
+        </p>
+      </Field>
+
+      <Field label="연간 연차 한도 (선택, 기본 15일)">
+        <input
+          name="annualLeaveTotal"
+          type="number"
+          step="0.5"
+          min="0"
+          max="365"
+          disabled={isPending}
+          placeholder="예: 15"
+          className="input"
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          반차 단위(0.5일)까지 입력 가능. 잔여 보정은 등록 후 편집 페이지에서.
+        </p>
+      </Field>
+
       <div className="space-y-2">
         <label className="flex items-center gap-2 text-sm">
           <input

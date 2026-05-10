@@ -19,6 +19,7 @@ type UserData = {
   name: string;
   roleId: string;
   title: string | null;
+  joinDate: string; // yyyy-mm-dd or ""
 };
 
 export function EditStaffForm({
@@ -103,6 +104,19 @@ export function EditStaffForm({
           placeholder="예: 수석강사, 교무부장"
           className="input"
         />
+      </Field>
+
+      <Field label="입사일자">
+        <input
+          name="joinDate"
+          type="date"
+          disabled={isPending}
+          defaultValue={user.joinDate}
+          className="input"
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          연차 발생 기준일. 비워서 저장하면 미설정으로 변경됩니다.
+        </p>
       </Field>
 
       {state.error && (

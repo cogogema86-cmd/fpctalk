@@ -59,26 +59,59 @@ model User {
   // 직책/별명 (선택, 예: "수석강사")
   title String?
 
-  annualLeaveTotal Int @default(15)
-  annualLeaveUsed  Int @default(0)
+  // 입사일자 (계정 등록 시 입력) — 연차 발생 기준
+  joinDate DateTime?
+
+  // 연차 (반차 0.5일 단위 → Float)
+  annualLeaveTotal Float @default(15)
+  annualLeaveUsed  Float @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // 관계
-  messages          Message[]
-  chatMembers       ChatMember[]
-  attendances       Attendance[]
-  leaveRequests     LeaveRequest[]     @relation("LeaveRequester")
-  leaveApprovals    LeaveRequest[]     @relation("LeaveApprover")
-  signRequests      SignatureRequest[] @relation("SignRequester")
-  signs             SignatureRequest[] @relation("SignSigner")
-  templates         DocumentTemplate[] @relation("TemplateUploader")
-  pushSubscriptions PushSubscription[]
-  events            Event[]              @relation("EventCreator")
-  eventAcks         EventAcknowledgement[]
+  messages           Message[]
+  chatMembers        ChatMember[]
+  attendances        Attendance[]
+  leaveRequests      LeaveRequest[]     @relation("LeaveRequester")
+  leaveApprovals     LeaveRequest[]     @relation("LeaveApprover")
+  signRequests       SignatureRequest[] @relation("SignRequester")
+  signs              SignatureRequest[] @relation("SignSigner")
+  templates          DocumentTemplate[] @relation("TemplateUploader")
+  pushSubscriptions  PushSubscription[]
+  events             Event[]              @relation("EventCreator")
+  eventAcks          EventAcknowledgement[]
+  leaveAdjustments   LeaveAdjustment[]    @relation("LeaveAdjustmentTarget")
+  leaveAdjustmentsBy LeaveAdjustment[]    @relation("LeaveAdjustmentAdmin")
 
   @@index([roleId])
+}
+
+// =====================================================
+// 연차 잔여 조정 감사 로그
+// 관리자가 직원의 annualLeaveTotal / annualLeaveUsed 를 수동 변경할 때마다 기록.
+// 운영 중 사이트 개설로 인한 보정, 이월, 정산, 육아휴직 등.
+// =====================================================
+model LeaveAdjustment {
+  id        String   @id @default(cuid())
+  userId    String   // 대상 직원
+  adminId   String   // 변경한 관리자
+  field     LeaveAdjustmentField // TOTAL or USED
+  before    Float
+  after     Float
+  reason    String   @db.Text
+  createdAt DateTime @default(now())
+
+  user  User @relation("LeaveAdjustmentTarget", fields: [userId], references: [id], onDelete: Cascade)
+  admin User @relation("LeaveAdjustmentAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([adminId])
+}
+
+enum LeaveAdjustmentField {
+  TOTAL // annualLeaveTotal 변경 (한도)
+  USED  // annualLeaveUsed 변경 (사용량)
 }
 
 // =====================================================

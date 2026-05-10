@@ -55,6 +55,8 @@ export async function createStaffAction(
   const roleId = formData.get("roleId") as string;
   const title = ((formData.get("title") as string) ?? "").trim() || null;
   const passwordInput = (formData.get("password") as string)?.trim();
+  const joinDateRaw = ((formData.get("joinDate") as string) ?? "").trim();
+  const annualLeaveTotalRaw = ((formData.get("annualLeaveTotal") as string) ?? "").trim();
 
   if (!isValidUsername(username)) {
     return { error: "아이디는 영문/숫자/_/- 3~20자여야 합니다." };
@@ -63,6 +65,24 @@ export async function createStaffAction(
   if (!roleId) return { error: "역할을 선택해주세요." };
   if (passwordInput && passwordInput.length < 6) {
     return { error: "비밀번호는 최소 6자 이상이어야 합니다." };
+  }
+
+  // 입사일 파싱 — yyyy-mm-dd
+  let joinDate: Date | null = null;
+  if (joinDateRaw) {
+    const d = new Date(joinDateRaw);
+    if (isNaN(d.getTime())) return { error: "입사일자가 올바르지 않습니다." };
+    joinDate = d;
+  }
+
+  // 연차 한도 파싱
+  let annualLeaveTotal: number | undefined;
+  if (annualLeaveTotalRaw) {
+    const n = Number(annualLeaveTotalRaw);
+    if (!Number.isFinite(n) || n < 0 || n > 365) {
+      return { error: "연차 한도는 0 이상 365 이하의 숫자여야 합니다." };
+    }
+    annualLeaveTotal = n;
   }
 
   const role = await prisma.staffRole.findUnique({ where: { id: roleId } });
@@ -99,6 +119,8 @@ export async function createStaffAction(
         roleId: role.id,
         level: role.defaultLevel,
         title,
+        joinDate,
+        ...(annualLeaveTotal !== undefined ? { annualLeaveTotal } : {}),
       },
     });
   } catch (e) {
@@ -133,12 +155,21 @@ export async function updateStaffAction(
   const name = (formData.get("name") as string)?.trim();
   const roleId = formData.get("roleId") as string;
   const title = ((formData.get("title") as string) ?? "").trim() || null;
+  const joinDateRaw = ((formData.get("joinDate") as string) ?? "").trim();
 
   if (!id || !username || !name || !roleId) {
     return { error: "필수 정보가 누락되었습니다." };
   }
   if (!isValidUsername(username)) {
     return { error: "아이디는 영문/숫자/_/- 3~20자여야 합니다." };
+  }
+
+  // 입사일 파싱 (빈 값이면 null로 클리어)
+  let joinDate: Date | null = null;
+  if (joinDateRaw) {
+    const d = new Date(joinDateRaw);
+    if (isNaN(d.getTime())) return { error: "입사일자가 올바르지 않습니다." };
+    joinDate = d;
   }
 
   const target = await prisma.user.findUnique({
@@ -195,6 +226,7 @@ export async function updateStaffAction(
       name,
       roleId,
       title,
+      joinDate, // null 또는 Date — 빈 문자열 입력 시 null로 클리어
       // level은 역할 바뀌어도 자동으로 안 바꿈 (수동 조정 가능하게)
     },
   });
@@ -202,6 +234,74 @@ export async function updateStaffAction(
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${id}/edit`);
   return { success: true };
+}
+
+// =====================================================
+// 연차 잔여 조정 (관리자 직접 변경)
+// - field=TOTAL: annualLeaveTotal 변경 (한도)
+// - field=USED:  annualLeaveUsed 변경 (사용량)
+// - LeaveAdjustment 감사로그 자동 기록
+// =====================================================
+export type AdjustLeaveResult = {
+  ok: boolean;
+  error?: string;
+};
+
+export async function adjustLeaveAction(
+  userId: string,
+  field: "TOTAL" | "USED",
+  newValue: number,
+  reason: string,
+): Promise<AdjustLeaveResult> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const me = guard.me;
+
+  if (!Number.isFinite(newValue) || newValue < 0 || newValue > 365) {
+    return { ok: false, error: "값은 0 이상 365 이하의 숫자여야 합니다." };
+  }
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) {
+    return { ok: false, error: "변경 사유를 입력해주세요." };
+  }
+  if (trimmedReason.length > 500) {
+    return { ok: false, error: "변경 사유는 500자 이하로 입력해주세요." };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, annualLeaveTotal: true, annualLeaveUsed: true },
+  });
+  if (!target) return { ok: false, error: "직원을 찾을 수 없습니다." };
+
+  const before = field === "TOTAL" ? target.annualLeaveTotal : target.annualLeaveUsed;
+  if (before === newValue) {
+    return { ok: false, error: "변경된 값이 없습니다." };
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data:
+        field === "TOTAL"
+          ? { annualLeaveTotal: newValue }
+          : { annualLeaveUsed: newValue },
+    }),
+    prisma.leaveAdjustment.create({
+      data: {
+        userId,
+        adminId: me.id,
+        field,
+        before,
+        after: newValue,
+        reason: trimmedReason,
+      },
+    }),
+  ]);
+
+  revalidatePath(`/admin/users/${userId}/edit`);
+  revalidatePath("/admin/users");
+  return { ok: true };
 }
 
 // =====================================================
