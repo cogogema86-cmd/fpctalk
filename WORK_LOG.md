@@ -4,6 +4,21 @@
 
 ---
 
+## ✅ 2026-05-10 후속 (채팅 안정화 마지막)
+
+- **`d345718`** fix(chat): 번역 원복 회귀 + ✕ 항상 표시
+  - 5초 ORDER 폴링이 동일 metadata도 새 reference로 교체 → ActiveOrderBar `useEffect([message.metadata])` fire → `setTranslation(null)`
+  - 폴링: JSON.stringify 구조적 동일성 검사 → 같으면 m reference 유지
+  - useEffect dep을 metaSig(JSON.stringify)로 변경 — 이중 안전장치
+  - 5개 버블(MessageBubble / AiMessageBubble / ActiveOrderBar / ClosedOrderBubble / EventProposalBubble)에서 ✕ 항상 렌더 + `disabled={!translation}` + opacity-30
+- **`ee47689`** chore(ai): default 모델을 `gemini-3.1-flash-lite`로 변경 (무료 일일 1,000 RPD)
+  - **사용자 액션**: Vercel 환경변수 `AI_MODEL_FAST` / `AI_MODEL_PRO`도 `gemini-3.1-flash-lite`로 변경 후 Redeploy
+- **`b558b4e`** fix(ai): quota 초과 등 AI 에러를 친절한 메시지로 변환 (`friendlyAiError`)
+
+→ **번역·ORDER·실시간 동기화·할루시네이션 가드까지 모두 사용자 검증 완료 (2026-05-10)**
+
+---
+
 ## 🚀 이번 세션에서 끝낸 큰 줄기
 
 ### 1. 디지털 사인 보강
