@@ -140,8 +140,8 @@ async function callGemini(
 
   const modelName =
     mode === "pro"
-      ? (process.env.AI_MODEL_PRO ?? "gemini-2.5-pro")
-      : (process.env.AI_MODEL_FAST ?? "gemini-2.5-flash");
+      ? (process.env.AI_MODEL_PRO ?? "gemini-3.1-flash-lite")
+      : (process.env.AI_MODEL_FAST ?? "gemini-3.1-flash-lite");
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
