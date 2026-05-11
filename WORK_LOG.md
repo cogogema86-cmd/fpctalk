@@ -6,6 +6,31 @@
 
 ---
 
+## ✅ 2026-05-11 (UX 묶음: 모바일 nav + PWA 아이콘 + 이미지 압축 + 매트릭스 검색 + i18n 폴리시)
+
+| 항목 | 내용 |
+|---|---|
+| 모바일 하단 nav 축소 | `mobile-nav.tsx` — `min-w-[6.75rem] py-3 px-4` → `flex-1 min-w-[3.4rem] py-2 px-1` + 아이콘/라벨 폰트 축소. 한 화면에 6개 메뉴(채팅·문서·캘린더·홈·설치·AI) 모두 보임 |
+| PWA 폴백 아이콘 재디자인 | `scripts/generate-icons.ts` brandSvg를 녹색 그라데이션 + 흰 말풍선 + 진녹색 "FPC" + 골드 타이핑 점 3개로. source.png 없을 때 폴백 |
+| 아이콘 8종 재생성 | icon-192/-512/-maskable-512, apple-touch-icon 5종, favicon. `npx tsx scripts/generate-icons.ts` 1회 실행 |
+| 채팅 이미지 자동 압축 | `/api/chat/[chatId]/upload`에 sharp 압축 추가 — JPEG/PNG/WebP/HEIC/AVIF 등 → 긴 변 1920px, JPEG 85% (mozjpeg). GIF/SVG는 그대로. 압축 결과가 원본보다 크면 원본 유지 (이미 작은 이미지). EXIF rotate 자동 적용. R2 비용·네트워크 절감 |
+| 근태 매트릭스 검색/필터 | `/admin/attendance` `_grid.tsx`에 직원 이름/아이디 search + 역할 select 추가. 결과 카운트 표시. 직원 늘어나도 빠른 탐색 |
+| 남은 i18n 폴리시 | 사전(dictionary.ts)에 ~90개 키 추가(ko/en). 적용: `/attendance/_leave-form.tsx`, `_leave-list.tsx`, `/admin/roles/page.tsx`, `_components/create-role-form.tsx`, `_components/roles-table.tsx`, `/admin/users/new/page.tsx`, `_form.tsx`, `/admin/users/[id]/edit/page.tsx`, `_form.tsx`. 로케일 toggle로 즉시 전환 |
+
+### 답변 (사용자 추가 질문)
+- **홈 아이콘 숫자 배지**: 이미 `badge-sync.tsx`가 `navigator.setAppBadge()` 호출 중. iOS 16.4+ (2023.3 이후)는 알림 권한 받으면 OS가 빨간 배지 표시. Android Chrome도 API는 OK지만 **런처 의존**(Pixel/Nova OK, Samsung One UI는 일부, MIUI/EMUI는 거의 안 됨) — 사용자 합의로 현재 구조 유지
+- **자동 아이콘**: 학원 로고 PNG를 `public/icons/source.png`로 두면 `generate-icons.ts`가 8 사이즈 자동 변환. 로고 없으면 새 폴백(말풍선 + FPC + 골드점) 사용
+
+### 다음 작업 후보
+- 결근/지각/조퇴 LeaveType 추가 (매트릭스/엑셀 컬럼은 이미 있음, enum에만 없음)
+- 채팅 일반 파일 첨부 (현재 이미지/동영상만)
+- 메시지 검색
+- 그룹 멤버 추가/삭제
+- 직원 비활성화/삭제
+- 외부 사인 SMS (사업자 결정 + 결제 등록 필요)
+
+---
+
 ## ✅ 2026-05-11 (D — 채팅 첨부 + 자동 삭제 cron)
 
 | 커밋 | 내용 |
