@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
+import { getT } from "@/lib/i18n/server";
 import { EditStaffForm } from "./_form";
 import { LeaveAdjustPanel } from "./_leave-adjust-panel";
 
@@ -21,10 +22,11 @@ export default async function EditStaffPage({
     where: { authId: authUser.id },
     include: { role: true },
   });
+  const t = await getT();
   if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자 전용 페이지입니다.
+        {t("common.adminOnly")}
       </div>
     );
   }
@@ -64,10 +66,12 @@ export default async function EditStaffPage({
     <div className="max-w-xl mx-auto p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          직원 편집
+          {t("admin.users.edit")}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {target.name} <span className="text-zinc-400">({target.username})</span>의 정보를 수정합니다.
+          {target.name}{" "}
+          <span className="text-zinc-400">({target.username})</span>
+          {t("admin.users.editSubtitle")}
         </p>
       </div>
       <EditStaffForm

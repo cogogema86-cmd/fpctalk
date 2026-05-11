@@ -1,6 +1,8 @@
 "use client";
 
 import { useTransition, useState } from "react";
+import { useT, useLocale } from "@/lib/i18n/client";
+import type { DictKey } from "@/lib/i18n/dictionary";
 import { cancelLeaveAction } from "./actions";
 import type { LeaveStatus, LeaveType } from "@prisma/client";
 
@@ -17,20 +19,20 @@ type LeaveItem = {
   createdAt: string;
 };
 
-const TYPE_LABEL: Record<LeaveType, string> = {
-  ANNUAL: "연차",
-  HALF_AM: "오전반차",
-  HALF_PM: "오후반차",
-  SICK: "병가",
-  OFFICIAL: "공가",
-  OTHER: "기타",
+const TYPE_KEY: Record<LeaveType, DictKey> = {
+  ANNUAL: "leave.type.ANNUAL",
+  HALF_AM: "leave.type.HALF_AM",
+  HALF_PM: "leave.type.HALF_PM",
+  SICK: "leave.type.SICK",
+  OFFICIAL: "leave.type.OFFICIAL",
+  OTHER: "leave.type.OTHER",
 };
 
-const STATUS_LABEL: Record<LeaveStatus, string> = {
-  PENDING: "승인 대기",
-  APPROVED: "승인됨",
-  REJECTED: "거부됨",
-  CANCELLED: "취소됨",
+const STATUS_KEY: Record<LeaveStatus, DictKey> = {
+  PENDING: "leave.status.PENDING",
+  APPROVED: "leave.status.APPROVED",
+  REJECTED: "leave.status.REJECTED",
+  CANCELLED: "leave.status.CANCELLED",
 };
 
 const STATUS_STYLE: Record<LeaveStatus, string> = {
@@ -44,10 +46,11 @@ const STATUS_STYLE: Record<LeaveStatus, string> = {
 };
 
 export function LeaveList({ items }: { items: LeaveItem[] }) {
+  const t = useT();
   if (items.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
-        아직 신청한 휴가가 없습니다.
+        {t("leave.empty")}
       </div>
     );
   }
@@ -62,11 +65,13 @@ export function LeaveList({ items }: { items: LeaveItem[] }) {
 }
 
 function Row({ item }: { item: LeaveItem }) {
+  const t = useT();
+  const locale = useLocale();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleCancel = () => {
-    if (!confirm("이 신청을 취소하시겠습니까?")) return;
+    if (!confirm(t("leave.cancelConfirm"))) return;
     setError(null);
     startTransition(async () => {
       const r = await cancelLeaveAction(item.id);
@@ -75,7 +80,7 @@ function Row({ item }: { item: LeaveItem }) {
   };
 
   const fmt = (s: string) =>
-    new Date(s).toLocaleDateString("ko-KR", {
+    new Date(s).toLocaleDateString(locale === "en" ? "en-US" : "ko-KR", {
       year: "2-digit",
       month: "2-digit",
       day: "2-digit",
@@ -88,22 +93,24 @@ function Row({ item }: { item: LeaveItem }) {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-0.5">
           <div className="flex items-center gap-2">
-            <span className="font-medium">{TYPE_LABEL[item.type]}</span>
+            <span className="font-medium">{t(TYPE_KEY[item.type])}</span>
             <span
               className={`text-xs rounded px-1.5 py-0.5 ${STATUS_STYLE[item.status]}`}
             >
-              {STATUS_LABEL[item.status]}
+              {t(STATUS_KEY[item.status])}
             </span>
           </div>
           <div className="text-zinc-600 dark:text-zinc-400">
             {sameDay ? fmt(item.startDate) : `${fmt(item.startDate)} ~ ${fmt(item.endDate)}`}
           </div>
           {item.reason && (
-            <div className="text-xs text-zinc-500 mt-1">사유: {item.reason}</div>
+            <div className="text-xs text-zinc-500 mt-1">
+              {t("leave.reasonPrefix")} {item.reason}
+            </div>
           )}
           {item.decidedNote && (
             <div className="text-xs text-zinc-500 mt-1">
-              관리자 메모: {item.decidedNote}
+              {t("leave.adminNote")} {item.decidedNote}
             </div>
           )}
           {item.approver && item.decidedAt && (
@@ -119,7 +126,7 @@ function Row({ item }: { item: LeaveItem }) {
             disabled={isPending}
             className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 shrink-0"
           >
-            {isPending ? "..." : "취소"}
+            {isPending ? "..." : t("common.cancel")}
           </button>
         )}
       </div>

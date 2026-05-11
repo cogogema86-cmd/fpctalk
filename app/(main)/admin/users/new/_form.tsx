@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
+import { useT } from "@/lib/i18n/client";
 import { createStaffAction, type CreateStaffState } from "../actions";
 import { CredentialsCard } from "../_components/credentials-card";
 
@@ -37,6 +38,7 @@ function FormInstance({
   roles: RoleOption[];
   onReset: () => void;
 }) {
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     createStaffAction,
     initialState,
@@ -47,7 +49,7 @@ function FormInstance({
     return (
       <div className="space-y-4">
         <CredentialsCard
-          title="✅ 직원 계정이 생성되었습니다"
+          title={t("admin.users.createSuccess")}
           username={state.success.username}
           name={state.success.name}
           password={state.success.password}
@@ -57,14 +59,14 @@ function FormInstance({
             href="/admin/users"
             className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900"
           >
-            목록으로
+            {t("admin.users.backToList")}
           </Link>
           <button
             type="button"
             onClick={onReset}
             className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
           >
-            추가로 한 명 더 등록
+            {t("admin.users.addAnother")}
           </button>
         </div>
       </div>
@@ -73,30 +75,30 @@ function FormInstance({
 
   return (
     <form action={formAction} className="space-y-4">
-      <Field label="아이디 (영문/숫자, 3~20자)" required>
+      <Field label={t("admin.users.field.username")} required>
         <input
           name="username"
           type="text"
           autoComplete="off"
           required
           disabled={isPending}
-          placeholder="예: kim_teacher"
+          placeholder={t("admin.users.field.usernameExample")}
           className="input"
         />
       </Field>
 
-      <Field label="이름" required>
+      <Field label={t("admin.users.field.name")} required>
         <input
           name="name"
           type="text"
           required
           disabled={isPending}
-          placeholder="예: 김강사"
+          placeholder={t("admin.users.field.nameExample")}
           className="input"
         />
       </Field>
 
-      <Field label="역할" required>
+      <Field label={t("admin.users.field.role")} required>
         <select
           name="roleId"
           defaultValue=""
@@ -105,34 +107,34 @@ function FormInstance({
           className="input"
         >
           <option value="" disabled>
-            선택하세요
+            {t("common.selectPlaceholder")}
           </option>
           {roles.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.label} {r.isAdmin ? "(관리권한)" : ""}
+              {r.label} {r.isAdmin ? t("admin.users.adminBadge") : ""}
             </option>
           ))}
         </select>
         <p className="mt-1 text-xs text-zinc-500">
-          역할이 없거나 새 역할이 필요하면{" "}
+          {t("admin.users.roleNotFoundPrefix")}{" "}
           <Link href="/admin/roles" className="underline">
-            역할 관리
+            {t("nav.adminRoles")}
           </Link>{" "}
-          페이지에서 추가
+          {t("admin.users.roleNotFoundSuffix")}
         </p>
       </Field>
 
-      <Field label="직책 (선택)">
+      <Field label={t("admin.users.field.title")}>
         <input
           name="title"
           type="text"
           disabled={isPending}
-          placeholder="예: 수석강사, 교무부장"
+          placeholder={t("admin.users.field.titleExample")}
           className="input"
         />
       </Field>
 
-      <Field label="입사일자 (선택)">
+      <Field label={t("admin.users.field.joinDateOptional")}>
         <input
           name="joinDate"
           type="date"
@@ -140,11 +142,11 @@ function FormInstance({
           className="input"
         />
         <p className="mt-1 text-xs text-zinc-500">
-          연차 발생 기준일. 비우면 나중에 편집 페이지에서 추가할 수 있습니다.
+          {t("admin.users.field.joinDateHint")}
         </p>
       </Field>
 
-      <Field label="연간 연차 한도 (선택, 기본 15일)">
+      <Field label={t("admin.users.field.annualLeaveTotal")}>
         <input
           name="annualLeaveTotal"
           type="number"
@@ -152,11 +154,11 @@ function FormInstance({
           min="0"
           max="365"
           disabled={isPending}
-          placeholder="예: 15"
+          placeholder={t("admin.users.field.annualLeaveTotalExample")}
           className="input"
         />
         <p className="mt-1 text-xs text-zinc-500">
-          반차 단위(0.5일)까지 입력 가능. 잔여 보정은 등록 후 편집 페이지에서.
+          {t("admin.users.field.annualLeaveTotalHint")}
         </p>
       </Field>
 
@@ -168,17 +170,17 @@ function FormInstance({
             onChange={(e) => setAutoPw(e.target.checked)}
             disabled={isPending}
           />
-          <span>비밀번호 자동 생성 (10자 영문+숫자)</span>
+          <span>{t("admin.users.autoPasswordLabel")}</span>
         </label>
         {!autoPw && (
-          <Field label="비밀번호 (직접 입력)">
+          <Field label={t("admin.users.field.passwordManual")}>
             <input
               name="password"
               type="text"
               autoComplete="new-password"
               minLength={6}
               disabled={isPending}
-              placeholder="최소 6자"
+              placeholder={t("admin.users.field.passwordMinHint")}
               className="input"
             />
           </Field>
@@ -197,13 +199,13 @@ function FormInstance({
           disabled={isPending}
           className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
         >
-          {isPending ? "생성 중..." : "직원 추가"}
+          {isPending ? t("admin.users.creating") : t("admin.users.create")}
         </button>
         <Link
           href="/admin/users"
           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm"
         >
-          취소
+          {t("common.cancel")}
         </Link>
       </div>
 

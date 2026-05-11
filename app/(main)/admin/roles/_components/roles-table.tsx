@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useActionState, useEffect, useState, useTransition } from "react";
+import { useT } from "@/lib/i18n/client";
 import { deleteRoleAction, updateRoleAction, type RoleFormState } from "../actions";
 
 type Role = {
@@ -15,18 +16,19 @@ type Role = {
 };
 
 export function RolesTable({ roles }: { roles: Role[] }) {
+  const t = useT();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
     <table className="w-full text-sm">
       <thead className="bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400">
         <tr>
-          <th className="text-left px-4 py-2 font-medium">이름</th>
-          <th className="text-left px-4 py-2 font-medium">레벨</th>
-          <th className="text-left px-4 py-2 font-medium">관리권한</th>
-          <th className="text-left px-4 py-2 font-medium">분류</th>
-          <th className="text-left px-4 py-2 font-medium">사용중</th>
-          <th className="text-left px-4 py-2 font-medium">관리</th>
+          <th className="text-left px-4 py-2 font-medium">{t("admin.roles.col.name")}</th>
+          <th className="text-left px-4 py-2 font-medium">{t("admin.roles.col.level")}</th>
+          <th className="text-left px-4 py-2 font-medium">{t("admin.roles.col.admin")}</th>
+          <th className="text-left px-4 py-2 font-medium">{t("admin.roles.col.category")}</th>
+          <th className="text-left px-4 py-2 font-medium">{t("admin.roles.col.inUse")}</th>
+          <th className="text-left px-4 py-2 font-medium">{t("admin.roles.col.actions")}</th>
         </tr>
       </thead>
       <tbody>
@@ -56,13 +58,14 @@ function DisplayRow({
   isEditing: boolean;
   onEdit: () => void;
 }) {
+  const t = useT();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleDelete = () => {
     if (
       !confirm(
-        `"${role.label}" 역할을 삭제하시겠습니까? (사용 중인 직원이 있으면 거부됩니다)`,
+        `"${role.label}" — ${t("admin.roles.deleteConfirm")}`,
       )
     )
       return;
@@ -84,30 +87,35 @@ function DisplayRow({
         <td className="px-4 py-2">{role.defaultLevel}</td>
         <td className="px-4 py-2">
           {role.isAdmin ? (
-            <span className="text-amber-600 dark:text-amber-400">⚙️ 있음</span>
+            <span className="text-amber-600 dark:text-amber-400">
+              {t("admin.roles.adminYes")}
+            </span>
           ) : (
-            <span className="text-zinc-400">없음</span>
+            <span className="text-zinc-400">{t("admin.roles.adminNo")}</span>
           )}
         </td>
         <td className="px-4 py-2">
           {role.isSystem ? (
             <span className="text-xs rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-1.5 py-0.5">
-              시스템
+              {t("admin.roles.systemBadge")}
             </span>
           ) : (
             <span className="text-xs rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 px-1.5 py-0.5">
-              커스텀
+              {t("admin.roles.customBadge")}
             </span>
           )}
         </td>
-        <td className="px-4 py-2 text-zinc-500">{role._count.users}명</td>
+        <td className="px-4 py-2 text-zinc-500">
+          {role._count.users}
+          {t("admin.roles.userCountSuffix")}
+        </td>
         <td className="px-4 py-2 space-x-2">
           <button
             type="button"
             onClick={onEdit}
             className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
           >
-            {isEditing ? "편집 중" : "편집"}
+            {isEditing ? t("admin.roles.editing") : t("common.edit")}
           </button>
           {!role.isSystem && (
             <button
@@ -116,11 +124,13 @@ function DisplayRow({
               disabled={isPending}
               className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
             >
-              {isPending ? "삭제 중..." : "삭제"}
+              {isPending ? t("admin.roles.deleting") : t("common.delete")}
             </button>
           )}
           {role.isSystem && (
-            <span className="text-xs text-zinc-400">시스템(삭제 불가)</span>
+            <span className="text-xs text-zinc-400">
+              {t("admin.roles.systemNoDelete")}
+            </span>
           )}
         </td>
       </tr>
@@ -141,6 +151,7 @@ function DisplayRow({
 const initialState: RoleFormState = {};
 
 function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     updateRoleAction,
     initialState,
@@ -159,7 +170,8 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="md:col-span-2">
               <label className="block text-xs font-medium mb-1">
-                역할 이름 *
+                {t("admin.roles.field.label")}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 name="label"
@@ -171,7 +183,9 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1">기본 레벨</label>
+              <label className="block text-xs font-medium mb-1">
+                {t("admin.roles.field.defaultLevel")}
+              </label>
               <input
                 name="defaultLevel"
                 type="number"
@@ -183,7 +197,9 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1">정렬</label>
+              <label className="block text-xs font-medium mb-1">
+                {t("admin.roles.field.sortOrder")}
+              </label>
               <input
                 name="sortOrder"
                 type="number"
@@ -201,15 +217,13 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
               defaultChecked={role.isAdmin}
               disabled={isPending}
             />
-            <span>
-              관리권한 부여 (직원·역할·비번 관리 메뉴 접근 가능)
-            </span>
+            <span>{t("admin.roles.field.isAdmin")}</span>
           </label>
 
           {role.isSystem && (
             <p className="text-xs text-zinc-500">
-              💡 시스템 기본 역할이지만 라벨/레벨/관리권한 모두 변경 가능합니다.
-              (코드 식별자 <span className="font-mono">{role.code}</span>는 변경되지 않음)
+              {t("admin.roles.systemEditHint")}{" "}
+              <span className="font-mono">{role.code}</span>
             </p>
           )}
 
@@ -225,7 +239,7 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
               disabled={isPending}
               className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-1.5 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
             >
-              {isPending ? "저장 중..." : "저장"}
+              {isPending ? t("common.saving") : t("common.save")}
             </button>
             <button
               type="button"
@@ -233,7 +247,7 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
               disabled={isPending}
               className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-1.5 text-sm"
             >
-              취소
+              {t("common.cancel")}
             </button>
           </div>
 

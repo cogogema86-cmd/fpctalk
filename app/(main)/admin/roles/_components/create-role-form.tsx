@@ -1,11 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
+import { useT } from "@/lib/i18n/client";
 import { createRoleAction, type RoleFormState } from "../actions";
 
 const initialState: RoleFormState = {};
 
 export function CreateRoleForm() {
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     createRoleAction,
     initialState,
@@ -22,18 +24,23 @@ export function CreateRoleForm() {
     <form ref={formRef} action={formAction} className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="md:col-span-2">
-          <label className="block text-xs font-medium mb-1">역할 이름 *</label>
+          <label className="block text-xs font-medium mb-1">
+            {t("admin.roles.field.label")}{" "}
+            <span className="text-red-500">*</span>
+          </label>
           <input
             name="label"
             type="text"
             required
             disabled={isPending}
-            placeholder="예: 교무부장, 회계, 행정실장"
+            placeholder={t("admin.roles.field.labelExample")}
             className="role-input"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium mb-1">기본 레벨</label>
+          <label className="block text-xs font-medium mb-1">
+            {t("admin.roles.field.defaultLevel")}
+          </label>
           <input
             name="defaultLevel"
             type="number"
@@ -45,7 +52,9 @@ export function CreateRoleForm() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium mb-1">정렬</label>
+          <label className="block text-xs font-medium mb-1">
+            {t("admin.roles.field.sortOrder")}
+          </label>
           <input
             name="sortOrder"
             type="number"
@@ -62,7 +71,7 @@ export function CreateRoleForm() {
           type="checkbox"
           disabled={isPending}
         />
-        <span>관리권한 부여 (직원·역할·비번 관리 메뉴 접근 가능)</span>
+        <span>{t("admin.roles.field.isAdmin")}</span>
       </label>
 
       {state.error && (
@@ -76,7 +85,7 @@ export function CreateRoleForm() {
         disabled={isPending}
         className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
       >
-        {isPending ? "추가 중..." : "+ 역할 추가"}
+        {isPending ? t("admin.roles.creating") : t("admin.roles.create")}
       </button>
 
       <style>{`

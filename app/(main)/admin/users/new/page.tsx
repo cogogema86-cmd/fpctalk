@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { getT } from "@/lib/i18n/server";
 import { CreateStaffForm } from "./_form";
 
 export default async function NewStaffPage() {
@@ -14,10 +15,11 @@ export default async function NewStaffPage() {
     where: { authId: authUser.id },
     include: { role: true },
   });
+  const t = await getT();
   if (!me || !me.role.isAdmin) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자 전용 페이지입니다.
+        {t("common.adminOnly")}
       </div>
     );
   }
@@ -31,10 +33,10 @@ export default async function NewStaffPage() {
     <div className="max-w-xl mx-auto p-6 space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          직원 추가
+          {t("admin.users.create")}
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          신규 직원 정보를 입력하세요. 생성된 비밀번호는 한 번만 노출됩니다.
+          {t("admin.users.createHint")}
         </p>
       </div>
       <CreateStaffForm roles={roles} />

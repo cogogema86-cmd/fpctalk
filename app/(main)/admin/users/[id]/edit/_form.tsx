@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useT } from "@/lib/i18n/client";
 import { updateStaffAction, type UpdateStaffState } from "../../actions";
 
 const initialState: UpdateStaffState = {};
@@ -32,6 +33,7 @@ export function EditStaffForm({
   isSelf: boolean;
 }) {
   const router = useRouter();
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     updateStaffAction,
     initialState,
@@ -49,7 +51,7 @@ export function EditStaffForm({
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="id" value={user.id} />
 
-      <Field label="아이디 (영문/숫자/_/-, 3~20자)" required>
+      <Field label={t("admin.users.field.usernameEdit")} required>
         <input
           name="username"
           type="text"
@@ -59,11 +61,11 @@ export function EditStaffForm({
           className="input"
         />
         <p className="mt-1 text-xs text-zinc-500">
-          ⚠️ 아이디 변경 시 본인 로그인 정보도 함께 바뀝니다.
+          {t("admin.users.field.usernameEditWarn")}
         </p>
       </Field>
 
-      <Field label="이름" required>
+      <Field label={t("admin.users.field.name")} required>
         <input
           name="name"
           type="text"
@@ -74,7 +76,7 @@ export function EditStaffForm({
         />
       </Field>
 
-      <Field label="역할" required>
+      <Field label={t("admin.users.field.role")} required>
         <select
           name="roleId"
           defaultValue={user.roleId}
@@ -84,29 +86,29 @@ export function EditStaffForm({
         >
           {roles.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.label} {r.isAdmin ? "(관리권한)" : ""}
+              {r.label} {r.isAdmin ? t("admin.users.adminBadge") : ""}
             </option>
           ))}
         </select>
         {isSelf && (
           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-            ⚠️ 본인의 역할은 관리권한이 있는 역할로만 변경 가능합니다 (잠금 방지)
+            {t("admin.users.selfRoleWarn")}
           </p>
         )}
       </Field>
 
-      <Field label="직책 (선택)">
+      <Field label={t("admin.users.field.title")}>
         <input
           name="title"
           type="text"
           disabled={isPending}
           defaultValue={user.title ?? ""}
-          placeholder="예: 수석강사, 교무부장"
+          placeholder={t("admin.users.field.titleExample")}
           className="input"
         />
       </Field>
 
-      <Field label="입사일자">
+      <Field label={t("admin.users.field.joinDate")}>
         <input
           name="joinDate"
           type="date"
@@ -115,7 +117,7 @@ export function EditStaffForm({
           className="input"
         />
         <p className="mt-1 text-xs text-zinc-500">
-          연차 발생 기준일. 비워서 저장하면 미설정으로 변경됩니다.
+          {t("admin.users.field.joinDateEditHint")}
         </p>
       </Field>
 
@@ -131,13 +133,13 @@ export function EditStaffForm({
           disabled={isPending}
           className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
         >
-          {isPending ? "저장 중..." : "저장"}
+          {isPending ? t("common.saving") : t("common.save")}
         </button>
         <Link
           href="/admin/users"
           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-4 py-2 text-sm"
         >
-          취소
+          {t("common.cancel")}
         </Link>
       </div>
 

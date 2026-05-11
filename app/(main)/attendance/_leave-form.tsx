@@ -1,17 +1,19 @@
 "use client";
 
 import { useActionState, useState, useEffect } from "react";
+import { useT } from "@/lib/i18n/client";
+import type { DictKey } from "@/lib/i18n/dictionary";
 import { requestLeaveAction, type LeaveFormState } from "./actions";
 
 const initialState: LeaveFormState = {};
 
-const TYPES = [
-  { value: "ANNUAL", label: "연차 (1일)" },
-  { value: "HALF_AM", label: "오전 반차 (0.5일)" },
-  { value: "HALF_PM", label: "오후 반차 (0.5일)" },
-  { value: "SICK", label: "병가" },
-  { value: "OFFICIAL", label: "공가" },
-  { value: "OTHER", label: "기타" },
+const TYPES: { value: string; labelKey: DictKey }[] = [
+  { value: "ANNUAL", labelKey: "leave.type.ANNUAL.long" },
+  { value: "HALF_AM", labelKey: "leave.type.HALF_AM.long" },
+  { value: "HALF_PM", labelKey: "leave.type.HALF_PM.long" },
+  { value: "SICK", labelKey: "leave.type.SICK" },
+  { value: "OFFICIAL", labelKey: "leave.type.OFFICIAL" },
+  { value: "OTHER", labelKey: "leave.type.OTHER" },
 ];
 
 const today = () => {
@@ -37,6 +39,7 @@ function FormInstance({
   remaining: number;
   onReset: () => void;
 }) {
+  const t = useT();
   const [state, formAction, isPending] = useActionState(
     requestLeaveAction,
     initialState,
@@ -55,7 +58,7 @@ function FormInstance({
   if (state.success) {
     return (
       <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 p-4 text-sm text-green-800 dark:text-green-200">
-        ✅ 휴가 신청이 접수되었습니다. 관리자 승인 대기 중입니다.
+        {t("leave.success")}
       </div>
     );
   }
@@ -63,10 +66,11 @@ function FormInstance({
   return (
     <form action={formAction} className="space-y-3">
       <div className="text-xs text-zinc-500 dark:text-zinc-400">
-        잔여 연차 {remaining}일
+        {t("leave.remaining.label")} {remaining}
+        {t("leave.remaining.unit")}
       </div>
 
-      <Field label="휴가 종류" required>
+      <Field label={t("leave.field.type")} required>
         <select
           name="type"
           value={type}
@@ -75,16 +79,16 @@ function FormInstance({
           disabled={isPending}
           className="lv-input"
         >
-          {TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
+          {TYPES.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {t(opt.labelKey)}
             </option>
           ))}
         </select>
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="시작일" required>
+        <Field label={t("leave.field.startDate")} required>
           <input
             name="startDate"
             type="date"
@@ -95,7 +99,7 @@ function FormInstance({
           />
         </Field>
         {!isHalf && (
-          <Field label="종료일" required>
+          <Field label={t("leave.field.endDate")} required>
             <input
               name="endDate"
               type="date"
@@ -108,12 +112,12 @@ function FormInstance({
         )}
       </div>
 
-      <Field label="사유 (선택)">
+      <Field label={t("leave.field.reason")}>
         <textarea
           name="reason"
           rows={2}
           disabled={isPending}
-          placeholder="간단히 사유를 적어주세요"
+          placeholder={t("leave.field.reasonPlaceholder")}
           className="lv-input"
         />
       </Field>
@@ -129,7 +133,7 @@ function FormInstance({
         disabled={isPending}
         className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
       >
-        {isPending ? "신청 중..." : "신청"}
+        {isPending ? t("leave.submitting") : t("leave.submit")}
       </button>
 
       <style>{`
