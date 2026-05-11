@@ -3,6 +3,7 @@
 import { askAI, classifyMode, AI_GUARDRAIL, friendlyAiError, type AiMode } from "@/lib/ai";
 import { getMe } from "@/lib/chat";
 import { prisma } from "@/lib/db";
+import { getPersonalEventsForAiContext } from "@/lib/personal-events";
 
 export type AssistantMode = "auto" | "fast" | "pro";
 
@@ -110,8 +111,11 @@ export async function askAssistantAction(
     return { ok: false, error: "질문이 너무 깁니다 (4000자 제한)." };
   }
 
-  // 채팅 컨텍스트 수집
-  const chatContext = await getChatContext(me.id);
+  // 채팅 컨텍스트 + 본인 개인 일정 컨텍스트 (병렬)
+  const [chatContext, personalEventsContext] = await Promise.all([
+    getChatContext(me.id),
+    getPersonalEventsForAiContext(me.id),
+  ]);
   const contextSize = chatContext ? chatContext.split("\n").length : 0;
 
   // 컨텍스트가 많으면 자동으로 Pro 모드 강제 (긴 컨텍스트 처리)
@@ -121,14 +125,24 @@ export async function askAssistantAction(
     finalMode = "pro";
   }
 
+  // 오늘 날짜 (한국 기준) — AI가 D-day 계산할 수 있도록
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const systemPrompt = `${AI_GUARDRAIL}
 
 학원장 ${me.name}님을 보좌하는 비서입니다.
+오늘 날짜: ${todayIso}
 
 [채팅 기록 인용 시]
 - 학원 채팅 기록에서 가져온 정보는 누가/언제 말했는지 인용
   예: "박은숙님이 2026-04-10 09:13에 '길동이 개별하원'이라고 말씀하셨습니다."
   English: "Park Eun-sook said on 2026-04-10 09:13: 'Gildong individual pickup'"
+
+[학원장 본인의 개인 일정 (PERSONAL_EVENTS) — 절대 비공개]
+- 아래는 학원장 ${me.name}님 본인만 설정한 비공개 일정입니다. 본인 답변에만 활용.
+- 학원장이 "오늘 일정", "내일 일정", "5월 17일 일정" 등으로 물으면 이 목록을 우선 참고.
+- D-day 임박한 일정이 있으면 "5월 17일 학부모 미팅이 D-3 남았습니다. 확인해주세요" 같은 능동적 알림 가능.
+${personalEventsContext || "(등록된 개인 일정이 없습니다)"}
 
 [참고: 학원의 최근 30일 채팅 기록]
 ${chatContext || "(아직 채팅 기록이 없습니다)"}
