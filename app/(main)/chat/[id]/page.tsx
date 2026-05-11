@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db";
 import { ChatRoom } from "./_chat-room";
 import { ClearChatButton } from "./_clear-chat-button";
 import { LeaveChatButton } from "./_leave-chat-button";
+import { DeleteChatButton } from "./_delete-chat-button";
 import { getT } from "@/lib/i18n/server";
 
 export default async function ChatRoomPage({
@@ -76,6 +77,8 @@ export default async function ChatRoomPage({
         {!info.isLevelChat && (
           <LeaveChatButton chatId={chatId} isDm={info.type === "DM"} />
         )}
+        {/* 관리자 전용 방 삭제 (모든 채팅 타입 — 레벨 채팅 포함) */}
+        {isAdmin && <DeleteChatButton chatId={chatId} />}
       </div>
 
       {/* 채팅 본체 */}

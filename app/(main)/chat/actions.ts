@@ -184,6 +184,38 @@ export async function clearChatRoomAction(
 }
 
 // =====================================================
+// 채팅방 자체 삭제 (관리자 전용)
+// 정책:
+// - role.isAdmin 만 가능 — 일반 직원은 leaveChatAction으로 본인 멤버만 해제
+// - 레벨 기반 자동 공개 채팅도 admin이면 삭제 가능 (nest 자동 재가입 대상이지만 admin이 의도적으로 정리)
+// - prisma cascade: ChatMember/Message 모두 자동 삭제됨
+// =====================================================
+export async function deleteChatAction(
+  chatId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 채팅방을 삭제할 수 있습니다." };
+  }
+
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true },
+  });
+  if (!chat) return { ok: false, error: "채팅방을 찾을 수 없습니다." };
+
+  await prisma.chat.delete({ where: { id: chatId } });
+
+  revalidatePath("/chat");
+  return { ok: true };
+}
+
 // 채팅방 나가기
 // 정책:
 // - 레벨 기반 자동 공개 채팅(levelRequired != null): 나갈 수 없음 (레벨 충족 시 자동 재가입됨)
