@@ -83,6 +83,7 @@ model User {
   eventAcks          EventAcknowledgement[]
   leaveAdjustments   LeaveAdjustment[]    @relation("LeaveAdjustmentTarget")
   leaveAdjustmentsBy LeaveAdjustment[]    @relation("LeaveAdjustmentAdmin")
+  personalEvents     PersonalEvent[]
 
   @@index([roleId])
 }
@@ -156,6 +157,28 @@ model EventAcknowledgement {
 
   @@unique([eventId, userId])
   @@index([userId])
+}
+
+// =====================================================
+// 개인 일정 (PersonalEvent)
+// 본인만 보는 비공개 일정. 학원 행사(Event)와 구분됨.
+// AI 비서가 본인 컨텍스트로만 사용 — 그룹 채팅에는 절대 노출 X.
+// =====================================================
+model PersonalEvent {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title   String
+  startAt DateTime
+  endAt   DateTime?
+  allDay  Boolean  @default(false)
+  note    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, startAt])
 }
 
 // =====================================================
