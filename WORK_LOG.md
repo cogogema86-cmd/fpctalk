@@ -6,6 +6,46 @@
 
 ---
 
+## ✅ 2026-05-11 오후 — 개인 일정 + AI 자동응답 + 채팅 관리 묶음
+
+### A. 개인 일정 (PersonalEvent — 본인만 보는 비공개 일정)
+
+| 커밋 | 내용 |
+|---|---|
+| `22ce48b` | **Prisma + helpers + actions** — `PersonalEvent` 모델(userId/title/startAt/endAt/allDay/note) + db push. `lib/personal-events.ts`(getMonthlyPersonalEvents, getUpcomingPersonalEvents, getPersonalEventsForAiContext). `attendance/personal-actions.ts`(add/update/delete, userId 가드) |
+| `25ca3b5` | **캘린더 셀 클릭 모달 + 4번째 토글 + D-7 카드** — `_personal-event-modal.tsx`(목록+추가/편집/삭제), 캘린더에 보라색 📌 일정 셀 노출, 4번째 카테고리 토글 "내 일정", `/attendance`+`/dashboard` 상단에 `UpcomingPersonal` D-7 카드. localStorage 토글 영속화 |
+| `cb27d26` | **AI 비서가 본인 일정 인지** — `/assistant` system prompt에 PERSONAL_EVENTS + 오늘 날짜 주입. D-day 임박 시 능동 안내 가능. **그룹 채팅 @AI는 미주입**(다른 직원 노출 방지) |
+
+**정책**: 본인 일정은 본인만 노출. AI 비서는 학원장(레벨 3+)만 사용 가능하므로 안전. 일반 직원은 본인 캘린더 + 본인 D-7 카드로만 확인.
+
+### B. 채팅 관리 강화
+
+| 커밋 | 내용 |
+|---|---|
+| `6ef2c11` | **관리자 전용 "방 삭제" 버튼** — `deleteChatAction` + `DeleteChatButton`(빨간 🗑). 레벨 자동 공개 채팅도 admin이면 삭제 가능. prisma cascade로 ChatMember/Message 일괄 정리 |
+| `b4bc485` | **채팅방별 "AI 자동 응답" 토글 (관리자 전용)** — `Chat.aiAutoReply` 필드 + db push. `setChatAiAutoReplyAction`. 헤더에 admin 전용 토글(`_ai-autoreply-toggle.tsx`). `isQuestionLike()`(?/`어떻게/뭐/언제/누가/왜/얼마/어느/할까/하나요/되나요` + how/what/where/when/who/why/which) → @AI prefix 없어도 AI 자동 답변. 켜진 방엔 emerald banner 노출 |
+| `e759079` | **AI 답변 포맷 개선** — system prompt에 항목별 한 줄 + `→` 한 줄 요약 가이드 + 예시. 시간 `MM-DD HH:MM` 짧은 형식. 전체 6줄 이내. 채팅 @AI(triggerChatAi) + /assistant(askAssistant) 둘 다 적용 |
+
+**자동 응답 흐름 (라이브 검증 ✅)**:
+> A 선생님 오전: "김신 개별하원합니다"
+> 오후에 누가: "오늘 누가 개별 하원?"
+> AI: 한 줄씩 인용 + 마지막에 "→ 오늘 개별 하원: 김신"
+
+### C. 캘린더 토글 + PWA 안정화
+
+| 커밋 | 내용 |
+|---|---|
+| `2290b24` | **캘린더 카테고리 체크박스 토글** — `_calendar.tsx`를 client로 전환. 내 휴가/동료 휴가/학원 행사 각각 끄기 가능. localStorage 영속화(`fpctalk:calendar:visible`). 관리자만 "동료 휴가" 토글 노출 |
+| `d81a4b1` | **middleware: PWA manifest/sw.js 매처 제외** — 인증 미들웨어에 `manifest.webmanifest`/`sw.js` 추가해 미인증 브라우저도 manifest fetch 가능. PWA 설치 prompt 정상화 (이전 307 → 200) |
+| `d0ac39d` | **InstallBanner "나중에" 24h 견고화** — `dismissedRef` in-memory flag + localStorage **+** sessionStorage 양쪽 저장 + `beforeinstallprompt` 핸들러 시점 재체크. 라이브 검증(데스크탑/모바일 viewport): dismiss 후 페이지 이동/새로고침 X, 23h 안 X, 25h 후 다시 ✅ |
+
+### D. 라이브 검증 (Playwright)
+
+- AI 자동응답 ON 상태에서 "오늘 개별 하원하는 친구 누구인가요?" → AI가 채팅 컨텍스트에서 "김파커님이 05-11 04:56에 '김신 개별하원합니다'..." 인용 + "→ 오늘 개별 하원: 김신" 요약. `hasNewline: true`, `hasArrow: true` ✅
+- InstallBanner 모바일(390×844): 배너 bottom=780px(모바일 nav top 789 바로 위), dismiss + 24h 시뮬레이션 모두 정상
+
+---
+
 ## ✅ 2026-05-11 (UX 묶음: 모바일 nav + PWA 아이콘 + 이미지 압축 + 매트릭스 검색 + i18n 폴리시)
 
 | 항목 | 내용 |
