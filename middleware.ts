@@ -67,6 +67,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // PWA 자원(manifest, sw.js)과 이미지/정적 파일은 미인증 사용자도 접근 가능해야
+    // 브라우저가 manifest를 fetch해 설치 prompt를 띄울 수 있음.
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
