@@ -6,6 +6,37 @@
 
 ---
 
+## ✅ 2026-05-11 저녁 — QuickPhrases (자주 쓰는 문구 칩)
+
+| 커밋 | 내용 |
+|---|---|
+| `46e0df9` | **채팅 입력창 위 빠른 문구 칩** — `_quick-phrases.tsx` 신규. 가로 스크롤 chip + 우측 ✏️ 관리 모달. 클릭/터치 시 textarea 커서 위치에 즉시 삽입(앞 공백 자동). 화면 너비에 자연 fit (모바일 2~3개, PC 6~7개 viewport에 노출 + 가로 스크롤). |
+
+### 저장 정책
+- **localStorage per-device** (`fpctalk:quickPhrases:v1`) — 폰/PC가 각각 다른 phrase를 가질 수 있어 자연스러움. DB 동기화는 차후 필요 시.
+- **시드** (처음 진입 시 7개, locale별):
+  - ko: 확인했습니다 👍 / 감사합니다 / 잠시만요 / 수고하셨습니다 / 오늘 결근입니다 / 회의 중입니다 / 이따 답변드릴게요
+  - en: Got it 👍 / Thanks / One moment / Good work / Out today / In a meeting / Will reply later
+
+### 관리 모달 (✏️ 버튼)
+- 추가 (Enter or [추가] 버튼) — 200자 제한, 중복 무시
+- 인라인 편집 / 삭제 / ▲▼ 순서 이동
+- ESC로 닫기
+
+### 삽입 동작
+- `inputRef.current` (uncontrolled textarea) — native `value` setter + `input` 이벤트 dispatch로 React state와 무관하게 동작
+- 커서 앞에 공백이 없으면 자동으로 공백 한 칸 prepend (단어 붙기 방지)
+- 삽입 후 커서를 삽입 끝으로 + textarea focus
+
+### 라이브 검증 (Playwright)
+- 데스크탑 1280×800: 시드 7개 + ✏️ 버튼 노출, 칩 클릭 시 `"오늘"` → `"오늘 확인했습니다 👍"` 정상 삽입
+- 모바일 390×844: viewport에 3개 노출 + `isScrollable: true` 가로 스크롤 ✅
+- 모달 추가/삭제 흐름 정상 — localStorage round-trip 검증
+
+i18n: `chat.quickPhrases.*` 8개 키 (ko/en).
+
+---
+
 ## ✅ 2026-05-11 오후 — 개인 일정 + AI 자동응답 + 채팅 관리 묶음
 
 ### A. 개인 일정 (PersonalEvent — 본인만 보는 비공개 일정)
