@@ -22,11 +22,12 @@ import {
   triggerChatAiAction,
   type SendMessageState,
 } from "../actions";
-import { useT } from "@/lib/i18n/client";
+import { useT, useLocale } from "@/lib/i18n/client";
 import {
   approveEventProposalAction,
   cancelEventProposalAction,
 } from "@/app/(main)/events/actions";
+import { QuickPhrases } from "./_quick-phrases";
 
 // @비서 / @AI / @assistant / @ + 공백 + 텍스트 모두 매칭
 const AI_TRIGGER = /^@(?:비서|ai|assistant)?\s+\S/i;
@@ -120,6 +121,7 @@ export function ChatRoom({
   initialMessages: Message[];
 }) {
   const t = useT();
+  const locale = useLocale();
   const memberMap = new Map(members.map((m) => [m.id, m]));
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   // 폴링에서 항상 최신 messages를 참조하기 위한 ref
@@ -886,6 +888,32 @@ export function ChatRoom({
               // 동일 파일 재선택 가능하도록 reset
               e.target.value = "";
             }
+          }}
+        />
+
+        {/* 자주 쓰는 문구 — 가로 스크롤 칩 (모바일/PC 모두 자연 fit) */}
+        <QuickPhrases
+          locale={locale}
+          onInsert={(phrase) => {
+            const ta = inputRef.current;
+            if (!ta) return;
+            const start = ta.selectionStart ?? ta.value.length;
+            const end = ta.selectionEnd ?? ta.value.length;
+            const cur = ta.value;
+            const needsSpaceBefore =
+              start > 0 && !/\s$/.test(cur.slice(0, start));
+            const insert = (needsSpaceBefore ? " " : "") + phrase;
+            const next = cur.slice(0, start) + insert + cur.slice(end);
+            // React-controlled가 아닌 textarea — native setter로 값 갱신 + input 이벤트 발사
+            const setter = Object.getOwnPropertyDescriptor(
+              window.HTMLTextAreaElement.prototype,
+              "value",
+            )?.set;
+            setter?.call(ta, next);
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+            const caret = start + insert.length;
+            ta.focus();
+            ta.setSelectionRange(caret, caret);
           }}
         />
 
