@@ -78,7 +78,7 @@ export function MobileNav({
         className="overflow-x-auto overflow-y-hidden touch-pan-x [&::-webkit-scrollbar]:hidden"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        <ul className="flex justify-around min-w-max">
+        <ul className="flex w-full">
           {ITEMS.map((item) => {
             const active =
               pathname === item.href ||
@@ -88,22 +88,22 @@ export function MobileNav({
               <li
                 key={item.href}
                 ref={active ? activeRef : null}
-                className="shrink-0 min-w-[6.75rem]"
+                className="shrink-0 flex-1 min-w-[3.4rem]"
               >
                 <Link
                   href={item.href}
-                  className={`relative flex flex-col items-center py-3 px-4 text-sm ${
+                  className={`relative flex flex-col items-center py-2 px-1 text-sm ${
                     active
                       ? "text-zinc-900 dark:text-zinc-50"
                       : "text-zinc-500 dark:text-zinc-400"
                   }`}
                 >
-                  <span className="text-2xl leading-none">{item.icon}</span>
-                  <span className="whitespace-nowrap mt-1 text-[13px] font-medium">
+                  <span className="text-xl leading-none">{item.icon}</span>
+                  <span className="whitespace-nowrap mt-0.5 text-[11px] font-medium">
                     {item.label}
                   </span>
                   {item.badge !== undefined && item.badge > 0 && (
-                    <span className="absolute top-1.5 right-2.5 inline-flex items-center justify-center min-w-[1.4rem] h-5 rounded-full bg-red-500 text-white text-[12px] font-semibold px-1.5">
+                    <span className="absolute top-1 right-1 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] rounded-full bg-red-500 text-white text-[10px] font-semibold px-1">
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
