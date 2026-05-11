@@ -184,6 +184,39 @@ export async function clearChatRoomAction(
 }
 
 // =====================================================
+// AI 자동 응답 모드 토글 (관리자 전용)
+// 켜진 채팅방에서는 질문형 메시지에 AI가 자동 응답 — 클라이언트가 트리거.
+// =====================================================
+export async function setChatAiAutoReplyAction(
+  chatId: string,
+  enabled: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+
+  const meWithRole = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!meWithRole?.role.isAdmin) {
+    return { ok: false, error: "관리자만 자동 응답 모드를 변경할 수 있습니다." };
+  }
+
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true },
+  });
+  if (!chat) return { ok: false, error: "채팅방을 찾을 수 없습니다." };
+
+  await prisma.chat.update({
+    where: { id: chatId },
+    data: { aiAutoReply: enabled },
+  });
+
+  revalidatePath(`/chat/${chatId}`);
+  return { ok: true };
+}
+
 // 채팅방 자체 삭제 (관리자 전용)
 // 정책:
 // - role.isAdmin 만 가능 — 일반 직원은 leaveChatAction으로 본인 멤버만 해제

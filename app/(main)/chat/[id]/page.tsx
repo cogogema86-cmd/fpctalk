@@ -12,6 +12,7 @@ import { ChatRoom } from "./_chat-room";
 import { ClearChatButton } from "./_clear-chat-button";
 import { LeaveChatButton } from "./_leave-chat-button";
 import { DeleteChatButton } from "./_delete-chat-button";
+import { AiAutoReplyToggle } from "./_ai-autoreply-toggle";
 import { getT } from "@/lib/i18n/server";
 
 export default async function ChatRoomPage({
@@ -72,6 +73,12 @@ export default async function ChatRoomPage({
                 : `${t("chat.groupMembers")} ${info.members.length}${t("chat.memberUnit")}`}
           </div>
         </div>
+        {isAdmin && (
+          <AiAutoReplyToggle
+            chatId={chatId}
+            initialEnabled={!!info.aiAutoReply}
+          />
+        )}
         {isAdmin && <ClearChatButton chatId={chatId} />}
         {/* 레벨 채팅이 아닌 경우(DM 또는 명시적 그룹)에만 나가기 버튼 노출 */}
         {!info.isLevelChat && (
@@ -87,6 +94,7 @@ export default async function ChatRoomPage({
         meId={me.id}
         meName={me.name}
         isAdmin={isAdmin}
+        aiAutoReply={!!info.aiAutoReply}
         members={info.members.map((m) => ({
           id: m.user.id,
           username: m.user.username,

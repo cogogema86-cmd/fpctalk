@@ -34,6 +34,23 @@ const AI_TRIGGER = /^@(?:비서|ai|assistant)?\s+\S/i;
 const AI_TRIGGER_STRIP = /^@(?:비서|ai|assistant)?\s+/i;
 
 /**
+ * 메시지가 질문형인지 — AI 자동 응답 모드용 휴리스틱.
+ * 정규식만 사용 (LLM 호출 X)이라 비용 0.
+ *  - 끝이 ? / ？ (전각 물음표)
+ *  - 한국어 의문사: 어떻게/어떡/어디/언제/뭐/무엇/누가/왜/얼마/어느/어떤/할까(요)/하나요/있나요/되나요/할지/될지
+ *  - 영어 의문사 (단어 경계): how/what/where/when/who/why/which
+ */
+function isQuestionLike(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/[?？]\s*$/u.test(t)) return true;
+  if (/(어떻게|어떡|어디|언제|뭐|무엇|누가|왜|얼마|어느|어떤|할까|하나요|있나요|있어요|되나요|할지|될지|어떨까|어떻하)/u.test(t))
+    return true;
+  if (/\b(how|what|where|when|who|why|which)\b/i.test(t)) return true;
+  return false;
+}
+
+/**
  * 메시지 본문에서 @이름 멘션을 파란색으로 강조해서 렌더.
  * - @ + 한글/영문 (공백·구두점·줄바꿈 전까지)을 매칭
  * - isMine(파란 배경 안)이면 흰색 굵게, 아니면 파란색
@@ -87,6 +104,7 @@ export function ChatRoom({
   meId,
   meName,
   isAdmin,
+  aiAutoReply,
   members,
   myLastReadAt,
   initialMessages,
@@ -95,6 +113,8 @@ export function ChatRoom({
   meId: string;
   meName: string;
   isAdmin: boolean;
+  /** 채팅방의 AI 자동 응답 모드. true면 질문형 메시지에 AI가 자동 답변. */
+  aiAutoReply: boolean;
   members: Member[];
   myLastReadAt: string | null;
   initialMessages: Message[];
@@ -508,6 +528,11 @@ export function ChatRoom({
           console.error("[chat AI] trigger failed:", err);
         });
       }
+    } else if (aiAutoReply && isQuestionLike(content)) {
+      // AI 자동 응답 모드: @prefix 없는 일반 질문 메시지 → 원문 그대로 AI에 prompt
+      triggerChatAiAction(chatId, content.trim()).catch((err) => {
+        console.error("[chat AI auto-reply] trigger failed:", err);
+      });
     }
   };
 
@@ -667,6 +692,11 @@ export function ChatRoom({
 
   return (
     <>
+      {aiAutoReply && (
+        <div className="px-4 py-2 text-[11px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border-b border-emerald-200 dark:border-emerald-900">
+          🤖 {t("chat.aiAutoReply.banner")}
+        </div>
+      )}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
