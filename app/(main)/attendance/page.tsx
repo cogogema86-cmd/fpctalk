@@ -173,30 +173,13 @@ export default async function AttendancePage({
         </p>
       </div>
 
-      {/* 범례 */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded bg-blue-500" />
-          {t("att.calendarLegend.mine")}
-        </div>
-        {isAdmin && (
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded bg-zinc-300 dark:bg-zinc-700" />
-            {t("att.calendarLegend.others")}
-          </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded bg-amber-300" />
-          {t("att.calendarLegend.event")}
-        </div>
-      </div>
-
       <MonthCalendar
         year={year}
         monthIdx={monthIdx}
         leavesByDay={leavesByDay}
         eventsByDay={eventsByDay}
         locale={locale}
+        showOthersToggle={isAdmin}
       />
 
       {/* 이번 달 일정 (접기 가능) — 일정 많아져도 캘린더 셀이 안 보일 때 활용 */}
