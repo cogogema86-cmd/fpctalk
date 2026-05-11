@@ -12,6 +12,11 @@ import { LeaveForm } from "./_leave-form";
 import { LeaveList } from "./_leave-list";
 import { MonthEventsList } from "./_month-events-list";
 import { getLocale, getT } from "@/lib/i18n/server";
+import {
+  getMonthlyPersonalEvents,
+  getUpcomingPersonalEvents,
+} from "@/lib/personal-events";
+import { UpcomingPersonal } from "./_upcoming-personal";
 
 export default async function AttendancePage({
   searchParams,
@@ -148,6 +153,13 @@ export default async function AttendancePage({
     reservedDays;
 
   // 본인 휴가 신청 내역
+  const upcomingPersonal = await getUpcomingPersonalEvents(me.id, 7);
+  const monthlyPersonalEvents = await getMonthlyPersonalEvents(
+    me.id,
+    year,
+    monthIdx,
+  );
+
   const leaveRequests = await getMyLeaveRequests(me.id);
   const leaveItems = leaveRequests.map((r) => ({
     id: r.id,
@@ -173,11 +185,14 @@ export default async function AttendancePage({
         </p>
       </div>
 
+      <UpcomingPersonal events={upcomingPersonal} />
+
       <MonthCalendar
         year={year}
         monthIdx={monthIdx}
         leavesByDay={leavesByDay}
         eventsByDay={eventsByDay}
+        personalEvents={monthlyPersonalEvents}
         locale={locale}
         showOthersToggle={isAdmin}
       />

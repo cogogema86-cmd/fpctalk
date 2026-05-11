@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { getUpcomingEventsForUser } from "@/lib/events";
+import { getUpcomingPersonalEvents } from "@/lib/personal-events";
 import { UpcomingEvents } from "./_upcoming-events";
+import { UpcomingPersonal } from "@/app/(main)/attendance/_upcoming-personal";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -40,6 +42,7 @@ export default async function DashboardPage() {
 
   const upcomingEvents = user ? await getUpcomingEventsForUser(user.id, 7) : [];
   const unackedCount = upcomingEvents.filter((e) => !e.acked).length;
+  const upcomingPersonal = user ? await getUpcomingPersonalEvents(user.id, 7) : [];
 
   const unitCases = t("dashboard.unitCases");
   const unitPeople = t("dashboard.unitPeople");
@@ -114,6 +117,9 @@ export default async function DashboardPage() {
 
       {/* D-7 행사 카드 */}
       <UpcomingEvents events={upcomingEvents} locale={locale} />
+
+      {/* D-7 내 일정 (개인) */}
+      <UpcomingPersonal events={upcomingPersonal} />
     </div>
   );
 }
