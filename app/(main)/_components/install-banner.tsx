@@ -14,7 +14,7 @@
  *  - 그 외: /install로 가는 안내 (배너 자체는 안 표시)
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useT } from "@/lib/i18n/client";
@@ -29,12 +29,40 @@ type BeforeInstallPromptEvent = Event & {
 
 type Mode = "hidden" | "androidReady" | "ios";
 
+/**
+ * dismiss 여부 체크 — localStorage/sessionStorage 양쪽 + 24h 내인지.
+ * 둘 다 실패해도 무해 (false 반환).
+ */
+function isRecentlyDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const ls = parseInt(localStorage.getItem(DISMISS_KEY) || "0", 10);
+    if (ls && Date.now() - ls < DISMISS_DURATION_MS) return true;
+  } catch {
+    // ignore
+  }
+  try {
+    const ss = parseInt(sessionStorage.getItem(DISMISS_KEY) || "0", 10);
+    if (ss && Date.now() - ss < DISMISS_DURATION_MS) return true;
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 export function InstallBanner() {
   const pathname = usePathname();
   const t = useT();
   const [mode, setMode] = useState<Mode>("hidden");
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosModal, setShowIosModal] = useState(false);
+
+  /**
+   * 같은 페이지 세션에서 dismiss됐는지 in-memory ref로 즉시 추적.
+   * useEffect cleanup 전에 beforeinstallprompt가 재발생해도 ref가 차단.
+   * localStorage가 차단된 환경(시크릿/iframe)에서도 같은 탭이면 안전.
+   */
+  const dismissedRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -48,12 +76,10 @@ export function InstallBanner() {
       (navigator as Navigator & { standalone?: boolean }).standalone === true;
     if (isStandalone) return;
 
-    // 최근 dismiss 됐는지
-    try {
-      const ts = parseInt(localStorage.getItem(DISMISS_KEY) || "0", 10);
-      if (ts && Date.now() - ts < DISMISS_DURATION_MS) return;
-    } catch {
-      // ignore
+    // dismiss 됐는지 (ref + storage 양쪽)
+    if (dismissedRef.current || isRecentlyDismissed()) {
+      dismissedRef.current = true;
+      return;
     }
 
     // iOS Safari? — Chrome on iOS 등은 제외
@@ -68,8 +94,14 @@ export function InstallBanner() {
     }
 
     // Android/Desktop: beforeinstallprompt 대기
+    // 핸들러 시점에 한 번 더 체크 — dismiss 후 SPA 페이지 이동으로
+    // effect 재실행 전 사이에 브라우저가 이벤트를 재발화해도 차단.
     const onPrompt = (e: Event) => {
       e.preventDefault();
+      if (dismissedRef.current || isRecentlyDismissed()) {
+        dismissedRef.current = true;
+        return;
+      }
       setDeferred(e as BeforeInstallPromptEvent);
       setMode("androidReady");
     };
@@ -85,12 +117,22 @@ export function InstallBanner() {
   }, [pathname]);
 
   const dismiss = () => {
+    // ref 즉시 — 다음 effect/이벤트가 동기 발생해도 차단
+    dismissedRef.current = true;
+    const ts = String(Date.now());
     try {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      localStorage.setItem(DISMISS_KEY, ts);
+    } catch {
+      // ignore
+    }
+    try {
+      // localStorage 차단(시크릿/iframe) 환경 보호용 백업
+      sessionStorage.setItem(DISMISS_KEY, ts);
     } catch {
       // ignore
     }
     setMode("hidden");
+    setDeferred(null);
     setShowIosModal(false);
   };
 
