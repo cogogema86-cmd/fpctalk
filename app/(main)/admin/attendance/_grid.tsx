@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addLeaveByAdminAction } from "@/app/(main)/attendance/actions";
 import type { LeaveType } from "@prisma/client";
@@ -75,6 +75,28 @@ export function AttendanceGrid({
   const [pickerType, setPickerType] = useState<LeaveType>("ANNUAL");
   const [error, setError] = useState<string | null>(null);
   const [showBulk, setShowBulk] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("");
+
+  // 역할 옵션 (실제 직원 데이터에서 추출)
+  const roleOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const u of users) set.add(u.roleLabel);
+    return Array.from(set).sort();
+  }, [users]);
+
+  // 검색/필터 적용된 사용자 목록
+  const visibleUsers = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    return users.filter((u) => {
+      if (roleFilter && u.roleLabel !== roleFilter) return false;
+      if (!q) return true;
+      return (
+        u.name.toLowerCase().includes(q) ||
+        u.username.toLowerCase().includes(q)
+      );
+    });
+  }, [users, searchQ, roleFilter]);
   const [detail, setDetail] = useState<{
     leaveId: string;
     userName: string;
@@ -155,21 +177,69 @@ export function AttendanceGrid({
 
   return (
     <>
-      <div className="flex items-center justify-end gap-2 flex-wrap">
-        <a
-          href={exportHref}
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm font-medium px-3 py-1.5"
-          title="이 달의 근태표를 .xlsx로 다운로드 (노무사 전달용)"
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 검색 */}
+        <div className="relative flex-1 min-w-[10rem] max-w-xs">
+          <input
+            type="search"
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            placeholder="직원 이름/아이디 검색"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 pl-8 pr-7 py-1.5 text-sm placeholder:text-zinc-400"
+          />
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm pointer-events-none">
+            🔍
+          </span>
+          {searchQ && (
+            <button
+              type="button"
+              onClick={() => setSearchQ("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-sm leading-none"
+              title="검색 초기화"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* 역할 필터 */}
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-sm"
+          title="역할로 필터"
         >
-          📥 엑셀 다운로드
-        </a>
-        <button
-          type="button"
-          onClick={() => setShowBulk(true)}
-          className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-1.5 shadow-sm"
-        >
-          ＋ 일괄 등록
-        </button>
+          <option value="">전체 역할</option>
+          {roleOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+
+        {/* 결과 카운트 (필터 적용 중일 때만) */}
+        {(searchQ.trim() || roleFilter) && (
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            {visibleUsers.length} / {users.length}명
+          </span>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          <a
+            href={exportHref}
+            className="rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm font-medium px-3 py-1.5"
+            title="이 달의 근태표를 .xlsx로 다운로드 (노무사 전달용)"
+          >
+            📥 엑셀 다운로드
+          </a>
+          <button
+            type="button"
+            onClick={() => setShowBulk(true)}
+            className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-1.5 shadow-sm"
+          >
+            ＋ 일괄 등록
+          </button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-x-auto">
@@ -214,7 +284,17 @@ export function AttendanceGrid({
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => {
+            {visibleUsers.length === 0 && (
+              <tr>
+                <td
+                  colSpan={daysInMonth + 6}
+                  className="px-4 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400"
+                >
+                  검색 결과가 없습니다.
+                </td>
+              </tr>
+            )}
+            {visibleUsers.map((u) => {
               const stats = computeStats(u.cells);
               const remaining = u.annualLeaveTotal - u.annualLeaveUsed;
               return (
