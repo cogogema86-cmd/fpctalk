@@ -19,12 +19,64 @@ import { prisma } from "@/lib/db";
 import { getMe } from "@/lib/chat";
 import { uploadFile, getActiveStorageType } from "@/lib/storage";
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024; // 30MB
 
 const IMAGE_RETENTION_DAYS = 365;
 const VIDEO_RETENTION_DAYS = 60;
+
+// 이미지 자동 압축 한도 (긴 변 기준)
+const IMAGE_MAX_DIMENSION = 1920;
+const IMAGE_JPEG_QUALITY = 85;
+
+/**
+ * 이미지 압축:
+ *  - GIF (애니메이션 가능) → 그대로 유지
+ *  - SVG → 그대로 (벡터, 압축 의미 없음)
+ *  - 그 외 (JPEG/PNG/WebP/HEIC/AVIF 등) → 긴 변 1920px, JPEG 85% 변환
+ *  - 압축 결과가 원본보다 큰 경우 원본 반환
+ *  - EXIF rotate 자동 적용
+ */
+async function compressImageIfApplicable(
+  buf: Buffer<ArrayBuffer>,
+  mime: string,
+): Promise<{ buffer: Buffer<ArrayBuffer>; mime: string; ext: string }> {
+  if (mime === "image/gif" || mime === "image/svg+xml") {
+    return { buffer: buf, mime, ext: mime === "image/gif" ? "gif" : "svg" };
+  }
+  try {
+    const compressedRaw = await sharp(buf, { failOn: "none" })
+      .rotate() // EXIF orientation 자동 적용
+      .resize(IMAGE_MAX_DIMENSION, IMAGE_MAX_DIMENSION, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: IMAGE_JPEG_QUALITY, mozjpeg: true })
+      .toBuffer();
+    // sharp가 반환하는 Buffer는 ArrayBufferLike — 표준 ArrayBuffer로 정규화
+    const compressed = Buffer.from(compressedRaw);
+    if (compressed.byteLength < buf.byteLength) {
+      return { buffer: compressed, mime: "image/jpeg", ext: "jpg" };
+    }
+    // 압축이 효과 없으면 (이미 작은 이미지) 원본 유지
+    return { buffer: buf, mime, ext: guessExt(mime) };
+  } catch {
+    // sharp 처리 실패 (손상된 이미지 등) — 원본 그대로
+    return { buffer: buf, mime, ext: guessExt(mime) };
+  }
+}
+
+function guessExt(mime: string): string {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  if (mime === "image/heic" || mime === "image/heif") return "heic";
+  if (mime === "image/avif") return "avif";
+  if (mime === "image/gif") return "gif";
+  return "";
+}
 
 export async function POST(
   req: Request,
@@ -98,24 +150,42 @@ export async function POST(
   // 파일명 sanitize — 확장자만 보존
   const origName = file.name || "attachment";
   const extMatch = origName.match(/\.([a-zA-Z0-9]+)$/);
-  const ext = extMatch ? extMatch[1].toLowerCase() : "";
+  const origExt = extMatch ? extMatch[1].toLowerCase() : "";
   const safeName = origName
     .replace(/[\\/]/g, "_")
     .replace(/[^\w.\- ]/g, "")
     .slice(0, 120) || "attachment";
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const originalBuffer = Buffer.from(await file.arrayBuffer());
+
+  // 이미지면 자동 압축 (긴 변 1920px, JPEG 85%) — GIF/SVG 제외
+  let finalBuffer = originalBuffer;
+  let finalMime = mime;
+  let finalExt = origExt;
+  let finalName = safeName;
+  if (kind === "image") {
+    const c = await compressImageIfApplicable(originalBuffer, mime);
+    finalBuffer = c.buffer;
+    finalMime = c.mime;
+    if (c.ext) finalExt = c.ext;
+    // 압축으로 JPEG 변환된 경우 파일명 확장자도 갱신 (다운로드 호환성)
+    if (mime !== finalMime) {
+      const base = safeName.replace(/\.[^.]+$/, "");
+      finalName = `${base || "image"}.${finalExt}`;
+    }
+  }
+
   const storageType = getActiveStorageType();
-  const key = `chat/${chatId}/${randomUUID()}${ext ? `.${ext}` : ""}`;
+  const key = `chat/${chatId}/${randomUUID()}${finalExt ? `.${finalExt}` : ""}`;
 
   let storagePath: string;
   try {
     const r = await uploadFile({
       storageType,
       path: key,
-      fileName: safeName,
-      buffer,
-      mimeType: mime,
+      fileName: finalName,
+      buffer: finalBuffer,
+      mimeType: finalMime,
     });
     storagePath = r.storagePath;
   } catch (e) {
@@ -136,9 +206,9 @@ export async function POST(
     attachment: {
       kind,
       path: storagePath,
-      mime,
-      size: file.size,
-      name: safeName,
+      mime: finalMime,
+      size: finalBuffer.byteLength,
+      name: finalName,
       expiresAt,
     },
   });
