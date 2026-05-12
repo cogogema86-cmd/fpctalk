@@ -851,7 +851,12 @@ export async function getDocumentsByUploader(uploaderId: string) {
     include: {
       _count: { select: { signatureRequests: true } },
       signatureRequests: {
-        select: { status: true },
+        select: {
+          status: true,
+          externalName: true,
+          signer: { select: { name: true } },
+        },
+        orderBy: { createdAt: "asc" },
       },
     },
     orderBy: { createdAt: "desc" },

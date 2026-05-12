@@ -159,6 +159,20 @@ export default async function DocumentsPage() {
                 (r) => r.status === "SIGNED",
               ).length;
               const isComplete = total > 0 && signed === total;
+              // 사인자 라벨: 직원이면 이름, 외부면 externalName. 상태 아이콘 prefix.
+              const PREVIEW_LIMIT = 4;
+              const signerLabels = d.signatureRequests.map((r) => {
+                const name = r.signer?.name ?? r.externalName ?? "?";
+                const icon =
+                  r.status === "SIGNED"
+                    ? "✓"
+                    : r.status === "REJECTED" || r.status === "CANCELLED"
+                      ? "✕"
+                      : "⏳";
+                return `${icon} ${name}`;
+              });
+              const previewSigners = signerLabels.slice(0, PREVIEW_LIMIT);
+              const remaining = signerLabels.length - previewSigners.length;
               return (
                 <li
                   key={d.id}
@@ -170,6 +184,22 @@ export default async function DocumentsPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate">{d.title}</div>
+                      {signerLabels.length > 0 && (
+                        <div className="text-xs text-zinc-600 dark:text-zinc-300 mt-0.5 truncate">
+                          <span className="text-zinc-500">
+                            {t("documents.signersLabel")}:
+                          </span>{" "}
+                          {previewSigners.join(", ")}
+                          {remaining > 0 && (
+                            <span className="text-zinc-400 ml-1">
+                              {t("documents.signersMore").replace(
+                                "{n}",
+                                String(remaining),
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="text-xs text-zinc-400 mt-0.5">
                         {d.createdAt.toLocaleDateString(dateLocale)}
                       </div>
