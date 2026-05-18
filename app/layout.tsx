@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { LocaleProvider } from "@/lib/i18n/client";
 import { getLocale } from "@/lib/i18n/server";
@@ -93,6 +94,12 @@ export default async function RootLayout({
           content="default"
         />
         <meta name="mobile-web-app-capable" content="yes" />
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2976423366068371"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider locale={locale}>{children}</LocaleProvider>
