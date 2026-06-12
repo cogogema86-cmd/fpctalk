@@ -737,10 +737,11 @@ export function ChatRoom({
         onScroll={handleFloatingDateScroll}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
       >
-        {/* 스크롤 중 우측 상단 떠다니는 날짜 (h-0 sticky — 레이아웃 영향 없음) */}
-        <div className="sticky top-0 z-10 h-0 flex justify-end pointer-events-none">
+        {/* 스크롤 중 우측 상단 떠다니는 날짜 (h-0 sticky — 레이아웃 영향 없음)
+            items-start 필수: 없으면 flex stretch로 칩 높이가 0으로 짜부라져 글자가 배경 밖으로 넘침 */}
+        <div className="sticky top-0 z-10 h-0 flex justify-end items-start pointer-events-none">
           <span
-            className={`rounded-full bg-zinc-700/80 dark:bg-zinc-200/90 text-white dark:text-zinc-900 text-[11px] px-3 py-1 shadow transition-opacity duration-300 ${
+            className={`mt-0.5 rounded-full bg-white/95 dark:bg-zinc-800/95 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 text-xs font-medium px-3.5 py-1.5 shadow-md transition-opacity duration-300 ${
               floatingDate ? "opacity-100" : "opacity-0"
             }`}
           >
