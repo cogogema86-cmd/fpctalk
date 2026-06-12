@@ -692,6 +692,39 @@ export function ChatRoom({
     ? messages.filter((m) => m.id !== activeOrder.id)
     : messages;
 
+  // 스크롤 중 우측 상단에 현재 보이는 메시지의 날짜 표시 (카카오톡 스타일)
+  // 스크롤이 멈추면 1.2초 후 사라짐
+  const [floatingDate, setFloatingDate] = useState<string | null>(null);
+  const floatingHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const floatingRafRef = useRef(0);
+
+  const handleFloatingDateScroll = () => {
+    cancelAnimationFrame(floatingRafRef.current);
+    floatingRafRef.current = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const nodes = el.querySelectorAll<HTMLElement>("[data-msg-date]");
+      for (const n of nodes) {
+        // 화면 상단에 걸쳐 있는 첫 메시지의 날짜
+        if (n.getBoundingClientRect().bottom >= top + 8) {
+          setFloatingDate(n.dataset.msgDate ?? null);
+          break;
+        }
+      }
+      if (floatingHideTimer.current) clearTimeout(floatingHideTimer.current);
+      floatingHideTimer.current = setTimeout(() => setFloatingDate(null), 1200);
+    });
+  };
+
+  useEffect(
+    () => () => {
+      if (floatingHideTimer.current) clearTimeout(floatingHideTimer.current);
+      cancelAnimationFrame(floatingRafRef.current);
+    },
+    [],
+  );
+
   return (
     <>
       {aiAutoReply && (
@@ -701,8 +734,19 @@ export function ChatRoom({
       )}
       <div
         ref={scrollRef}
+        onScroll={handleFloatingDateScroll}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
       >
+        {/* 스크롤 중 우측 상단 떠다니는 날짜 (h-0 sticky — 레이아웃 영향 없음) */}
+        <div className="sticky top-0 z-10 h-0 flex justify-end pointer-events-none">
+          <span
+            className={`rounded-full bg-zinc-700/80 dark:bg-zinc-200/90 text-white dark:text-zinc-900 text-[11px] px-3 py-1 shadow transition-opacity duration-300 ${
+              floatingDate ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {floatingDate ? formatDateLabel(floatingDate, locale) : ""}
+          </span>
+        </div>
         {visibleMessages.length === 0 ? (
           <div className="text-center text-sm text-zinc-400 py-8">
             {t("chat.firstMessage")}
@@ -723,12 +767,14 @@ export function ChatRoom({
                   <DateDivider dateStr={m.createdAt} locale={locale} />
                 )}
                 {showDivider && <UnreadDivider ref={dividerRef} />}
-                <MessageBubble
-                  message={m}
-                  isMine={isMine}
-                  showAuthor={showAuthor}
-                  onReply={startReply}
-                />
+                <div data-msg-date={m.createdAt}>
+                  <MessageBubble
+                    message={m}
+                    isMine={isMine}
+                    showAuthor={showAuthor}
+                    onReply={startReply}
+                  />
+                </div>
               </Fragment>
             );
           })
@@ -1108,17 +1154,21 @@ function isSameLocalDay(a: string, b: string): boolean {
   );
 }
 
-/**
- * 날짜가 바뀌는 첫 메시지 위에 표시하는 가운데 날짜 구분선 (카카오톡 스타일).
- * ko: "2026년 6월 12일 금요일", en: "Friday, June 12, 2026"
- */
-function DateDivider({ dateStr, locale }: { dateStr: string; locale: string }) {
-  const label = new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ko-KR", {
+/** 날짜 라벨 포맷 — ko: "2026년 6월 12일 금요일", en: "Friday, June 12, 2026" */
+function formatDateLabel(dateStr: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
     weekday: "long",
   }).format(new Date(dateStr));
+}
+
+/**
+ * 날짜가 바뀌는 첫 메시지 위에 표시하는 가운데 날짜 구분선 (카카오톡 스타일).
+ */
+function DateDivider({ dateStr, locale }: { dateStr: string; locale: string }) {
+  const label = formatDateLabel(dateStr, locale);
   return (
     <div className="flex justify-center py-1.5">
       <span className="rounded-full bg-zinc-200/80 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-300 text-[11px] px-3 py-1">
