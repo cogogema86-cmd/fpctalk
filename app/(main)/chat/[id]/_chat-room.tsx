@@ -714,8 +714,14 @@ export function ChatRoom({
             const showAuthor =
               !isMine && (!prev || prev.userId !== m.userId);
             const showDivider = i === firstUnreadIdx;
+            // 날짜가 바뀌는 첫 메시지(맨 첫 메시지 포함) 위에 날짜 구분선
+            const showDateDivider =
+              !prev || !isSameLocalDay(prev.createdAt, m.createdAt);
             return (
               <Fragment key={m.id}>
+                {showDateDivider && (
+                  <DateDivider dateStr={m.createdAt} locale={locale} />
+                )}
                 {showDivider && <UnreadDivider ref={dividerRef} />}
                 <MessageBubble
                   message={m}
@@ -1090,6 +1096,37 @@ const UnreadDivider = ({
     </div>
   );
 };
+
+/** 두 ISO 시각이 (현지 시간대 기준) 같은 날인지 */
+function isSameLocalDay(a: string, b: string): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
+
+/**
+ * 날짜가 바뀌는 첫 메시지 위에 표시하는 가운데 날짜 구분선 (카카오톡 스타일).
+ * ko: "2026년 6월 12일 금요일", en: "Friday, June 12, 2026"
+ */
+function DateDivider({ dateStr, locale }: { dateStr: string; locale: string }) {
+  const label = new Intl.DateTimeFormat(locale === "en" ? "en-US" : "ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(new Date(dateStr));
+  return (
+    <div className="flex justify-center py-1.5">
+      <span className="rounded-full bg-zinc-200/80 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-300 text-[11px] px-3 py-1">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 type OrderMetaClient = {
   title?: string;
