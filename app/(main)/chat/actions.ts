@@ -51,6 +51,11 @@ export async function submitOrderResponseAction(
   if (!msg || msg.type !== "ORDER") {
     return { ok: false, error: "주문 메시지가 아닙니다." };
   }
+  // 권한: 해당 채팅 접근 자격(멤버 또는 레벨)이 있어야 응답 가능 (IDOR 방지)
+  const okAccess = await canAccessForPolling(msg.chatId, me.id);
+  if (!okAccess) {
+    return { ok: false, error: "이 채팅에 접근 권한이 없습니다." };
+  }
   const meta = (msg.metadata ?? {}) as OrderMeta;
   if (meta.status === "closed") {
     return { ok: false, error: "이미 마감된 주문입니다." };

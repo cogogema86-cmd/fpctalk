@@ -31,12 +31,11 @@ export async function GET(req: Request) {
 
   try {
     // 가벼운 DB 왕복 — 이 요청 자체가 Supabase 활성 신호가 됨
+    // (공개 호출 가능 엔드포인트이므로 사용자 수 등 내부 정보는 노출하지 않음)
     await prisma.$queryRaw`SELECT 1`;
-    const userCount = await prisma.user.count();
     return NextResponse.json({
       ok: true,
       ts: new Date().toISOString(),
-      users: userCount,
       via: fromVercelCron ? "vercel-cron" : "external",
     });
   } catch (e) {

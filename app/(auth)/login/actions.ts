@@ -39,15 +39,18 @@ export async function loginAction(
 
   const email = usernameToEmail(username);
 
+  // 사용자에게 노출하는 에러는 일반화한다(계정 열거·내부정보 누출 방지).
+  // 상세 원인은 서버 로그(console)로만 남겨 관리자가 Vercel 로그에서 확인.
+  const GENERIC_AUTH_ERROR = "아이디 또는 비밀번호가 올바르지 않습니다.";
+  const GENERIC_SERVER_ERROR =
+    "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+
   let supabase;
   try {
     supabase = await createClient();
   } catch (e) {
     console.error("[login] createClient 실패:", e);
-    return {
-      error: "서버 설정 오류 (createClient)",
-      debug: e instanceof Error ? e.message : String(e),
-    };
+    return { error: GENERIC_SERVER_ERROR };
   }
 
   let signInResult;
@@ -55,10 +58,7 @@ export async function loginAction(
     signInResult = await supabase.auth.signInWithPassword({ email, password });
   } catch (e) {
     console.error("[login] signIn 호출 자체 예외:", e);
-    return {
-      error: "Supabase 호출 실패",
-      debug: e instanceof Error ? e.message : String(e),
-    };
+    return { error: GENERIC_SERVER_ERROR };
   }
 
   const { error, data } = signInResult;
@@ -71,17 +71,11 @@ export async function loginAction(
   });
 
   if (error) {
-    return {
-      error: `로그인 실패: ${error.message} (status ${error.status ?? "?"})`,
-      debug: `email=${email}`,
-    };
+    return { error: GENERIC_AUTH_ERROR };
   }
 
   if (!data?.session) {
-    return {
-      error: "세션 생성 실패",
-      debug: `user=${data?.user?.id ?? "none"}`,
-    };
+    return { error: GENERIC_AUTH_ERROR };
   }
 
   // 비활성(퇴사) 계정이면 즉시 로그아웃 + 로그인 거부
