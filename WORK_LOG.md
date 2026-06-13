@@ -16,7 +16,12 @@
   - `login/actions.ts`: 인증 실패 메시지 일반화("아이디 또는 비밀번호가 올바르지 않습니다") — 계정 열거·Supabase 내부정보(status/email) 누출 차단. 상세는 서버 콘솔 로그로만.
   - `keepalive/route.ts`: 응답에서 `users`(사용자 수) 제거 — 공개 엔드포인트 정보누출 방지.
 - **검증**: `tsc --noEmit` 0 에러, `next build` 성공, 로컬 prod 헤더 curl 확인.
-- **사용자 조치 권장 (코드로 불가)**: ① Vercel 환경변수에 `CRON_SECRET` 설정(keepalive 인증 강제) ② Next.js 16.2.4 보안 패치 업그레이드 검토(미들웨어 우회 권고문) — 회귀 위험 있어 사용자 승인 후 별도 진행. ③ Supabase 대시보드 Auth 로그인 rate-limit 확인(무차별 대입 방어는 Supabase 기본 제공에 의존).
+- **사용자 조치 권장 (코드로 불가)**: ① Vercel 환경변수에 `CRON_SECRET` 설정(keepalive 인증 강제) ② Supabase 대시보드 Auth 로그인 rate-limit 확인(무차별 대입 방어는 Supabase 기본 제공에 의존).
+
+### 후속: Next.js 16.2.4 → 16.2.9 보안 패치 업그레이드 (`f740674`)
+- 미들웨어 관련 보안 권고 패치 포함. 같은 마이너 내 패치라 회귀 위험 낮음. 안전 위해 `chore/next-16.2.9` 브랜치 작업 후 ff-merge.
+- **검증**: `tsc --noEmit` 0에러, `next build` 성공, 로컬 prod 스모크(로그인 200·보안헤더·keepalive DB조회), 배포 후 프로덕션 재확인 모두 통과.
+- **남은 npm audit (의도적 미수정)**: esbuild/tmp/tsx(=dev server·빌드 도구), postcss/next(빌드타임 CSS) — 전부 **빌드/개발 시점 전용이라 라이브 사이트 외부 공격면 아님**. next의 안정 최신이 16.2.9이고 audit가 요구하는 수정본은 16.3 canary뿐. `npm audit fix --force`는 next를 9.x로 다운그레이드시키므로 **금지**.
 
 ## ✅ 2026-06-14 — 관리자 AI 모델 실시간 선택 (`9f169b2`)
 
