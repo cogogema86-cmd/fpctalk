@@ -6,6 +6,18 @@
 
 ---
 
+## ✅ 2026-06-14 — 보안 점검 & 하드닝 (외부 해킹 대비) (`ab4e778`)
+- **요청**: "외부에서 해킹등 보안에 철저했으면 좋겠습니다." → 4개 서브에이전트(authz/IDOR/시크릿·미들웨어/인젝션·XSS) 병렬 감사 + 코드 검증.
+- **RLS 검증 (가장 중요·이상무)**: 공개 anon 키(클라 번들에 노출됨)로 Supabase REST(`/rest/v1/User` 등) 직접 조회 시도 → 모든 민감 테이블 **HTTP 401 / 42501(insufficient_privilege)**. Prisma 생성 테이블에 `anon` 역할 권한이 없어 외부 PostgREST 접근 원천 차단. 앱은 Prisma 직결로만 DB 접근. → **외부에서 데이터 직접 읽기 불가 확인**.
+- **파일 서빙 권한 양호**: `/api/files`(uploader/signer), `/api/chat/file`(멤버/레벨), `/api/sign-files`(랜덤 토큰+만료+SIGNED차단) 모두 정상.
+- **수정 4건 (배포됨)**:
+  - `next.config.ts`: 전역 보안헤더(X-Content-Type-Options:nosniff, X-Frame-Options:SAMEORIGIN, HSTS 2y, Referrer-Policy, Permissions-Policy) + `poweredByHeader:false`(X-Powered-By 제거). 업로드 파일 라우트(`/api/files|chat/file|sign-files`)엔 **CSP `sandbox`**로 SVG/HTML 저장형 XSS(스크립트 실행) 차단. → 로컬 prod 서버 curl로 적용 확인.
+  - `chat/actions.ts` `submitOrderResponseAction`: 채팅 접근권한 체크(`canAccessForPolling`) 추가 — **IDOR(비멤버가 messageId로 주문응답 주입) 방지**.
+  - `login/actions.ts`: 인증 실패 메시지 일반화("아이디 또는 비밀번호가 올바르지 않습니다") — 계정 열거·Supabase 내부정보(status/email) 누출 차단. 상세는 서버 콘솔 로그로만.
+  - `keepalive/route.ts`: 응답에서 `users`(사용자 수) 제거 — 공개 엔드포인트 정보누출 방지.
+- **검증**: `tsc --noEmit` 0 에러, `next build` 성공, 로컬 prod 헤더 curl 확인.
+- **사용자 조치 권장 (코드로 불가)**: ① Vercel 환경변수에 `CRON_SECRET` 설정(keepalive 인증 강제) ② Next.js 16.2.4 보안 패치 업그레이드 검토(미들웨어 우회 권고문) — 회귀 위험 있어 사용자 승인 후 별도 진행. ③ Supabase 대시보드 Auth 로그인 rate-limit 확인(무차별 대입 방어는 Supabase 기본 제공에 의존).
+
 ## ✅ 2026-06-14 — 관리자 AI 모델 실시간 선택 (`9f169b2`)
 
 - 배경: 제미나이 모델명이 자주 바뀌는데 env var(`AI_MODEL_FAST/PRO`)라 매번 재배포 필요. → 관리자 화면에서 바꿔 저장하면 재배포 없이 즉시 반영되게.
