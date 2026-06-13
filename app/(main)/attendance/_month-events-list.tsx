@@ -2,7 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteEventAction } from "@/app/(main)/events/actions";
+import {
+  deleteEventAction,
+  updateEventAction,
+} from "@/app/(main)/events/actions";
 import { deleteLeaveByAdminAction } from "./actions";
 import { useT } from "@/lib/i18n/client";
 
@@ -13,6 +16,13 @@ type EventItem = {
   endDate: string;
   location: string | null;
 };
+
+/** ISO 문자열 → datetime-local input 값 (YYYY-MM-DDTHH:mm, 현지시각) */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 type LeaveItem = {
   id: string;
@@ -58,6 +68,7 @@ export function MonthEventsList({
   const [open, setOpen] = useState(defaultOpen);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [editing, setEditing] = useState<EventItem | null>(null);
 
   const total = events.length + leaves.length;
   if (total === 0) return null;
@@ -141,6 +152,17 @@ export function MonthEventsList({
         <span className="text-zinc-400 text-sm">{open ? "▲" : "▼"}</span>
       </button>
 
+      {editing && (
+        <EventEditModal
+          event={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            router.refresh();
+          }}
+        />
+      )}
+
       {open && (
         <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 max-h-[60vh] overflow-y-auto">
           {items.map((it) => (
@@ -161,6 +183,23 @@ export function MonthEventsList({
                       </span>
                     )}
                   </span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditing({
+                          id: it.id,
+                          title: it.title,
+                          startDate: it.startDate,
+                          endDate: it.endDate,
+                          location: it.location,
+                        })
+                      }
+                      className="text-xs rounded-md border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 shrink-0"
+                    >
+                      ✏️ 수정
+                    </button>
+                  )}
                   {isAdmin && (
                     <button
                       type="button"
@@ -213,5 +252,115 @@ export function MonthEventsList({
         </ul>
       )}
     </section>
+  );
+}
+
+function EventEditModal({
+  event,
+  onClose,
+  onSaved,
+}: {
+  event: EventItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(event.title);
+  const [start, setStart] = useState(toLocalInput(event.startDate));
+  const [end, setEnd] = useState(toLocalInput(event.endDate));
+  const [location, setLocation] = useState(event.location ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const save = () => {
+    if (!title.trim()) {
+      setError("제목을 입력해주세요.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await updateEventAction({
+        eventId: event.id,
+        title,
+        // datetime-local 값(현지시각)을 ISO로 변환
+        startDate: new Date(start).toISOString(),
+        endDate: new Date(end).toISOString(),
+        location: location.trim() || null,
+      });
+      if (!r.ok) {
+        setError(r.error ?? "수정 실패");
+        return;
+      }
+      onSaved();
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          🎉 행사 수정
+        </h3>
+        <div>
+          <label className="text-xs text-zinc-500">제목</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-zinc-500">시작</label>
+            <input
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="mt-1 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-500">종료</label>
+            <input
+              type="datetime-local"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className="mt-1 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-zinc-500">장소 (선택)</label>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          />
+        </div>
+        {error && <div className="text-xs text-red-500">{error}</div>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={isPending}
+            className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-1.5 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
+          >
+            {isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

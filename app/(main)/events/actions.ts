@@ -189,3 +189,93 @@ export async function deleteEventAction(
   revalidatePath("/dashboard");
   return { ok: true };
 }
+
+/**
+ * 행사 수정 — 관리자 전용. 제목/기간/장소 변경.
+ * 등록 멤버에게 변경 푸시 알림. (sourceMessage metadata도 동기화)
+ */
+export async function updateEventAction(input: {
+  eventId: string;
+  title: string;
+  startDate: string; // ISO (datetime-local 값)
+  endDate: string;
+  location: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, error: "로그인이 필요합니다." };
+  const u = await prisma.user.findUnique({
+    where: { id: me.id },
+    include: { role: { select: { isAdmin: true } } },
+  });
+  if (!u?.role.isAdmin) {
+    return { ok: false, error: "관리자만 행사를 수정할 수 있습니다." };
+  }
+
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: "제목을 입력해주세요." };
+
+  const start = new Date(input.startDate);
+  const end = new Date(input.endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return { ok: false, error: "날짜 형식이 올바르지 않습니다." };
+  }
+  if (end.getTime() < start.getTime()) {
+    return { ok: false, error: "종료일이 시작일보다 빠를 수 없습니다." };
+  }
+
+  const ev = await prisma.event.findUnique({
+    where: { id: input.eventId },
+    select: { id: true, sourceMessageId: true },
+  });
+  if (!ev) return { ok: false, error: "행사를 찾을 수 없습니다." };
+
+  const location = input.location?.trim() || null;
+
+  await prisma.event.update({
+    where: { id: input.eventId },
+    data: { title, startDate: start, endDate: end, location },
+  });
+
+  // 채팅 EVENT_PROPOSAL 메시지 metadata 동기화 (있으면)
+  if (ev.sourceMessageId) {
+    const msg = await prisma.message.findUnique({
+      where: { id: ev.sourceMessageId },
+      select: { metadata: true, chatId: true },
+    });
+    if (msg) {
+      const meta = (msg.metadata ?? {}) as Record<string, unknown>;
+      await prisma.message.update({
+        where: { id: ev.sourceMessageId },
+        data: {
+          metadata: {
+            ...meta,
+            title,
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            location,
+          },
+        },
+      });
+      revalidatePath(`/chat/${msg.chatId}`);
+    }
+  }
+
+  // 확인(ack)한 멤버에게 변경 알림
+  const acks = await prisma.eventAcknowledgement.findMany({
+    where: { eventId: input.eventId },
+    select: { userId: true },
+  });
+  const recipients = acks.map((a) => a.userId).filter((id) => id !== me.id);
+  if (recipients.length > 0) {
+    void sendPushToUsers(recipients, {
+      title: "📝 학원 행사 변경",
+      body: title,
+      url: "/attendance",
+      tag: `event-${input.eventId}`,
+    });
+  }
+
+  revalidatePath("/attendance");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
