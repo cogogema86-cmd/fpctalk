@@ -572,6 +572,62 @@ export async function submitSignature(params: SubmitSignatureParams) {
     color: rgb(0.25, 0.25, 0.25),
   });
 
+  // 3-b) 전자서명 정보(감사) 페이지 — 법적 증거력용. 서명자·시각·IP·기기·문서ID 기록.
+  const auditPage = pdfDoc.addPage();
+  const { width: aw, height: ah } = auditPage.getSize();
+  auditPage.drawText(safeCap("전자서명 정보 (Signature Audit)"), {
+    x: 50,
+    y: ah - 70,
+    size: 18,
+    font: capFont,
+    color: rgb(0, 0, 0),
+  });
+  auditPage.drawLine({
+    start: { x: 50, y: ah - 82 },
+    end: { x: aw - 50, y: ah - 82 },
+    thickness: 1,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  const signedAtKst = now.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const auditRows: Array<[string, string]> = [
+    ["문서", req.document.title ?? ""],
+    ["문서 ID", req.document.id],
+    ["서명자", signerLabel],
+    ["서명 시각 (KST)", signedAtKst],
+  ];
+  if (ip) auditRows.push(["IP 주소", ip]);
+  if (userAgent) auditRows.push(["접속 기기", userAgent.slice(0, 80)]);
+  let ay = ah - 120;
+  for (const [label, value] of auditRows) {
+    auditPage.drawText(safeCap(label), {
+      x: 50,
+      y: ay,
+      size: 10,
+      font: capFont,
+      color: rgb(0.45, 0.45, 0.45),
+    });
+    auditPage.drawText(safeCap(value).slice(0, 95), {
+      x: 170,
+      y: ay,
+      size: 10,
+      font: capFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    ay -= 24;
+  }
+  auditPage.drawText(
+    safeCap("이 페이지는 전자서명의 증빙을 위해 시스템이 자동 생성했습니다."),
+    { x: 50, y: 60, size: 9, font: capFont, color: rgb(0.5, 0.5, 0.5) },
+  );
+
   // 4) 합성된 PDF 저장 — 부모 문서와 같은 스토리지에 보관
   const signedBytes = await pdfDoc.save();
   const signedBuffer = Buffer.from(signedBytes);
