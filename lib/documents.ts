@@ -318,7 +318,8 @@ export async function submitSignature(params: SubmitSignatureParams) {
     const koBytes = await loadKoreanFont();
     if (koBytes) {
       try {
-        const koFont = await certPdf.embedFont(koBytes, { subset: true });
+        // subset 임베드는 PDFium/크롬에서 글리프 폭이 깨져 글자가 흩어짐 → 전체 임베드
+        const koFont = await certPdf.embedFont(koBytes);
         certFont = koFont;
         certBoldFont = koFont; // Noto Sans KR Regular only — size increase serves as "bold"
         useUnicodeFont = true;
@@ -528,7 +529,8 @@ export async function submitSignature(params: SubmitSignatureParams) {
   const koBytesPdf = await loadKoreanFont();
   if (koBytesPdf) {
     try {
-      capFont = await pdfDoc.embedFont(koBytesPdf, { subset: true });
+      // subset 임베드는 PDFium/크롬에서 글리프 폭이 깨져 글자가 흩어짐 → 전체 임베드
+      capFont = await pdfDoc.embedFont(koBytesPdf);
       pdfUseUnicode = true;
     } catch {
       // keep helvetica
