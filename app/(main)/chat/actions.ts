@@ -943,3 +943,50 @@ export async function getMessagesSinceAction(
     metadata: m.metadata,
   }));
 }
+
+// =====================================================
+// 메시지 검색 — 채팅방 안에서 키워드(content)로 검색
+// =====================================================
+export type SearchHit = {
+  id: string;
+  content: string;
+  type: string;
+  createdAt: string;
+  userName: string | null;
+};
+
+export async function searchMessagesAction(
+  chatId: string,
+  keyword: string,
+): Promise<{ ok: boolean; results: SearchHit[]; error?: string }> {
+  const me = await getMe();
+  if (!me) return { ok: false, results: [], error: "로그인이 필요합니다." };
+
+  const q = keyword.trim();
+  if (q.length < 1) return { ok: true, results: [] };
+
+  const okAccess = await canAccessForPolling(chatId, me.id);
+  if (!okAccess) return { ok: false, results: [], error: "권한이 없습니다." };
+
+  // 본문(content) 부분일치, 대소문자 무시. 첨부/시스템 등도 content에 파일명·문구가 들어가므로 포함.
+  const rows = await prisma.message.findMany({
+    where: {
+      chatId,
+      content: { contains: q, mode: "insensitive" },
+    },
+    orderBy: { createdAt: "desc" },
+    include: { user: { select: { name: true } } },
+    take: 100,
+  });
+
+  return {
+    ok: true,
+    results: rows.map((m) => ({
+      id: m.id,
+      content: m.content,
+      type: m.type,
+      createdAt: m.createdAt.toISOString(),
+      userName: m.user?.name ?? null,
+    })),
+  };
+}

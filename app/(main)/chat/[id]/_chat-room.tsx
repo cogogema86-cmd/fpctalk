@@ -15,11 +15,13 @@ import {
   getMessagesSinceAction,
   getOrderMessagesAction,
   markAsReadAction,
+  searchMessagesAction,
   sendMessageAction,
   submitOrderResponseAction,
   translateMessageAction,
   translateTextsAction,
   triggerChatAiAction,
+  type SearchHit,
   type SendMessageState,
 } from "../actions";
 import { useT, useLocale } from "@/lib/i18n/client";
@@ -723,6 +725,39 @@ export function ChatRoom({
     [],
   );
 
+  // 메시지 검색 (채팅방 안 키워드 검색)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
+  const [searchPending, startSearchTransition] = useTransition();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
+  const runSearch = () => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults(null);
+      return;
+    }
+    startSearchTransition(async () => {
+      const r = await searchMessagesAction(chatId, q);
+      setSearchResults(r.ok ? r.results : []);
+    });
+  };
+
+  const jumpToMessage = (id: string) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setHighlightId(id);
+      setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 2000);
+      setSearchOpen(false);
+    } else {
+      // 현재 로드된 메시지(최근 200개)에 없음 — 검색 결과 패널에서 내용만 확인 가능
+      alert("이 메시지는 최근 목록에 없어 위치로 이동할 수 없습니다. (검색 결과에서 내용 확인 가능)");
+    }
+  };
+
   return (
     <>
       {aiAutoReply && (
@@ -730,6 +765,100 @@ export function ChatRoom({
           🤖 {t("chat.aiAutoReply.banner")}
         </div>
       )}
+
+      {/* 검색 바 */}
+      <div className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black">
+        <div className="px-3 py-1.5 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setSearchOpen((o) => {
+                const next = !o;
+                if (!next) {
+                  setSearchResults(null);
+                  setSearchQuery("");
+                }
+                return next;
+              });
+              setTimeout(() => searchInputRef.current?.focus(), 50);
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 flex items-center gap-1"
+          >
+            🔍 {searchOpen ? "검색 닫기" : "메시지 검색"}
+          </button>
+        </div>
+        {searchOpen && (
+          <div className="px-3 pb-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    runSearch();
+                  }
+                }}
+                placeholder="이 채팅방에서 검색할 단어"
+                className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500"
+              />
+              <button
+                type="button"
+                onClick={runSearch}
+                disabled={searchPending}
+                className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-3 py-1.5 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 shrink-0"
+              >
+                {searchPending ? "검색 중..." : "검색"}
+              </button>
+            </div>
+            {searchResults !== null && (
+              <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-900">
+                {searchResults.length === 0 ? (
+                  <div className="px-3 py-3 text-xs text-zinc-400 text-center">
+                    검색 결과가 없습니다.
+                  </div>
+                ) : (
+                  <>
+                    <div className="px-3 py-1.5 text-[11px] text-zinc-400 bg-zinc-50 dark:bg-zinc-900">
+                      결과 {searchResults.length}건 (최신순) — 클릭 시 해당 메시지로 이동
+                    </div>
+                    {searchResults.map((h) => (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => jumpToMessage(h.id)}
+                        className="w-full text-left px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      >
+                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 mb-0.5">
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                            {h.userName ?? "시스템/AI"}
+                          </span>
+                          <span>
+                            {new Date(h.createdAt).toLocaleString(
+                              locale === "en" ? "en-US" : "ko-KR",
+                              {
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-xs text-zinc-800 dark:text-zinc-200 line-clamp-2">
+                          {h.content}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div
         ref={scrollRef}
         onScroll={handleFloatingDateScroll}
@@ -766,7 +895,15 @@ export function ChatRoom({
                   <DateDivider dateStr={m.createdAt} locale={locale} />
                 )}
                 {showDivider && <UnreadDivider ref={dividerRef} />}
-                <div data-msg-date={m.createdAt}>
+                <div
+                  data-msg-date={m.createdAt}
+                  id={`msg-${m.id}`}
+                  className={
+                    highlightId === m.id
+                      ? "rounded-lg ring-2 ring-amber-400 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950 transition-shadow"
+                      : "transition-shadow"
+                  }
+                >
                   <MessageBubble
                     message={m}
                     isMine={isMine}
