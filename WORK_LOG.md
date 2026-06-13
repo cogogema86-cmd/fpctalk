@@ -6,6 +6,30 @@
 
 ---
 
+## ✅ 2026-06-13 — 기능 묶음 5건 (#2 행사수정 / #3 메시지검색 / #5 직원비활성화 / #6 결근지각조퇴 / #7 일반파일첨부) + #4 검증
+
+| 커밋 | 내용 |
+|---|---|
+| `56280b3` | **#6 결근/지각/조퇴 LeaveType + User.active** — LeaveType enum에 ABSENT/TARDY/EARLY_LEAVE 추가(연차 차감 0). 관리자 매트릭스(`_grid.tsx`)·엑셀 export·휴가목록·승인페이지 라벨/색상. 엑셀 결근 컬럼 자동 카운트. 직원 자가신청 폼은 6종 유지(`ADMIN_LEAVE_TYPES` 분리). User.active Boolean 추가 + db push |
+| `a661816` | **#5 직원 비활성화/재활성화** — `setStaffActiveAction`(본인 비활성화 방지). 직원목록 비활성 배지+토글(`_components/active-toggle.tsx`). 로그인 차단: login action + 메인 레이아웃 active 체크 후 signOut. 선택목록(DM/그룹/매트릭스/엑셀/사인대상/레벨채팅 멘션·unread)에서 비활성 제외 |
+| `2c229e3` | **#7 일반 파일 첨부** — 업로드 라우트 image/video 외 일반파일 허용(최대 20MB, 보관 90일). 클라 accept 해제·크기검증. 렌더(다운로드 링크)·만료 cron은 기존 file 처리 재사용 |
+| `0540e02` | **#3 메시지 검색** — `searchMessagesAction`(content 부분일치, 대소문자무시, 최신 100건). `_chat-room` 헤더 🔍 토글+입력+결과패널. 결과 클릭 시 해당 메시지로 스크롤+amber ring (로드 안 된 옛 메시지는 안내) |
+| `88013de` | **#2 행사 수정** — `updateEventAction`(관리자, 제목/기간/장소 + sourceMessage metadata 동기화 + ack멤버 변경 푸시). 캘린더 월별 목록에 ✏️수정 버튼 + 모달(`EventEditModal`). 삭제는 기존 `deleteEventAction` 이미 존재 |
+
+### #4 그룹 멤버 추가/삭제 — 검증 결과 (구현 안 함, 사용자 결정)
+- **레벨 채팅**: 멤버 관리 불필요 — `User.role.defaultLevel >= Chat.levelRequired`로 자동 보임/숨김. **레벨 수정으로 자동 처리됨(사용자 추측 정확)**.
+- **명시적 그룹**: 레벨 무관. 만든 뒤 멤버 추가 불가, 삭제는 본인 나가기만. → 사용자가 "안 만든다(레벨로 충분)" 선택. 코드 변경 0.
+
+### 기본값 결정 (사용자 위임)
+- #6: ABSENT/TARDY/EARLY_LEAVE 모두 연차 차감 0
+- #7: 일반 파일 최대 20MB, 보관 90일
+
+### 검증
+- 전 기능 `tsc --noEmit` 통과. Vercel 빌드 통과 후 라이브 점검 예정.
+- 스키마 변경: `User.active Boolean @default(true)`, LeaveType +3종. `prisma db push` 완료.
+
+---
+
 ## ✅ 2026-06-12 — 채팅 날짜 구분선
 
 | 커밋 | 내용 |
