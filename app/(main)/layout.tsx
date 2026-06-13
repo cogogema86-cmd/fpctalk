@@ -61,6 +61,21 @@ export default async function MainLayout({
   const isAdmin = user.role.isAdmin;
   const userLevel = user.role.defaultLevel;
 
+  // 기능별 세부 권한 (각 기능은 isAdmin AND 해당 플래그)
+  const adminPerms = {
+    users: isAdmin && user.role.canManageUsers,
+    roles: isAdmin && user.role.canManageRoles,
+    leave: isAdmin && user.role.canApproveLeave,
+    attendance: isAdmin && user.role.canManageAttendance,
+    ai: isAdmin && user.role.canManageAI,
+  };
+  const hasAnyAdmin =
+    adminPerms.users ||
+    adminPerms.roles ||
+    adminPerms.leave ||
+    adminPerms.attendance ||
+    adminPerms.ai;
+
   const [pendingSignsCount, chatUnreadCount] = await Promise.all([
     prisma.signatureRequest.count({
       where: { signerId: user.id, status: "PENDING" },
@@ -98,6 +113,8 @@ export default async function MainLayout({
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           isAdmin={isAdmin}
+          adminPerms={adminPerms}
+          hasAnyAdmin={hasAnyAdmin}
           userLevel={userLevel}
           pendingSignsCount={pendingSignsCount}
           chatUnreadCount={chatUnreadCount}
@@ -107,6 +124,8 @@ export default async function MainLayout({
 
       <MobileNav
         isAdmin={isAdmin}
+        adminPerms={adminPerms}
+        hasAnyAdmin={hasAnyAdmin}
         userLevel={userLevel}
         pendingSignsCount={pendingSignsCount}
         chatUnreadCount={chatUnreadCount}

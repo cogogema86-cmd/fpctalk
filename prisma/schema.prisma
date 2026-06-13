@@ -23,8 +23,15 @@ model StaffRole {
   label        String
   // 직급 레벨 (0~3, 권한 차등에 활용 가능)
   defaultLevel Int      @default(0)
-  // 관리 권한 (직원 추가/비번 초기화/역할 관리 등 가능)
+  // 관리 권한 (이 역할이 '관리자'인지 여부 — 관리 메뉴 노출의 기본 스위치)
   isAdmin      Boolean  @default(false)
+  // 세부 관리 권한 (isAdmin=true일 때만 의미 있음). 기존 admin 역할 호환 위해 기본 true.
+  // 각 기능은 isAdmin AND 해당 플래그 둘 다 true여야 접근 가능.
+  canManageUsers      Boolean @default(true) // 직원 관리 (/admin/users)
+  canManageRoles      Boolean @default(true) // 역할 관리 (/admin/roles) — 민감
+  canApproveLeave     Boolean @default(true) // 연차 승인 (/admin/leave)
+  canManageAttendance Boolean @default(true) // 근태 관리 (/admin/attendance)
+  canManageAI         Boolean @default(true) // AI 설정 (/admin/ai) — 민감
   // 시스템 기본 역할 (수정/삭제 불가)
   isSystem     Boolean  @default(false)
   // 정렬 순서 (오름차순)

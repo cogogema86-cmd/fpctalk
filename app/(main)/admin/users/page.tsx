@@ -21,7 +21,7 @@ export default async function AdminUsersPage() {
   const locale = await getLocale();
   const dateLocale = locale === "en" ? "en-US" : "ko-KR";
 
-  if (!me || !me.role.isAdmin) {
+  if (!me || !me.role.isAdmin || !me.role.canManageUsers) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
         {t("docDetail.adminOnly")}

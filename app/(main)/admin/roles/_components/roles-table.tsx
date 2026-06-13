@@ -3,6 +3,7 @@
 import { Fragment, useActionState, useEffect, useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import { deleteRoleAction, updateRoleAction, type RoleFormState } from "../actions";
+import { FeaturePermissions, ROLE_FEATURES } from "./feature-permissions";
 
 type Role = {
   id: string;
@@ -10,6 +11,11 @@ type Role = {
   label: string;
   defaultLevel: number;
   isAdmin: boolean;
+  canManageUsers: boolean;
+  canManageRoles: boolean;
+  canApproveLeave: boolean;
+  canManageAttendance: boolean;
+  canManageAI: boolean;
   isSystem: boolean;
   sortOrder: number;
   _count: { users: number };
@@ -87,9 +93,19 @@ function DisplayRow({
         <td className="px-4 py-2">{role.defaultLevel}</td>
         <td className="px-4 py-2">
           {role.isAdmin ? (
-            <span className="text-amber-600 dark:text-amber-400">
-              {t("admin.roles.adminYes")}
-            </span>
+            <div className="space-y-0.5">
+              <span className="text-amber-600 dark:text-amber-400">
+                {t("admin.roles.adminYes")}
+              </span>
+              <div className="text-[11px] text-zinc-400 leading-tight">
+                {ROLE_FEATURES.filter((f) => role[f.name]).length ===
+                ROLE_FEATURES.length
+                  ? t("admin.roles.allFeatures")
+                  : ROLE_FEATURES.filter((f) => role[f.name])
+                      .map((f) => t(`${f.key}.short`))
+                      .join(" · ") || t("admin.roles.noFeatures")}
+              </div>
+            </div>
           ) : (
             <span className="text-zinc-400">{t("admin.roles.adminNo")}</span>
           )}
@@ -219,6 +235,17 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
             />
             <span>{t("admin.roles.field.isAdmin")}</span>
           </label>
+
+          <FeaturePermissions
+            disabled={isPending}
+            defaults={{
+              canManageUsers: role.canManageUsers,
+              canManageRoles: role.canManageRoles,
+              canApproveLeave: role.canApproveLeave,
+              canManageAttendance: role.canManageAttendance,
+              canManageAI: role.canManageAI,
+            }}
+          />
 
           {role.isSystem && (
             <p className="text-xs text-zinc-500">

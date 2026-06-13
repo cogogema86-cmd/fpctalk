@@ -11,13 +11,25 @@ type NavItem = {
   badge?: number;
 };
 
+export type AdminPerms = {
+  users: boolean;
+  roles: boolean;
+  leave: boolean;
+  attendance: boolean;
+  ai: boolean;
+};
+
 export function Sidebar({
   isAdmin,
+  adminPerms,
+  hasAnyAdmin,
   userLevel,
   pendingSignsCount,
   chatUnreadCount,
 }: {
   isAdmin: boolean;
+  adminPerms: AdminPerms;
+  hasAnyAdmin: boolean;
   userLevel: number;
   pendingSignsCount: number;
   chatUnreadCount: number;
@@ -57,11 +69,27 @@ export function Sidebar({
   };
 
   const adminNav: NavItem[] = [
-    { href: "/admin/users", label: t("nav.adminUsers"), icon: "👥" },
-    { href: "/admin/roles", label: t("nav.adminRoles"), icon: "🏷️" },
-    { href: "/admin/leave", label: t("nav.adminLeave"), icon: "✅" },
-    { href: "/admin/attendance", label: t("nav.adminAttendance"), icon: "📋" },
-    { href: "/admin/ai", label: t("nav.adminAi"), icon: "🤖" },
+    ...(adminPerms.users
+      ? [{ href: "/admin/users", label: t("nav.adminUsers"), icon: "👥" }]
+      : []),
+    ...(adminPerms.roles
+      ? [{ href: "/admin/roles", label: t("nav.adminRoles"), icon: "🏷️" }]
+      : []),
+    ...(adminPerms.leave
+      ? [{ href: "/admin/leave", label: t("nav.adminLeave"), icon: "✅" }]
+      : []),
+    ...(adminPerms.attendance
+      ? [
+          {
+            href: "/admin/attendance",
+            label: t("nav.adminAttendance"),
+            icon: "📋",
+          },
+        ]
+      : []),
+    ...(adminPerms.ai
+      ? [{ href: "/admin/ai", label: t("nav.adminAi"), icon: "🤖" }]
+      : []),
   ];
 
   return (
@@ -84,7 +112,7 @@ export function Sidebar({
           </>
         )}
 
-        {isAdmin && (
+        {hasAnyAdmin && (
           <>
             <li className="pt-4 pb-1 px-3 text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               {t("nav.adminSection")}

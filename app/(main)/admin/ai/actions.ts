@@ -18,9 +18,10 @@ async function requireAdmin(): Promise<
   if (!me) return { ok: false, error: "로그인이 필요합니다." };
   const u = await prisma.user.findUnique({
     where: { id: me.id },
-    include: { role: { select: { isAdmin: true } } },
+    include: { role: { select: { isAdmin: true, canManageAI: true } } },
   });
-  if (!u?.role.isAdmin) return { ok: false, error: "관리자 권한이 필요합니다." };
+  if (!u?.role.isAdmin || !u.role.canManageAI)
+    return { ok: false, error: "AI 설정 권한이 없습니다." };
   return { ok: true, meId: me.id };
 }
 

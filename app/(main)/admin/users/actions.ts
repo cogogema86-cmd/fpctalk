@@ -27,7 +27,8 @@ async function requireAdmin(): Promise<
 > {
   const me = await getCurrentUser();
   if (!me) return { ok: false, error: "로그인이 필요합니다." };
-  if (!me.role.isAdmin) return { ok: false, error: "관리자 권한이 필요합니다." };
+  if (!me.role.isAdmin || !me.role.canManageUsers)
+    return { ok: false, error: "직원 관리 권한이 없습니다." };
   return { ok: true, me };
 }
 

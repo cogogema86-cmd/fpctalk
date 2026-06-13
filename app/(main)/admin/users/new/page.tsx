@@ -16,7 +16,7 @@ export default async function NewStaffPage() {
     include: { role: true },
   });
   const t = await getT();
-  if (!me || !me.role.isAdmin) {
+  if (!me || !me.role.isAdmin || !me.role.canManageUsers) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
         {t("common.adminOnly")}

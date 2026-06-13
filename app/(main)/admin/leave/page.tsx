@@ -50,7 +50,7 @@ export default async function AdminLeavePage() {
     CANCELLED: t("leave.status.cancelled"),
   };
 
-  if (!me || !me.role.isAdmin) {
+  if (!me || !me.role.isAdmin || !me.role.canApproveLeave) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
         {t("docDetail.adminOnly")}

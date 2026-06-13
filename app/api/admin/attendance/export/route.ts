@@ -84,10 +84,10 @@ export async function GET(req: Request) {
 
   const meWithRole = await prisma.user.findUnique({
     where: { id: me.id },
-    include: { role: { select: { isAdmin: true } } },
+    include: { role: { select: { isAdmin: true, canManageAttendance: true } } },
   });
-  if (!meWithRole?.role.isAdmin) {
-    return NextResponse.json({ error: "관리자 전용" }, { status: 403 });
+  if (!meWithRole?.role.isAdmin || !meWithRole.role.canManageAttendance) {
+    return NextResponse.json({ error: "근태 관리 권한 없음" }, { status: 403 });
   }
 
   const url = new URL(req.url);

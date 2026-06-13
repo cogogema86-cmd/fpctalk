@@ -21,10 +21,10 @@ export default async function AdminAttendancePage({
     where: { authId: authUser.id },
     include: { role: true },
   });
-  if (!me?.role.isAdmin) {
+  if (!me?.role.isAdmin || !me.role.canManageAttendance) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자 전용 페이지입니다.
+        근태 관리 권한이 있는 관리자만 접근할 수 있습니다.
       </div>
     );
   }

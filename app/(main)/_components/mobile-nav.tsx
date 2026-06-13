@@ -19,6 +19,9 @@ export function MobileNav({
   chatUnreadCount,
 }: {
   isAdmin: boolean;
+  // 레이아웃과 시그니처 일치를 위해 받되, 모바일 하단바엔 관리 하위메뉴가 없어 사용 안 함
+  adminPerms?: unknown;
+  hasAnyAdmin?: boolean;
   userLevel: number;
   pendingSignsCount: number;
   chatUnreadCount: number;

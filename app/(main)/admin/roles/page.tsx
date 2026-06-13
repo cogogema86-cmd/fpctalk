@@ -17,10 +17,10 @@ export default async function AdminRolesPage() {
     include: { role: true },
   });
   const t = await getT();
-  if (!me || !me.role.isAdmin) {
+  if (!me || !me.role.isAdmin || !me.role.canManageRoles) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        {t("common.adminOnly")}
+        {t("admin.roles.noPermission")}
       </div>
     );
   }

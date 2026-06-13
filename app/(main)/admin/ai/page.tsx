@@ -20,12 +20,12 @@ export default async function AdminAiPage() {
 
   const me = await prisma.user.findUnique({
     where: { authId: authUser.id },
-    include: { role: { select: { isAdmin: true } } },
+    include: { role: { select: { isAdmin: true, canManageAI: true } } },
   });
-  if (!me || !me.role.isAdmin) {
+  if (!me || !me.role.isAdmin || !me.role.canManageAI) {
     return (
       <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        관리자만 접근할 수 있습니다.
+        AI 설정은 최고 관리자(admin)만 접근할 수 있습니다.
       </div>
     );
   }

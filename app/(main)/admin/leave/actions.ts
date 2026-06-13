@@ -18,7 +18,8 @@ async function requireAdmin(): Promise<
     include: { role: true },
   });
   if (!me) return { ok: false, error: "사용자 정보를 찾을 수 없습니다." };
-  if (!me.role.isAdmin) return { ok: false, error: "관리자 권한이 필요합니다." };
+  if (!me.role.isAdmin || !me.role.canApproveLeave)
+    return { ok: false, error: "연차 승인 권한이 없습니다." };
   return { ok: true, meId: me.id };
 }
 

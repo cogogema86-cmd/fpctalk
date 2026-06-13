@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useT } from "@/lib/i18n/client";
 import { createRoleAction, type RoleFormState } from "../actions";
+import { FeaturePermissions } from "./feature-permissions";
 
 const initialState: RoleFormState = {};
 
@@ -73,6 +74,8 @@ export function CreateRoleForm() {
         />
         <span>{t("admin.roles.field.isAdmin")}</span>
       </label>
+
+      <FeaturePermissions disabled={isPending} />
 
       {state.error && (
         <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700 dark:text-red-300">
