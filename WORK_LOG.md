@@ -22,6 +22,12 @@
 - 수정: ① `next.config.ts` `experimental.serverActions.bodySizeLimit="20mb"` ② 업로드 폼(`upload/_form.tsx`)에서 이미지 클라이언트 축소(긴 변 2200px, JPEG 0.85) 후 전송 — 큰 폰 사진도 안전. gif/svg·비이미지·HEIC 디코드 실패는 원본 유지.
 - 교훈: **파일 업로드를 서버 액션으로 받으면 기본 1MB 제한**에 막힌다. 큰 파일은 bodySizeLimit 상향 + 클라 압축, 또는 route handler 사용.
 
+### 후속2: 외부사인 404 수정 + 연락처 포함 + 한글폰트 나눔고딕 (최종 검증) — `2753109`→`70ae409`
+- **외부 사인 후 404**: 사인 완료 시 accessToken을 null로 지워서, 서버액션 후 자동 RSC 새로고침 때 토큰 조회 null→notFound(404). 수정: 토큰 유지(재사인은 status로 차단) → 링크 재방문 시 "이미 사인 완료" 친절 페이지 정상 표시. (`2753109`)
+- **외부 사인자 연락처**: 사인 박스에 `서명자` + `연락처(전화/이메일)` 줄 추가 (관리자 입력값 기반 식별). `signerContact = [externalPhone, externalEmail]`. (`2753109`)
+- **🔴 한글 폰트 = 나눔고딕 전체본** (`70ae409`): 직전 번들한 notofonts `NotoSansKR-Regular.otf`가 **SubsetOTF(부분 글리프)**라 일부 한글만 렌더(일시/연락처 라벨·이름 깨짐, pdf.js로 발견). → `assets/NanumGothic-Regular.ttf`(2.05MB, 현대 한글 11,172자 전부)로 교체. lib/fonts.ts·next.config·CDN폴백 갱신. **notofonts SubsetOTF 절대 쓰지 말 것.**
+- **최종 라이브 e2e + PDF 텍스트 추출 검증 (2026-06-14)**: 외부사인(김보호자/010-9876-5432) → 사인본 PDF의 pdf.js getTextContent로 추출 = `["서명자: 김보호자 (외부)","연락처: 010-9876-5432","일시: 2026-06-14 02:18:42 KST","IP: 218.38.214.85"]` — 한글 완벽, 404 없음, 완료 화면 정상. (pdf.js 캔버스 렌더는 이 폰트를 화면에 안 그리는 버그 있으나 PDF 텍스트는 정상 → 크롬 뷰어선 정상 표시). 테스트 데이터·임시파일 정리 완료.
+
 ### 후속: 사인+증빙정보를 문서 우측 하단에 통합 (최종) — `fc52cad`→`b212d2c`→`a3b2907`
 - 진행: ① 감사 페이지를 별도로 붙임(`fc52cad`) → ② 라이브 테스트 중 **감사 페이지 한글 깨짐 발견** (한글 폰트 CDN fetch 실패 → ASCII 스트립) → ③ **한글 폰트 로컬 번들**로 수정(`b212d2c`): `assets/NotoSansKR-Regular.otf`(4.6MB) repo 포함, `lib/fonts.ts` 로컬 우선 로드, `next.config.ts outputFileTracingIncludes`로 Vercel 함수 번들 포함 → ④ 사용자 재요청 "별도 페이지 말고 우측 하단에 사인+날짜+IP 통합" → **별도 감사페이지 제거하고 우측 하단 박스에 [사인+서명자+일시(KST)+IP] 통합**(`a3b2907`).
 - **최종 사인본 = 1페이지**: 원본 문서(이미지는 PDF변환) 마지막 페이지 우측 하단 흰 박스에 사인 이미지 + "서명자: …" + "일시: YYYY-MM-DD HH:MM:SS KST" + "IP: …". 서명자/IP/UA는 DB에도 보존.
