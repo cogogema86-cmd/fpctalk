@@ -1,19 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setAiModelsAction, testAiModelAction } from "./actions";
-
-// 흔히 쓰는 제미나이 모델명 추천 (자유 입력 + datalist 제안)
-const SUGGESTIONS = [
-  "gemini-3.1-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-pro",
-  "gemini-2.0-flash",
-];
+import {
+  setAiModelsAction,
+  testAiModelAction,
+  listGeminiModelsAction,
+} from "./actions";
 
 type TestState = { ok: boolean; sample?: string; error?: string } | null;
+type Model = { id: string; label: string };
 
 export function AiSettingsForm({
   initialFast,
@@ -36,6 +32,30 @@ export function AiSettingsForm({
   const [testingFast, startTestFast] = useTransition();
   const [testingPro, startTestPro] = useTransition();
 
+  // 구글에서 실시간으로 받아온 사용 가능 모델 목록
+  const [models, setModels] = useState<Model[]>([]);
+  const [listErr, setListErr] = useState<string | null>(null);
+  const [loadingList, startLoadList] = useTransition();
+
+  const loadModels = () => {
+    setListErr(null);
+    startLoadList(async () => {
+      const r = await listGeminiModelsAction();
+      if (!r.ok) {
+        setListErr(r.error ?? "목록 조회 실패");
+        setModels([]);
+        return;
+      }
+      setModels(r.models ?? []);
+    });
+  };
+
+  // 화면 진입 시 자동 1회 조회
+  useEffect(() => {
+    loadModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const save = () => {
     setSaved(false);
     setSaveErr(null);
@@ -53,17 +73,32 @@ export function AiSettingsForm({
 
   return (
     <div className="space-y-5">
-      <datalist id="gemini-models">
-        {SUGGESTIONS.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
+      {/* 실시간 모델 목록 상태 */}
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          onClick={loadModels}
+          disabled={loadingList}
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+        >
+          {loadingList ? "불러오는 중..." : "🔄 모델 목록 새로고침"}
+        </button>
+        {!loadingList && !listErr && (
+          <span className="text-zinc-500">
+            구글에서 받아온 사용 가능 모델 {models.length}개
+          </span>
+        )}
+        {listErr && (
+          <span className="text-red-600 dark:text-red-400">⚠ {listErr}</span>
+        )}
+      </div>
 
       <ModelField
         label="⚡ 빠른 모델 (Fast)"
         value={fast}
         onChange={setFast}
         defaultModel={defaultModel}
+        models={models}
         test={testFast}
         testing={testingFast}
         onTest={() => {
@@ -77,6 +112,7 @@ export function AiSettingsForm({
         value={pro}
         onChange={setPro}
         defaultModel={defaultModel}
+        models={models}
         test={testPro}
         testing={testingPro}
         onTest={() => {
@@ -114,6 +150,7 @@ function ModelField({
   value,
   onChange,
   defaultModel,
+  models,
   test,
   testing,
   onTest,
@@ -122,6 +159,7 @@ function ModelField({
   value: string;
   onChange: (v: string) => void;
   defaultModel: string;
+  models: Model[];
   test: TestState;
   testing: boolean;
   onTest: () => void;
@@ -131,14 +169,25 @@ function ModelField({
       <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
         {label}
       </label>
-      <div className="flex items-center gap-2">
-        <input
-          list="gemini-models"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={defaultModel}
-          className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-zinc-500"
-        />
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 실시간 목록에서 선택 */}
+        <select
+          value={models.some((m) => m.id === value) ? value : ""}
+          onChange={(e) => {
+            if (e.target.value) onChange(e.target.value);
+          }}
+          disabled={models.length === 0}
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-2 text-sm max-w-[55%] disabled:opacity-50"
+        >
+          <option value="">
+            {models.length ? "목록에서 선택…" : "목록 불러오는 중…"}
+          </option>
+          {models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={onTest}
@@ -148,6 +197,13 @@ function ModelField({
           {testing ? "테스트 중..." : "연결 테스트"}
         </button>
       </div>
+      {/* 직접 입력 (새 모델이 목록에 아직 없을 때) */}
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={defaultModel}
+        className="mt-2 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-zinc-500"
+      />
       {test && (
         <div
           className={`mt-1.5 text-xs ${

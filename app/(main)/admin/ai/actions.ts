@@ -19,6 +19,58 @@ async function requireAdmin(): Promise<
   return { ok: true, meId: me.id };
 }
 
+/**
+ * 구글에서 현재 사용 가능한 제미나이 모델 목록을 실시간 조회.
+ * generateContent를 지원하는 모델만 추려 반환 (최신순 비슷하게 정렬).
+ */
+export async function listGeminiModelsAction(): Promise<{
+  ok: boolean;
+  models?: { id: string; label: string }[];
+  error?: string;
+}> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return { ok: false, error: "GEMINI_API_KEY가 설정되지 않았습니다." };
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=1000`,
+      { signal: AbortSignal.timeout(15_000), cache: "no-store" },
+    );
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      return { ok: false, error: `목록 조회 실패 (${res.status}) ${t.slice(0, 120)}` };
+    }
+    const data = (await res.json()) as {
+      models?: {
+        name?: string;
+        displayName?: string;
+        supportedGenerationMethods?: string[];
+      }[];
+    };
+    const list = (data.models ?? [])
+      .filter((m) =>
+        (m.supportedGenerationMethods ?? []).includes("generateContent"),
+      )
+      .map((m) => {
+        const id = (m.name ?? "").replace(/^models\//, "");
+        return { id, label: m.displayName ? `${id} — ${m.displayName}` : id };
+      })
+      .filter((m) => m.id.startsWith("gemini"))
+      // 버전 높은(최신) 모델이 위로 오도록 대략 정렬
+      .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+
+    return { ok: true, models: list };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message.slice(0, 160) : "목록 조회 실패",
+    };
+  }
+}
+
 /** AI 모델명 저장 — 다음 AI 호출부터 즉시 반영 (재배포 불필요). */
 export async function setAiModelsAction(
   fast: string,
