@@ -22,10 +22,11 @@
 - 수정: ① `next.config.ts` `experimental.serverActions.bodySizeLimit="20mb"` ② 업로드 폼(`upload/_form.tsx`)에서 이미지 클라이언트 축소(긴 변 2200px, JPEG 0.85) 후 전송 — 큰 폰 사진도 안전. gif/svg·비이미지·HEIC 디코드 실패는 원본 유지.
 - 교훈: **파일 업로드를 서버 액션으로 받으면 기본 1MB 제한**에 막힌다. 큰 파일은 bodySizeLimit 상향 + 클라 압축, 또는 route handler 사용.
 
-### 후속: 전자서명 정보(감사) 페이지 추가 (`fc52cad`) — 법적 증거력
-- 배경: 우측 하단 합성으로 바꾸면서 예전에 PDF에 찍히던 IP·시각 등 감사정보가 화면에서 빠짐(DB엔 보존). 사용자가 법적 문제 우려 → "감사 페이지 추가" 선택.
-- 구현: PDF/이미지 사인 합성 후 **맨 뒤에 '전자서명 정보' 페이지 자동 첨부** (서명자/서명시각 KST/IP/접속기기/문서ID). 사인은 우측 하단 유지. → 사인본 PDF 단독 증거력 복원.
-- 사인본 PDF 구성: [원본문서+우측하단 사인] + [전자서명 정보 페이지].
+### 후속: 사인+증빙정보를 문서 우측 하단에 통합 (최종) — `fc52cad`→`b212d2c`→`a3b2907`
+- 진행: ① 감사 페이지를 별도로 붙임(`fc52cad`) → ② 라이브 테스트 중 **감사 페이지 한글 깨짐 발견** (한글 폰트 CDN fetch 실패 → ASCII 스트립) → ③ **한글 폰트 로컬 번들**로 수정(`b212d2c`): `assets/NotoSansKR-Regular.otf`(4.6MB) repo 포함, `lib/fonts.ts` 로컬 우선 로드, `next.config.ts outputFileTracingIncludes`로 Vercel 함수 번들 포함 → ④ 사용자 재요청 "별도 페이지 말고 우측 하단에 사인+날짜+IP 통합" → **별도 감사페이지 제거하고 우측 하단 박스에 [사인+서명자+일시(KST)+IP] 통합**(`a3b2907`).
+- **최종 사인본 = 1페이지**: 원본 문서(이미지는 PDF변환) 마지막 페이지 우측 하단 흰 박스에 사인 이미지 + "서명자: …" + "일시: YYYY-MM-DD HH:MM:SS KST" + "IP: …". 서명자/IP/UA는 DB에도 보존.
+- **라이브 e2e + PDF 파싱 검증 (2026-06-14)**: 1.2MB 사진 양식 업로드→외부사인→사인본 PDF 파싱 결과 `pages:1`, BaseFonts에 `NotoSansKR-Regular`(한글 폰트 임베드됨), FontFile 스트림 1개 → 한글 정상 렌더 확정. 테스트 데이터·임시파일 정리 완료.
+- 위치/크기 상수(`lib/documents.ts`): rightMargin=28, bottomMargin=24, maxSigW=min(190,pw*0.45), maxSigH=64, metaSize=7.5.
 
 ---
 
