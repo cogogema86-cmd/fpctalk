@@ -17,6 +17,8 @@
   - 사이드바 관리 섹션 '🤖 AI 설정' + i18n `nav.adminAi`.
 - 라이브 검증(2026-06-14): 화면 렌더 OK / 연결테스트 유효모델 ✅"안녕하세요." · 가짜모델 ❌오류 / 저장 후 DB row updatedAt 갱신 확인(즉시 반영). 현재 값=gemini-3.1-flash-lite(정상).
 - **사용 안내(사용자)**: 모델 바뀌면 /admin/ai에서 새 모델명 입력 → 연결 테스트 ✅ 확인 → 저장. 끝(재배포 불필요). Vercel `AI_MODEL_*` env는 이제 폴백용일 뿐.
+- **후속2(`0dd3bec`)**: 관리자 전용 **제미나이 API 키 관리** 추가. AppSetting `ai.geminiApiKey`. `getGeminiApiKey()`(DB→env), `set/clearGeminiApiKey`, `getGeminiApiKeyStatus`(source+마스킹). lib/ai.ts·actions가 process.env 직접 대신 `getGeminiApiKey()` 사용. /admin/ai에 '🔑 API 키' 섹션(`_api-key.tsx`): 출처/끝4자리만 표시, password 입력→저장(`setGeminiApiKeyAction`), 삭제(env 복귀). 키 전체 재노출 안 함. 유료 전환 대비 미리 구현. 라이브 검증: "현재 키: 환경변수 사용 중 (••••sGMs)" 표시 확인.
+- **참고(무료 등급)**: gemini-3.1-pro-preview 등 **Pro/preview 모델은 무료 등급 할당량 0 → 첫 호출에 429**. Flash/Lite만 무료 동작. 사용자는 Fast/Pro 둘 다 flash-lite로 운영.
 - **후속(`4b9ef8f`)**: 사용 가능 모델 **실시간 목록 조회** 추가. `listGeminiModelsAction`이 구글 ListModels API(`v1beta/models?key=`)로 generateContent 지원 gemini 모델 조회 → AI 설정 화면 진입 시 자동 로드 + '🔄 새로고침'. Fast/Pro 각 필드에 '목록에서 선택' 드롭다운(실시간) + 직접 입력칸 유지. 라이브 검증: 28개 모델 조회·표시 확인(gemini-3.5-flash, gemini-3.1-pro-preview, gemini-flash-latest 등).
 
 ---
