@@ -6,6 +6,21 @@
 
 ---
 
+## ✅ 2026-06-14 — 역할 기능별 세부 권한 매트릭스 (`c067b1e`)
+- **요청**: "역할관리에서 admin/관리자가 할 수 있는 기능을 더 디테일하게. 예: AI 설정은 admin만 보이게(민감)." → 사용자가 '기능별 권한 매트릭스' + 민감 기능=AI설정·역할관리 선택.
+- **배경**: 기존엔 `isAdmin` 단일 플래그로 모든 관리기능(직원/역할/연차/근태/AI)이 한꺼번에 열림. 시스템 역할 PRINCIPAL(label "admin", lvl3)·VICE("관리자"=부원장, lvl2) 둘 다 isAdmin=true라 부원장도 AI설정이 보였음.
+- **구현**: `StaffRole`에 5개 boolean 추가(`canManageUsers/canManageRoles/canApproveLeave/canManageAttendance/canManageAI`, 기본 true=기존 admin 호환). 각 기능 접근 = `isAdmin AND 해당 플래그`. `lib/permissions.ts`(`getMyPermissions`/`canAccessFeature`)가 단일 권한 소스.
+- **게이트 적용(페이지+서버액션+API 전부)**: /admin/ai(canManageAI), /admin/roles(canManageRoles), /admin/users(canManageUsers), /admin/leave(canApproveLeave), /admin/attendance + 엑셀 export route(canManageAttendance). 사이드바도 권한별 메뉴 노출(`hasAnyAdmin`으로 섹션 표시, 항목별 플래그). 모바일 하단바엔 관리 하위메뉴 없어 변경 없음.
+- **역할 관리 UI**: 생성폼+편집행에 5개 체크박스(공용 `_components/feature-permissions.tsx`, `ROLE_FEATURES`). 표시행엔 부여 기능 요약(`직원·연차·근태` 또는 "모든 관리 기능"). 액션에서 `readFeatureFlags` 읽어 저장하되 isAdmin 꺼지면 전부 false.
+- **락아웃 방지**: 기존 isAdmin 가드 + 신규 canManageRoles 가드(본인 역할의 역할관리 못 끔 + 마지막 역할관리자 0명 되는 것 차단).
+- **초기 설정(사용자 의도)**: VICE(부원장) `canManageAI=false, canManageRoles=false` 적용 → AI·역할관리는 admin(원장)만. (PRINCIPAL은 전부 true 유지.)
+- **i18n**: `admin.roles.field.canManage*`(+`.short`)·featuresLegend/Hint·allFeatures/noFeatures·noPermission KO/EN 추가.
+- **검증**: `tsc` 0에러, `next build` 성공, DB 권한현황 확인(PRINCIPAL 전부 true / VICE roles·ai=false). ⚠️ Playwright는 로컬 node 일괄종료 시 함께 끊겨 브라우저 재검증 못함 — 로직/타입/데이터로 검증.
+- **확장 메모**: 새 관리기능 추가 시 ① StaffRole에 boolean ② permissions.ts에 반영 ③ 페이지/액션 게이트 ④ 사이드바 항목 ⑤ ROLE_FEATURES+i18n. 기본 true로 추가해야 기존 admin 호환.
+
+## ✅ 2026-06-14 — 문서 페이지 접기 + 페이지네이션 (`56f1445`)
+- 양식 보관함·진행중 캠페인·내 사인 대기/완료 리스트에 접기(기본 접힘) + 10개 단위 페이지네이션. 재사용 `_collapsible-section.tsx`(서버 렌더 <li>를 `Children.toArray`로 슬라이스). 데이터 쌓여도 화면 안 길어짐. tsc/build 통과, 프로덕션 확인.
+
 ## ✅ 2026-06-14 — 보안 점검 & 하드닝 (외부 해킹 대비) (`ab4e778`)
 - **요청**: "외부에서 해킹등 보안에 철저했으면 좋겠습니다." → 4개 서브에이전트(authz/IDOR/시크릿·미들웨어/인젝션·XSS) 병렬 감사 + 코드 검증.
 - **RLS 검증 (가장 중요·이상무)**: 공개 anon 키(클라 번들에 노출됨)로 Supabase REST(`/rest/v1/User` 등) 직접 조회 시도 → 모든 민감 테이블 **HTTP 401 / 42501(insufficient_privilege)**. Prisma 생성 테이블에 `anon` 역할 권한이 없어 외부 PostgREST 접근 원천 차단. 앱은 Prisma 직결로만 DB 접근. → **외부에서 데이터 직접 읽기 불가 확인**.
