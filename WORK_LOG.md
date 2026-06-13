@@ -6,6 +6,18 @@
 
 ---
 
+## ✅ 2026-06-13 오후 — Supabase 7일 자동정지 방지 (keepalive cron)
+
+| 커밋 | 내용 |
+|---|---|
+| `18d1e43` | **`/api/cron/keepalive`** — 매일 09:00 KST(UTC 00:00) 가벼운 `SELECT 1` + user.count로 Supabase 활성 신호. 메시지 미생성. 외부 핑(cron-job.org)도 호출 가능하도록 읽기전용·무해. vercel.json crons에 추가 |
+
+- **원인 확정 (사용자 확인)**: 7일 무활동 시 **전체 앱 정지(로그인·채팅 전부 안 됨)** → Supabase 무료 플랜 7일 비활성 자동 일시정지가 원인.
+- 기존 `cleanup-attachments` cron(매일 01:00)도 DB 조회를 하지만, Vercel Hobby cron이 불안정해 누락됐을 가능성 → 9시 keepalive 추가 + **외부 핑 백업 권장**.
+- ⚠️ **남은 액션 (사용자)**: ① Vercel 대시보드에서 cron 실제 실행 기록 확인 ② cron-job.org 등에 `https://www.fpctalk.com/api/cron/keepalive` 매일 호출 등록(Vercel cron 불안정 대비 백업) ③ 근본 해결은 Supabase Pro($25/월) 업그레이드(자동정지 없음) — 비용 발생이라 보류.
+
+---
+
 ## ✅ 2026-06-13 — 기능 묶음 5건 (#2 행사수정 / #3 메시지검색 / #5 직원비활성화 / #6 결근지각조퇴 / #7 일반파일첨부) + #4 검증
 
 | 커밋 | 내용 |
