@@ -6,6 +6,20 @@
 
 ---
 
+## ✅ 2026-06-14 — 관리자 AI 모델 실시간 선택 (`9f169b2`)
+
+- 배경: 제미나이 모델명이 자주 바뀌는데 env var(`AI_MODEL_FAST/PRO`)라 매번 재배포 필요. → 관리자 화면에서 바꿔 저장하면 재배포 없이 즉시 반영되게.
+- 구현:
+  - `AppSetting`(key-value) 모델 추가 (`@@map("app_settings")`), db push.
+  - `lib/app-settings.ts`: `getAiModels()`(DB→env→기본값 폴백)/`setAiModels()`. 키 `ai.modelFast`·`ai.modelPro`. 기본값 `gemini-3.1-flash-lite`.
+  - `lib/ai.ts callGemini`: 모델명을 env 직접 대신 `await getAiModels()`로 호출마다 읽음 → 실시간.
+  - `/admin/ai` 페이지(`page.tsx`+`_form.tsx`+`actions.ts`): Fast/Pro 입력(추천 datalist) + **연결 테스트 버튼**(`testAiModelAction` — 실제 Gemini 호출로 ✅/❌) + 저장(`setAiModelsAction`, admin 가드).
+  - 사이드바 관리 섹션 '🤖 AI 설정' + i18n `nav.adminAi`.
+- 라이브 검증(2026-06-14): 화면 렌더 OK / 연결테스트 유효모델 ✅"안녕하세요." · 가짜모델 ❌오류 / 저장 후 DB row updatedAt 갱신 확인(즉시 반영). 현재 값=gemini-3.1-flash-lite(정상).
+- **사용 안내(사용자)**: 모델 바뀌면 /admin/ai에서 새 모델명 입력 → 연결 테스트 ✅ 확인 → 저장. 끝(재배포 불필요). Vercel `AI_MODEL_*` env는 이제 폴백용일 뿐.
+
+---
+
 ## ✅ 2026-06-13 오후 — 디지털 사인: 우측 하단 고정 합성 + 이미지 양식 지원
 
 | 커밋 | 내용 |
