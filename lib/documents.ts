@@ -274,6 +274,7 @@ export async function submitSignature(params: SubmitSignatureParams) {
   );
 
   let signerLabel: string;
+  let signerContact: string | null = null; // 외부 사인자 연락처 (전화/이메일)
   if (signerId) {
     const signer = await prisma.user.findUnique({
       where: { id: signerId },
@@ -286,6 +287,10 @@ export async function submitSignature(params: SubmitSignatureParams) {
     signerLabel = req.externalName
       ? `${req.externalName} (외부)`
       : "External signer";
+    const contacts = [req.externalPhone, req.externalEmail].filter(
+      (c): c is string => !!c && c.trim().length > 0,
+    );
+    if (contacts.length > 0) signerContact = contacts.join(" / ");
   }
   const now = new Date();
 
@@ -485,7 +490,8 @@ export async function submitSignature(params: SubmitSignatureParams) {
         signedAt: nowCert,
         signerIp: ip ?? null,
         signerAgent: userAgent ?? null,
-        ...(signerId === null ? { accessToken: null } : {}),
+        // 외부 토큰은 지우지 않음 — status=SIGNED로 재사인은 막히고,
+        // 링크 재방문 시 sign 페이지가 "이미 사인 완료" 안내를 보여줄 수 있게 유지.
       },
     });
     return { signedPath: certPath };
@@ -541,10 +547,11 @@ export async function submitSignature(params: SubmitSignatureParams) {
   const signedAtKst = now.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" });
 
   // 박스에 들어갈 메타 정보 줄 (한글 폰트 내장이라 안정적으로 렌더)
-  const metaLines = [
-    safeCap(`서명자: ${signerLabel}`).slice(0, 48),
-    safeCap(`일시: ${signedAtKst} KST`),
-  ];
+  const metaLines = [safeCap(`서명자: ${signerLabel}`).slice(0, 48)];
+  if (signerContact) {
+    metaLines.push(safeCap(`연락처: ${signerContact}`).slice(0, 48));
+  }
+  metaLines.push(safeCap(`일시: ${signedAtKst} KST`));
   if (ip) metaLines.push(safeCap(`IP: ${ip}`));
 
   const rightMargin = 28;
@@ -631,7 +638,8 @@ export async function submitSignature(params: SubmitSignatureParams) {
       signedAt: now,
       signerIp: ip ?? null,
       signerAgent: userAgent ?? null,
-      ...(signerId === null ? { accessToken: null } : {}),
+      // 외부 토큰은 지우지 않음 — status=SIGNED로 재사인은 막히고,
+      // 링크 재방문 시 sign 페이지가 "이미 사인 완료" 안내를 보여줄 수 있게 유지.
     },
   });
 
