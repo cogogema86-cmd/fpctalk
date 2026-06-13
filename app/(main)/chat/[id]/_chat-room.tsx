@@ -592,14 +592,12 @@ export function ChatRoom({
     setUploadStatus({ isUploading: false, error: undefined, fileName: file.name });
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type.startsWith("video/");
-    if (!isImage && !isVideo) {
-      setUploadStatus({
-        isUploading: false,
-        error: "이미지/동영상만 첨부할 수 있습니다.",
-      });
-      return;
-    }
-    const maxBytes = isImage ? 10 * 1024 * 1024 : 30 * 1024 * 1024;
+    // 이미지 10MB / 동영상 30MB / 일반 파일 20MB (서버와 동일 기준)
+    const maxBytes = isImage
+      ? 10 * 1024 * 1024
+      : isVideo
+        ? 30 * 1024 * 1024
+        : 20 * 1024 * 1024;
     if (file.size > maxBytes) {
       const limitMb = Math.round(maxBytes / 1024 / 1024);
       setUploadStatus({
@@ -932,7 +930,6 @@ export function ChatRoom({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -994,7 +991,7 @@ export function ChatRoom({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isPending || uploadStatus?.isUploading}
-            title="이미지/동영상 첨부 (드래그도 가능)"
+            title="파일 첨부 — 이미지/동영상/문서 (드래그도 가능)"
             className="shrink-0 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3 py-2 text-lg disabled:opacity-50"
           >
             📎

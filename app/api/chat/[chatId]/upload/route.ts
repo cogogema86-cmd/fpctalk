@@ -4,15 +4,15 @@
  *
  * 검증:
  * - 채팅 멤버여야 함 (또는 레벨 충족)
- * - mime: image/* 또는 video/* 만 허용 (Phase 1)
- * - size: 이미지 ≤ 10MB, 동영상 ≤ 30MB
+ * - mime: image/* (압축), video/* , 그 외 일반 파일(PDF/HWP/문서/압축 등)
+ * - size: 이미지 ≤ 10MB, 동영상 ≤ 30MB, 일반 파일 ≤ 20MB
  *
  * 응답:
  * - { ok: true, attachment: AttachmentMeta }
- *   - kind: image / video
+ *   - kind: image / video / file
  *   - path: R2 key
  *   - mime, size, name
- *   - expiresAt: 이미지=1년, 동영상=60일
+ *   - expiresAt: 이미지=1년, 동영상=60일, 일반 파일=90일
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -23,9 +23,11 @@ import sharp from "sharp";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024; // 30MB
+const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB (일반 파일)
 
 const IMAGE_RETENTION_DAYS = 365;
 const VIDEO_RETENTION_DAYS = 60;
+const FILE_RETENTION_DAYS = 90; // 일반 파일
 
 // 이미지 자동 압축 한도 (긴 변 기준)
 const IMAGE_MAX_DIMENSION = 1920;
@@ -132,11 +134,10 @@ export async function POST(
     maxBytes = MAX_VIDEO_BYTES;
     retentionDays = VIDEO_RETENTION_DAYS;
   } else {
-    // Phase 1: 이미지/동영상만
-    return NextResponse.json(
-      { error: "이미지/동영상 파일만 첨부할 수 있습니다." },
-      { status: 415 },
-    );
+    // 그 외 일반 파일 (PDF/HWP/DOCX/XLSX/ZIP 등) — 미리보기 없이 다운로드 링크로 제공
+    kind = "file";
+    maxBytes = MAX_FILE_BYTES;
+    retentionDays = FILE_RETENTION_DAYS;
   }
 
   if (file.size > maxBytes) {
