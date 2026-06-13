@@ -11,10 +11,12 @@
 | 커밋 | 내용 |
 |---|---|
 | `18d1e43` | **`/api/cron/keepalive`** — 매일 09:00 KST(UTC 00:00) 가벼운 `SELECT 1` + user.count로 Supabase 활성 신호. 메시지 미생성. 외부 핑(cron-job.org)도 호출 가능하도록 읽기전용·무해. vercel.json crons에 추가 |
+| `96e22fc` | **🔑 진짜 근본 원인 수정** — 미들웨어 matcher가 `/api/cron/*`도 잡아서, 세션 없는 cron 호출이 `/login`으로 **307 리다이렉트**됨 → 기존 cleanup cron도 **DB 조회를 한 번도 못 했음**. `/api/cron`을 PUBLIC_PATHS에 추가해 해결 |
 
-- **원인 확정 (사용자 확인)**: 7일 무활동 시 **전체 앱 정지(로그인·채팅 전부 안 됨)** → Supabase 무료 플랜 7일 비활성 자동 일시정지가 원인.
-- 기존 `cleanup-attachments` cron(매일 01:00)도 DB 조회를 하지만, Vercel Hobby cron이 불안정해 누락됐을 가능성 → 9시 keepalive 추가 + **외부 핑 백업 권장**.
-- ⚠️ **남은 액션 (사용자)**: ① Vercel 대시보드에서 cron 실제 실행 기록 확인 ② cron-job.org 등에 `https://www.fpctalk.com/api/cron/keepalive` 매일 호출 등록(Vercel cron 불안정 대비 백업) ③ 근본 해결은 Supabase Pro($25/월) 업그레이드(자동정지 없음) — 비용 발생이라 보류.
+- **원인 확정 (사용자 확인)**: 7일 무활동 시 **전체 앱 정지(로그인·채팅 전부 안 됨)** → Supabase 무료 플랜 7일 비활성 자동 일시정지.
+- **진짜 원인**: cleanup cron이 존재했는데도 정지가 계속된 이유 = 미들웨어가 cron 호출을 `/login`으로 튕겨 DB에 도달 못 함. (curl로 307 확인 → middleware 수정 → 200 `{ok:true, users:5}` 확인)
+- **검증 완료 (2026-06-13)**: `curl https://www.fpctalk.com/api/cron/keepalive` → `{"ok":true,"users":5}` HTTP 200. DB 조회 정상.
+- ⚠️ **남은 액션 (사용자, 권장)**: ① cron-job.org 등 외부 핑에 `https://www.fpctalk.com/api/cron/keepalive` 매일 1회 등록 (Vercel Hobby cron 불안정 대비 이중 안전망) ② Vercel 대시보드에서 cron 실행 기록 확인. 근본해결은 Supabase Pro($25/월, 자동정지 없음)이나 비용상 보류.
 
 ---
 
