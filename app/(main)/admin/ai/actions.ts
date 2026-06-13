@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/db";
 import { getMe } from "@/lib/chat";
-import { setAiModels } from "@/lib/app-settings";
+import {
+  setAiModels,
+  getGeminiApiKey,
+  setGeminiApiKey,
+  clearGeminiApiKey,
+} from "@/lib/app-settings";
 
 async function requireAdmin(): Promise<
   { ok: true; meId: string } | { ok: false; error: string }
@@ -31,8 +36,8 @@ export async function listGeminiModelsAction(): Promise<{
   const guard = await requireAdmin();
   if (!guard.ok) return { ok: false, error: guard.error };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { ok: false, error: "GEMINI_API_KEY가 설정되지 않았습니다." };
+  const apiKey = await getGeminiApiKey();
+  if (!apiKey) return { ok: false, error: "API 키가 설정되지 않았습니다." };
 
   try {
     const res = await fetch(
@@ -101,8 +106,8 @@ export async function testAiModelAction(
   const name = (model ?? "").trim();
   if (!name) return { ok: false, error: "모델명을 입력해주세요." };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { ok: false, error: "GEMINI_API_KEY가 설정되지 않았습니다." };
+  const apiKey = await getGeminiApiKey();
+  if (!apiKey) return { ok: false, error: "API 키가 설정되지 않았습니다." };
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -114,4 +119,35 @@ export async function testAiModelAction(
     const msg = e instanceof Error ? e.message : "호출 실패";
     return { ok: false, error: msg.slice(0, 200) };
   }
+}
+
+/** Gemini API 키 저장 — 다음 AI 호출부터 즉시 반영 (재배포 불필요). */
+export async function setGeminiApiKeyAction(
+  key: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  const k = (key ?? "").trim();
+  if (!k) return { ok: false, error: "API 키를 입력해주세요." };
+  if (k.length < 10 || k.length > 200) {
+    return { ok: false, error: "API 키 형식이 올바르지 않습니다." };
+  }
+
+  await setGeminiApiKey(k);
+  revalidatePath("/admin/ai");
+  return { ok: true };
+}
+
+/** 저장된 API 키 삭제 → 환경변수로 복귀. */
+export async function clearGeminiApiKeyAction(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  await clearGeminiApiKey();
+  revalidatePath("/admin/ai");
+  return { ok: true };
 }

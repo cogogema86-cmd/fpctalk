@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { getAiModels, DEFAULT_AI_MODEL } from "@/lib/app-settings";
+import {
+  getAiModels,
+  getGeminiApiKeyStatus,
+  DEFAULT_AI_MODEL,
+} from "@/lib/app-settings";
 import { AiSettingsForm } from "./_form";
+import { ApiKeySection } from "./_api-key";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +31,7 @@ export default async function AdminAiPage() {
   }
 
   const models = await getAiModels();
+  const keyStatus = await getGeminiApiKeyStatus();
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-5">
@@ -45,6 +51,8 @@ export default async function AdminAiPage() {
         initialPro={models.pro}
         defaultModel={DEFAULT_AI_MODEL}
       />
+
+      <ApiKeySection source={keyStatus.source} hint={keyStatus.hint} />
 
       <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 text-xs text-zinc-500 dark:text-zinc-400 space-y-1.5">
         <div className="font-semibold text-zinc-600 dark:text-zinc-300">
