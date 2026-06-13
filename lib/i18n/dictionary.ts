@@ -460,7 +460,7 @@ export const dictKo = {
   "upload.koFile2": "🇰🇷 한국어 파일",
   "upload.enFile2": "🇺🇸 English file (선택)",
   "upload.fileHint2Line1": "PDF / HWP / DOCX / XLSX / 이미지 등 모든 포맷 가능 (각 파일 최대 20MB).",
-  "upload.fileHint2Line2": "PDF는 사인이 자동 합성됩니다. 그 외 포맷은 원본 + 사인 별도 보관.",
+  "upload.fileHint2Line2": "PDF·이미지는 문서 우측 하단에 사인이 자동 합성됩니다. HWP/DOCX 등은 원본 + 사인 증명서 별도 보관.",
   "upload.saveBtn": "양식 저장",
 
   // ----- Admin: users -----
@@ -1176,7 +1176,7 @@ export const dictEn: Record<DictKey, string> = {
   "upload.koFile2": "🇰🇷 Korean file",
   "upload.enFile2": "🇺🇸 English file (optional)",
   "upload.fileHint2Line1": "PDF / HWP / DOCX / XLSX / images all supported (each file max 20MB).",
-  "upload.fileHint2Line2": "PDFs auto-merge the signature; other formats keep original + a separate signature.",
+  "upload.fileHint2Line2": "PDF & image files get the signature composited at the bottom-right; HWP/DOCX etc. keep the original + a separate signature certificate.",
   "upload.saveBtn": "Save template",
 
   "adm.users.title": "Staff",
