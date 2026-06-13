@@ -794,7 +794,7 @@ export async function requestSignaturesFromTemplate(
   });
 
   const others = await prisma.user.findMany({
-    where: { id: { not: uploaderId } },
+    where: { id: { not: uploaderId }, active: true },
     select: { id: true },
   });
 

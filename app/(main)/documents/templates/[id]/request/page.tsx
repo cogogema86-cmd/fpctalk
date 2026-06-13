@@ -41,9 +41,9 @@ export default async function RequestSignaturesPage({
     );
   }
 
-  // 본인 제외 모든 직원 (대상자 후보)
+  // 본인 제외 모든 활성 직원 (대상자 후보)
   const others = await prisma.user.findMany({
-    where: { id: { not: me.id } },
+    where: { id: { not: me.id }, active: true },
     include: { role: { select: { label: true } } },
     orderBy: [{ role: { sortOrder: "asc" } }, { name: "asc" }],
   });

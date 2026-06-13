@@ -18,13 +18,14 @@ export default async function NewGroupChatPage() {
   const isAdmin = !!meWithRole?.role.isAdmin;
 
   const others = await prisma.user.findMany({
-    where: { id: { not: me.id } },
+    where: { id: { not: me.id }, active: true },
     orderBy: [{ role: { sortOrder: "asc" } }, { name: "asc" }],
     include: { role: { select: { label: true, defaultLevel: true } } },
   });
 
-  // 레벨별 사용자 수 (레벨 채팅 만들 때 미리보기)
+  // 레벨별 사용자 수 (레벨 채팅 만들 때 미리보기) — 활성 직원만
   const allUsers = await prisma.user.findMany({
+    where: { active: true },
     select: { role: { select: { defaultLevel: true } } },
   });
   const levelDistribution: Record<number, number> = {};

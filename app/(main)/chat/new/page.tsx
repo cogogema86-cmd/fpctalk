@@ -10,9 +10,9 @@ export default async function NewChatPage() {
   if (!me) redirect("/login");
   const t = await getT();
 
-  // 본인 제외 모든 직원
+  // 본인 제외 모든 활성 직원
   const others = await prisma.user.findMany({
-    where: { id: { not: me.id } },
+    where: { id: { not: me.id }, active: true },
     orderBy: [
       { role: { sortOrder: "asc" } },
       { name: "asc" },

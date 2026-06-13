@@ -391,9 +391,9 @@ export async function computeUnreadCounts(
   // 잠재 독자 수
   let totalEligible: number;
   if (chat?.levelRequired !== null && chat?.levelRequired !== undefined) {
-    // 레벨 채팅 — 레벨 충족 직원 전체 (User.level은 입사 시 role.defaultLevel 복사값)
+    // 레벨 채팅 — 레벨 충족 활성 직원 전체 (User.level은 입사 시 role.defaultLevel 복사값)
     totalEligible = await prisma.user.count({
-      where: { level: { gte: chat.levelRequired } },
+      where: { level: { gte: chat.levelRequired }, active: true },
     });
   } else {
     totalEligible = members.length;
@@ -522,7 +522,10 @@ export async function extractMentionsFromContent(
   // 레벨 채팅이면 자격 있는 사용자도 멘션 가능 — 메시지에 이름 들어 있으면
   if (chat.levelRequired !== null) {
     const eligible = await prisma.user.findMany({
-      where: { role: { defaultLevel: { gte: chat.levelRequired } } },
+      where: {
+        role: { defaultLevel: { gte: chat.levelRequired } },
+        active: true,
+      },
       select: { id: true, name: true },
     });
     for (const u of eligible) candidates.set(u.id, u.name);

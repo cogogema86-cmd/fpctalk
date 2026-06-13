@@ -112,6 +112,7 @@ export async function GET(req: Request) {
   const daysInMonth = monthEnd.getDate();
 
   const users = await prisma.user.findMany({
+    where: { active: true },
     select: {
       id: true,
       name: true,

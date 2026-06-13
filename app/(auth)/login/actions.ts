@@ -2,6 +2,7 @@
 
 import { createClient, REMEMBER_ME_COOKIE } from "@/lib/supabase/server";
 import { usernameToEmail } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
@@ -81,6 +82,16 @@ export async function loginAction(
       error: "세션 생성 실패",
       debug: `user=${data?.user?.id ?? "none"}`,
     };
+  }
+
+  // 비활성(퇴사) 계정이면 즉시 로그아웃 + 로그인 거부
+  const dbUser = await prisma.user.findUnique({
+    where: { authId: data.user.id },
+    select: { active: true },
+  });
+  if (dbUser && !dbUser.active) {
+    await supabase.auth.signOut();
+    return { error: "비활성화된 계정입니다. 관리자에게 문의하세요." };
   }
 
   redirect("/chat");

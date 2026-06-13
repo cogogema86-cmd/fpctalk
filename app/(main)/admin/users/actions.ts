@@ -351,3 +351,35 @@ export async function resetPasswordAction(
 
   return { newPassword, username: target.username };
 }
+
+// =====================================================
+// 직원 비활성화 / 재활성화 (퇴사자 처리 — 복구 가능)
+// active=false면 로그인 차단 + 직원/채팅 선택 목록에서 숨김. 데이터는 모두 보존.
+// =====================================================
+export async function setStaffActiveAction(
+  userId: string,
+  active: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  // 본인 비활성화 방지 (락아웃)
+  if (userId === guard.me.id && !active) {
+    return { ok: false, error: "본인 계정은 비활성화할 수 없습니다." };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!target) return { ok: false, error: "직원을 찾을 수 없습니다." };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { active },
+  });
+
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}/edit`);
+  return { ok: true };
+}

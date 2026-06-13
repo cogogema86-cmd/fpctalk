@@ -29,6 +29,12 @@ export default async function MainLayout({
     include: { role: true },
   });
 
+  // 비활성(퇴사) 계정이 이미 로그인된 세션이면 즉시 로그아웃 (재로그인은 login action에서 차단)
+  if (user && !user.active) {
+    await supabase.auth.signOut();
+    redirect("/login");
+  }
+
   const locale = await getLocale();
   const t = await getT();
 

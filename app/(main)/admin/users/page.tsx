@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ResetPasswordButton } from "./_components/reset-password-button";
+import { ActiveToggle } from "./_components/active-toggle";
 import { getLocale, getT } from "@/lib/i18n/server";
 
 export default async function AdminUsersPage() {
@@ -83,12 +84,21 @@ export default async function AdminUsersPage() {
             {users.map((u) => (
               <tr
                 key={u.id}
-                className="border-t border-zinc-200 dark:border-zinc-800"
+                className={`border-t border-zinc-200 dark:border-zinc-800 ${
+                  u.active ? "" : "bg-zinc-50/60 dark:bg-zinc-900/40 opacity-60"
+                }`}
               >
                 <td className="px-4 py-2 text-zinc-900 dark:text-zinc-100 font-mono">
                   {u.username}
                 </td>
-                <td className="px-4 py-2">{u.name}</td>
+                <td className="px-4 py-2">
+                  {u.name}
+                  {!u.active && (
+                    <span className="ml-2 inline-flex items-center rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 px-1.5 py-0.5 text-[10px] font-medium">
+                      비활성
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   <RoleBadge label={u.role.label} isAdmin={u.role.isAdmin} />
                 </td>
@@ -110,11 +120,18 @@ export default async function AdminUsersPage() {
                       {t("adm.users.self")}
                     </span>
                   ) : (
-                    <ResetPasswordButton
-                      userId={u.id}
-                      username={u.username}
-                      name={u.name}
-                    />
+                    <>
+                      <ResetPasswordButton
+                        userId={u.id}
+                        username={u.username}
+                        name={u.name}
+                      />
+                      <ActiveToggle
+                        userId={u.id}
+                        name={u.name}
+                        active={u.active}
+                      />
+                    </>
                   )}
                 </td>
               </tr>

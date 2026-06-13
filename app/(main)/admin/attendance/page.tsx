@@ -51,8 +51,9 @@ export default async function AdminAttendancePage({
   const monthEnd = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
   const daysInMonth = monthEnd.getDate();
 
-  // 직원 + 역할 (정렬: role.sortOrder, 같으면 name)
+  // 직원 + 역할 (정렬: role.sortOrder, 같으면 name) — 활성 직원만
   const users = await prisma.user.findMany({
+    where: { active: true },
     select: {
       id: true,
       name: true,
