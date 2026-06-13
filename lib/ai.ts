@@ -13,6 +13,7 @@
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getAiModels } from "@/lib/app-settings";
 
 export type AiMode = "fast" | "pro";
 
@@ -138,10 +139,9 @@ async function callGemini(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set");
 
-  const modelName =
-    mode === "pro"
-      ? (process.env.AI_MODEL_PRO ?? "gemini-3.1-flash-lite")
-      : (process.env.AI_MODEL_FAST ?? "gemini-3.1-flash-lite");
+  // DB 설정(관리자 화면) → env → 기본값. 호출 시마다 읽어 재배포 없이 실시간 반영.
+  const models = await getAiModels();
+  const modelName = mode === "pro" ? models.pro : models.fast;
 
   const genAI = new GoogleGenerativeAI(apiKey);
 

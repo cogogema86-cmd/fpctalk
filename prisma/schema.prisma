@@ -454,3 +454,15 @@ enum SignStatus {
   REJECTED
   CANCELLED
 }
+
+// =====================================================
+// 앱 설정 (key-value) — 관리자가 런타임에 바꾸는 값 (AI 모델명 등)
+// 재배포 없이 즉시 반영. 값 없으면 코드가 env→기본값으로 폴백.
+// =====================================================
+model AppSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}

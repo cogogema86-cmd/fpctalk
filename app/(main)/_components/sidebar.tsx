@@ -61,6 +61,7 @@ export function Sidebar({
     { href: "/admin/roles", label: t("nav.adminRoles"), icon: "🏷️" },
     { href: "/admin/leave", label: t("nav.adminLeave"), icon: "✅" },
     { href: "/admin/attendance", label: t("nav.adminAttendance"), icon: "📋" },
+    { href: "/admin/ai", label: t("nav.adminAi"), icon: "🤖" },
   ];
 
   return (
