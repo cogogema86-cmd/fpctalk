@@ -12,7 +12,7 @@ export function CollapsibleSection({
   title,
   children,
   pageSize = 10,
-  defaultOpen = true,
+  defaultOpen = false,
   listClassName = "",
 }: {
   title: string;
