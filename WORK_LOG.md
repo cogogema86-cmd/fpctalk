@@ -16,7 +16,9 @@
   - `login/actions.ts`: 인증 실패 메시지 일반화("아이디 또는 비밀번호가 올바르지 않습니다") — 계정 열거·Supabase 내부정보(status/email) 누출 차단. 상세는 서버 콘솔 로그로만.
   - `keepalive/route.ts`: 응답에서 `users`(사용자 수) 제거 — 공개 엔드포인트 정보누출 방지.
 - **검증**: `tsc --noEmit` 0 에러, `next build` 성공, 로컬 prod 헤더 curl 확인.
-- **사용자 조치 권장 (코드로 불가)**: ① Vercel 환경변수에 `CRON_SECRET` 설정(keepalive 인증 강제) ② Supabase 대시보드 Auth 로그인 rate-limit 확인(무차별 대입 방어는 Supabase 기본 제공에 의존).
+- **사용자 조치 (2026-06-14 완료)**:
+  - ① **CRON_SECRET 적용 완료** — Vercel 환경변수 설정 + keepalive 라우트에 `?key=` 쿼리 인증 추가(`661edbe`). 검증: 키없음/틀린키→401, 올바른키→200. cron-job.org "FPCTalk keepalive" 작업 URL을 `?key=<secret>` 포함으로 교체(테스트 200 OK). 시크릿 값은 Vercel 환경변수에만 보관(이 로그엔 미기재). Vercel/외부 cron 둘 다 정상.
+  - ② **Supabase 무차별대입 방어 확인 — 추가조치 불필요**: Auth Rate Limits의 "sign-ups and sign-ins = 30 req/5min per IP"(시간당 360)가 기본 적용 중. 학원은 사무실 공유 IP라 더 낮추면 직원 로그인 막힘 → **현 기본값 유지**. Attack Protection의 Captcha는 **켜면 안 됨**(로그인 폼에 캡차 위젯 없어 전체 로그인 차단됨). leaked-password 차단은 무료면 켜기 선택.
 
 ### 후속: Next.js 16.2.4 → 16.2.9 보안 패치 업그레이드 (`f740674`)
 - 미들웨어 관련 보안 권고 패치 포함. 같은 마이너 내 패치라 회귀 위험 낮음. 안전 위해 `chore/next-16.2.9` 브랜치 작업 후 ff-merge.
