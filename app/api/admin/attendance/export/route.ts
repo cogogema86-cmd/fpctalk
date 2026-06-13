@@ -25,6 +25,9 @@ const TYPE_SHORT: Record<string, string> = {
   SICK: "병가",
   OFFICIAL: "공가",
   OTHER: "기타",
+  ABSENT: "결근",
+  TARDY: "지각",
+  EARLY_LEAVE: "조퇴",
 };
 const TYPE_LABEL: Record<string, string> = {
   ANNUAL: "연차",
@@ -33,6 +36,9 @@ const TYPE_LABEL: Record<string, string> = {
   SICK: "병가",
   OFFICIAL: "공가",
   OTHER: "기타",
+  ABSENT: "결근",
+  TARDY: "지각",
+  EARLY_LEAVE: "조퇴",
 };
 const TYPE_FILL: Record<string, string> = {
   ANNUAL: "FFDEE7F4",
@@ -41,6 +47,9 @@ const TYPE_FILL: Record<string, string> = {
   SICK: "FFF8E1E5",
   OFFICIAL: "FFE5DBF1",
   OTHER: "FFE8E8E8",
+  ABSENT: "FFF8C9C9",
+  TARDY: "FFFCE8C8",
+  EARLY_LEAVE: "FFFBDCC2",
 };
 
 const COLOR_HEADER = "FFD9E1F2";
@@ -229,6 +238,7 @@ export async function GET(req: Request) {
     const cells = matrix[u.id] ?? {};
     let halfDays = 0;
     let fullAnnual = 0;
+    let absentDays = 0;
     const seenLv = new Set<string>();
     for (const c of Object.values(cells)) {
       if (seenLv.has(c.leaveId)) continue;
@@ -238,6 +248,8 @@ export async function GET(req: Request) {
       if (lv.type === "HALF_AM" || lv.type === "HALF_PM") halfDays += 1;
       else if (lv.type === "ANNUAL")
         fullAnnual += calcLeaveDays(lv.type, lv.startDate, lv.endDate);
+      else if (lv.type === "ABSENT")
+        absentDays += calcLeaveDays(lv.type, lv.startDate, lv.endDate);
     }
     const deductible = fullAnnual + halfDays * 0.5;
     const remaining = u.annualLeaveTotal - u.annualLeaveUsed;
@@ -253,7 +265,7 @@ export async function GET(req: Request) {
     rowData.push(
       halfDays || 0,
       fullAnnual || 0,
-      0, // 결근 (LeaveType에 미포함 — 추후 추가 시 자동 카운트)
+      absentDays || 0, // 결근 (ABSENT 일수 자동 카운트)
       deductible,
       remaining,
     );

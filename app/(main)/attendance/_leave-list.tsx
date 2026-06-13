@@ -26,6 +26,9 @@ const TYPE_KEY: Record<LeaveType, DictKey> = {
   SICK: "leave.type.SICK",
   OFFICIAL: "leave.type.OFFICIAL",
   OTHER: "leave.type.OTHER",
+  ABSENT: "leave.type.ABSENT",
+  TARDY: "leave.type.TARDY",
+  EARLY_LEAVE: "leave.type.EARLY_LEAVE",
 };
 
 const STATUS_KEY: Record<LeaveStatus, DictKey> = {

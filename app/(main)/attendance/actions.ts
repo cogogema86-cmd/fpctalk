@@ -38,6 +38,7 @@ export async function checkOutAction(): Promise<CheckResult> {
 // =====================================================
 // 연차 신청
 // =====================================================
+// 직원 자가 신청용 (결근/지각/조퇴는 관리자만 기록)
 const VALID_LEAVE_TYPES: LeaveType[] = [
   "ANNUAL",
   "HALF_AM",
@@ -45,6 +46,14 @@ const VALID_LEAVE_TYPES: LeaveType[] = [
   "SICK",
   "OFFICIAL",
   "OTHER",
+];
+
+// 관리자 매트릭스 등록용 (결근/지각/조퇴 포함 — 모두 연차 차감 안 함)
+const ADMIN_LEAVE_TYPES: LeaveType[] = [
+  ...VALID_LEAVE_TYPES,
+  "ABSENT",
+  "TARDY",
+  "EARLY_LEAVE",
 ];
 
 export type LeaveFormState = {
@@ -182,7 +191,7 @@ export async function addLeaveByAdminAction(input: {
     return { ok: false, error: "관리자만 등록할 수 있습니다." };
   }
 
-  if (!VALID_LEAVE_TYPES.includes(input.type)) {
+  if (!ADMIN_LEAVE_TYPES.includes(input.type)) {
     return { ok: false, error: "휴가 종류가 올바르지 않습니다." };
   }
   const start = new Date(input.startDate);
@@ -296,7 +305,7 @@ export async function addLeavesBulkByAdminAction(input: {
   if (input.userIds.length > 100) {
     return { ok: false, error: "한 번에 최대 100명까지 등록할 수 있습니다." };
   }
-  if (!VALID_LEAVE_TYPES.includes(input.type)) {
+  if (!ADMIN_LEAVE_TYPES.includes(input.type)) {
     return { ok: false, error: "휴가 종류가 올바르지 않습니다." };
   }
   const start = new Date(input.startDate);

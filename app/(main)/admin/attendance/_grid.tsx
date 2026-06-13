@@ -35,6 +35,9 @@ const TYPE_BADGE: Record<string, string> = {
   SICK: "병가",
   OFFICIAL: "공가",
   OTHER: "기타",
+  ABSENT: "결근",
+  TARDY: "지각",
+  EARLY_LEAVE: "조퇴",
 };
 const TYPE_COLOR: Record<string, string> = {
   ANNUAL: "bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200",
@@ -43,6 +46,9 @@ const TYPE_COLOR: Record<string, string> = {
   SICK: "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200",
   OFFICIAL: "bg-violet-100 dark:bg-violet-950/60 text-violet-800 dark:text-violet-200",
   OTHER: "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300",
+  ABSENT: "bg-red-200 dark:bg-red-950/60 text-red-900 dark:text-red-200",
+  TARDY: "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200",
+  EARLY_LEAVE: "bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-200",
 };
 
 const SELECTABLE_TYPES: { value: LeaveType; label: string }[] = [
@@ -52,6 +58,9 @@ const SELECTABLE_TYPES: { value: LeaveType; label: string }[] = [
   { value: "SICK", label: "병가" },
   { value: "OFFICIAL", label: "공가" },
   { value: "OTHER", label: "기타" },
+  { value: "ABSENT", label: "결근 (차감 없음)" },
+  { value: "TARDY", label: "지각 (차감 없음)" },
+  { value: "EARLY_LEAVE", label: "조퇴 (차감 없음)" },
 ];
 
 export function AttendanceGrid({

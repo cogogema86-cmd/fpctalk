@@ -11,6 +11,9 @@ const TYPE_LABEL: Record<LeaveType, string> = {
   SICK: "병가",
   OFFICIAL: "공가",
   OTHER: "기타",
+  ABSENT: "결근",
+  TARDY: "지각",
+  EARLY_LEAVE: "조퇴",
 };
 
 type Item = {

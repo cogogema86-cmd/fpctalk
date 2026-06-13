@@ -66,6 +66,9 @@ model User {
   annualLeaveTotal Float @default(15)
   annualLeaveUsed  Float @default(0)
 
+  // 계정 활성 여부 — false면 로그인 차단 + 직원/채팅 선택 목록에서 숨김 (퇴사자 처리, 복구 가능)
+  active Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -331,6 +334,9 @@ enum LeaveType {
   SICK
   OFFICIAL
   OTHER
+  ABSENT      // 결근 (무급, 연차 차감 안 함)
+  TARDY       // 지각 (연차 차감 안 함)
+  EARLY_LEAVE // 조퇴 (연차 차감 안 함)
 }
 
 enum LeaveStatus {

@@ -39,6 +39,9 @@ export default async function AdminLeavePage() {
     SICK: t("leave.type.sick"),
     OFFICIAL: t("leave.type.official"),
     OTHER: t("leave.type.other"),
+    ABSENT: t("leave.type.ABSENT"),
+    TARDY: t("leave.type.TARDY"),
+    EARLY_LEAVE: t("leave.type.EARLY_LEAVE"),
   };
   const STATUS_LABEL: Record<LeaveStatus, string> = {
     PENDING: t("leave.status.pending"),
