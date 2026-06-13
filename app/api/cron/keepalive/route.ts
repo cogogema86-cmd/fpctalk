@@ -21,12 +21,20 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export async function GET(req: Request) {
-  // CRON_SECRET이 설정돼 있으면 검증 (외부 핑은 헤더 없이도 허용 — 읽기 전용·무해)
+  // 인증: CRON_SECRET이 설정돼 있으면 요구한다.
+  // - Vercel Cron: Authorization: Bearer <secret> 헤더 자동 부착
+  // - 외부 핑(cron-job.org 등): URL에 ?key=<secret> 추가
+  // CRON_SECRET 미설정이면 공개 허용(읽기 전용·무해) — 설정 전까진 핑이 안 끊김.
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
   const fromVercelCron = req.headers.get("user-agent")?.includes("vercel-cron");
-  if (secret && auth && auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (secret) {
+    const queryKey = new URL(req.url).searchParams.get("key");
+    const headerOk = auth === `Bearer ${secret}`;
+    const queryOk = queryKey === secret;
+    if (!headerOk && !queryOk) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   try {
