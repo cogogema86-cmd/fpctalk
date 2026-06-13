@@ -17,6 +17,11 @@
 - **라이브 e2e 검증 (Playwright, 2026-06-13)**: 테스트 JPG 양식 업로드 → 외부 사인 토큰 → 캔버스 사인 → 합성 성공 → **사인본 PDF 우측 하단에 사인 정상 표시 확인**(스크린샷). 테스트 데이터·임시파일 모두 정리 완료.
 - **사인 위치 상수** (`lib/documents.ts`): `rightMargin=36, bottomMargin=28, maxW=min(200, pw*0.42)`. 위치/크기 조정 요청 시 여기 수정.
 
+### 후속: 이미지 업로드 "This page couldn't load" 수정 (`17042fe`, `8868dfa`)
+- **진짜 원인 (재현·확정)**: 양식 업로드가 **서버 액션**으로 파일 전송 → Next 기본 본문 제한 **1MB** 초과 시 400(`This page couldn't load`). PDF 양식은 보통 1MB 미만이라 됐고, **사진(JPG)은 1MB↑라 실패**. (1.82MB JPG로 재현 → 수정 후 성공 재검증)
+- 수정: ① `next.config.ts` `experimental.serverActions.bodySizeLimit="20mb"` ② 업로드 폼(`upload/_form.tsx`)에서 이미지 클라이언트 축소(긴 변 2200px, JPEG 0.85) 후 전송 — 큰 폰 사진도 안전. gif/svg·비이미지·HEIC 디코드 실패는 원본 유지.
+- 교훈: **파일 업로드를 서버 액션으로 받으면 기본 1MB 제한**에 막힌다. 큰 파일은 bodySizeLimit 상향 + 클라 압축, 또는 route handler 사용.
+
 ---
 
 ## ✅ 2026-06-13 오후 — Supabase 7일 자동정지 방지 (keepalive cron)
