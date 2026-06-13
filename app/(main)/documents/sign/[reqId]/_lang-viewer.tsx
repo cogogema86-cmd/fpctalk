@@ -8,6 +8,8 @@ export function LangViewer({
   enUrl,
   isPdfKo,
   isPdfEn,
+  isImageKo,
+  isImageEn,
   koFileName,
   enFileName,
 }: {
@@ -15,6 +17,8 @@ export function LangViewer({
   enUrl: string | null;
   isPdfKo: boolean;
   isPdfEn: boolean;
+  isImageKo?: boolean;
+  isImageEn?: boolean;
   koFileName: string;
   enFileName: string;
 }) {
@@ -24,6 +28,7 @@ export function LangViewer({
 
   const url = lang === "ko" ? koUrl : enUrl;
   const isPdf = lang === "ko" ? isPdfKo : isPdfEn;
+  const isImage = lang === "ko" ? !!isImageKo : !!isImageEn;
   const fileName = lang === "ko" ? koFileName : enFileName;
 
   if (!url) {
@@ -77,6 +82,13 @@ export function LangViewer({
           src={url}
           className="w-full h-72 md:h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
           title={fileName}
+        />
+      ) : isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={fileName}
+          className="w-full max-h-[32rem] object-contain border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
         />
       ) : (
         <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-900">

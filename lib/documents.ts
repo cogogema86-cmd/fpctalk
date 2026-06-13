@@ -13,6 +13,7 @@
 import { prisma } from "@/lib/db";
 import { PDFDocument, type PDFFont, StandardFonts, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
+import sharp from "sharp";
 import {
   type StorageType,
   deleteFiles,
@@ -263,15 +264,33 @@ export async function submitSignature(params: SubmitSignatureParams) {
     mimeType: "image/png",
   });
 
-  // 2) 원본 파일 다운로드
-  const isPdf = req.document.mimeType === "application/pdf";
+  // 2) 원본 파일 다운로드 + 서명자 표기 계산
+  const mimeType = req.document.mimeType ?? "";
+  const isPdf = mimeType === "application/pdf";
+  const isImage = mimeType.startsWith("image/");
   const docBuffer = await downloadFile(
     docStorageType,
     req.document.storagePath,
   );
 
-  // 비-PDF: 원본은 보존하고 별도 "사인 증명 PDF" 생성
-  if (!isPdf) {
+  let signerLabel: string;
+  if (signerId) {
+    const signer = await prisma.user.findUnique({
+      where: { id: signerId },
+      select: { username: true, name: true },
+    });
+    signerLabel = signer?.name
+      ? `${signer.name} (${signer.username ?? signerId})`
+      : (signer?.username ?? signerId);
+  } else {
+    signerLabel = req.externalName
+      ? `${req.externalName} (외부)`
+      : "External signer";
+  }
+  const now = new Date();
+
+  // 렌더 불가 포맷(HWP/DOCX/XLSX 등 — 이미지·PDF 제외): 원본 보존 + 별도 "사인 증명 PDF"
+  if (!isPdf && !isImage) {
     let signerLabelCert: string;
     if (signerId) {
       const signer = await prisma.user.findUnique({
@@ -472,79 +491,86 @@ export async function submitSignature(params: SubmitSignatureParams) {
     return { signedPath: certPath };
   }
 
-  // 3) PDF에 사인 페이지 합성
-  const pdfDoc = await PDFDocument.load(docBuffer);
+  // 3) PDF/이미지 → 문서 마지막 페이지의 우측 하단에 사인 직접 합성
+  //    - PDF: 원본을 열어 마지막 페이지에 사인
+  //    - 이미지(jpg/png/webp 등): PNG로 정규화 후 PDF 한 페이지로 변환해 그 위에 사인
+  let pdfDoc: PDFDocument;
+  if (isImage) {
+    const pngBuf = await sharp(docBuffer)
+      .rotate() // EXIF 방향 보정
+      .resize(1654, 1654, { fit: "inside", withoutEnlargement: true }) // A4 150dpi 한도 — PDF 용량 억제
+      .png()
+      .toBuffer();
+    pdfDoc = await PDFDocument.create();
+    const bgImg = await pdfDoc.embedPng(Buffer.from(pngBuf));
+    const bgPage = pdfDoc.addPage([bgImg.width, bgImg.height]);
+    bgPage.drawImage(bgImg, {
+      x: 0,
+      y: 0,
+      width: bgImg.width,
+      height: bgImg.height,
+    });
+  } else {
+    pdfDoc = await PDFDocument.load(docBuffer);
+  }
   pdfDoc.registerFontkit(fontkit);
-  const sigImage = await pdfDoc.embedPng(sigBuffer);
 
+  // 캡션(서명자·날짜)용 폰트 — 한글 가능하면 임베드
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  let metaFont: PDFFont = helveticaFont;
+  let capFont: PDFFont = helveticaFont;
   let pdfUseUnicode = false;
   const koBytesPdf = await loadKoreanFont();
   if (koBytesPdf) {
     try {
-      metaFont = await pdfDoc.embedFont(koBytesPdf, { subset: true });
+      capFont = await pdfDoc.embedFont(koBytesPdf, { subset: true });
       pdfUseUnicode = true;
     } catch {
       // keep helvetica
     }
   }
-  const safeMeta = (s: string) => (pdfUseUnicode ? s : helveticaSafe(s));
+  const safeCap = (s: string) => (pdfUseUnicode ? s : helveticaSafe(s));
 
-  const newPage = pdfDoc.addPage();
-  const { height } = newPage.getSize();
+  const sigImage = await pdfDoc.embedPng(sigBuffer);
 
-  newPage.drawText("Signature", {
-    x: 50,
-    y: height - 80,
-    size: 20,
-    font: helveticaFont,
-    color: rgb(0, 0, 0),
-  });
+  // 마지막 페이지 우측 하단 고정 위치에 합성
+  const pages = pdfDoc.getPages();
+  const page = pages[pages.length - 1];
+  const { width: pw } = page.getSize();
 
+  const rightMargin = 36;
+  const bottomMargin = 28;
+  const capH = 9;
   const sigDims = sigImage.scale(1);
-  const maxW = 300;
+  const maxW = Math.min(200, pw * 0.42);
   const scale = sigDims.width > maxW ? maxW / sigDims.width : 1;
   const sigW = sigDims.width * scale;
   const sigH = sigDims.height * scale;
-  newPage.drawImage(sigImage, {
-    x: 50,
-    y: height - 100 - sigH,
-    width: sigW,
-    height: sigH,
+  const sigX = Math.max(rightMargin, pw - rightMargin - sigW);
+  const sigY = bottomMargin + capH + 3;
+
+  // 문서 내용과 겹쳐도 사인이 보이도록 흰 반투명 배경 박스
+  page.drawRectangle({
+    x: sigX - 6,
+    y: bottomMargin - 4,
+    width: sigW + 12,
+    height: sigH + capH + 11,
+    color: rgb(1, 1, 1),
+    opacity: 0.72,
+    borderColor: rgb(0.8, 0.8, 0.8),
+    borderWidth: 0.5,
   });
+  page.drawImage(sigImage, { x: sigX, y: sigY, width: sigW, height: sigH });
 
-  let signerLabel: string;
-  if (signerId) {
-    const signer = await prisma.user.findUnique({
-      where: { id: signerId },
-      select: { username: true, name: true },
-    });
-    signerLabel = signer?.name
-      ? `${signer.name} (${signer.username ?? signerId})`
-      : (signer?.username ?? signerId);
-  } else {
-    signerLabel = `External: ${req.externalName ?? "unknown"}`;
-  }
-  const now = new Date();
-  const meta = [
-    `Signer: ${signerLabel}`,
-    `Date: ${now.toISOString()}`,
-    ip ? `IP: ${ip}` : null,
-    userAgent ? `Agent: ${userAgent.slice(0, 60)}` : null,
-  ].filter(Boolean);
-
-  let metaY = height - 100 - sigH - 30;
-  for (const line of meta) {
-    newPage.drawText(safeMeta(line as string), {
-      x: 50,
-      y: metaY,
-      size: 9,
-      font: metaFont,
-      color: rgb(0.3, 0.3, 0.3),
-    });
-    metaY -= 14;
-  }
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const dateStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const caption = safeCap(`${signerLabel} · ${dateStr}`).slice(0, 60);
+  page.drawText(caption, {
+    x: sigX,
+    y: bottomMargin,
+    size: 7,
+    font: capFont,
+    color: rgb(0.25, 0.25, 0.25),
+  });
 
   // 4) 합성된 PDF 저장 — 부모 문서와 같은 스토리지에 보관
   const signedBytes = await pdfDoc.save();

@@ -43,6 +43,8 @@ export default async function SignPage({
 
   const isPdfKo = req.document.mimeType === "application/pdf";
   const isPdfEn = req.document.mimeTypeEn === "application/pdf";
+  const isImageKo = (req.document.mimeType ?? "").startsWith("image/");
+  const isImageEn = (req.document.mimeTypeEn ?? "").startsWith("image/");
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
@@ -74,6 +76,8 @@ export default async function SignPage({
           enUrl={enUrl}
           isPdfKo={isPdfKo}
           isPdfEn={isPdfEn}
+          isImageKo={isImageKo}
+          isImageEn={isImageEn}
           koFileName={req.document.title}
           enFileName={req.document.title}
         />

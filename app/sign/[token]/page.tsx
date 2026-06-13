@@ -54,6 +54,7 @@ export default async function ExternalSignPage({
     : null;
   const isPdfKo = req.document.mimeType === "application/pdf";
   const isPdfEn = req.document.mimeTypeEn === "application/pdf";
+  const isImageKo = (req.document.mimeType ?? "").startsWith("image/");
 
   return (
     <Wrapper title={req.document.title} locale={locale}>
@@ -80,6 +81,7 @@ export default async function ExternalSignPage({
             enUrl={enUrl}
             isPdfKo={isPdfKo}
             isPdfEn={isPdfEn}
+            isImageKo={isImageKo}
             openKoLabel={t("ext.openKo")}
             openEnLabel={t("ext.openEn")}
             notPdfBody={t("ext.notPdfBody")}
@@ -109,6 +111,7 @@ function SignFileViewer({
   koUrl,
   enUrl,
   isPdfKo,
+  isImageKo,
   openKoLabel,
   openEnLabel,
   notPdfBody,
@@ -117,12 +120,14 @@ function SignFileViewer({
   enUrl: string | null;
   isPdfKo: boolean;
   isPdfEn: boolean;
+  isImageKo: boolean;
   openKoLabel: string;
   openEnLabel: string;
   notPdfBody: string;
 }) {
   const url = koUrl;
   const isPdf = isPdfKo;
+  const isImage = isImageKo;
   return (
     <div className="space-y-2">
       <a
@@ -148,6 +153,13 @@ function SignFileViewer({
           src={url}
           className="w-full h-72 md:h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
           title="document"
+        />
+      ) : isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt="document"
+          className="w-full max-h-[32rem] object-contain border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
         />
       ) : (
         <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-900">
