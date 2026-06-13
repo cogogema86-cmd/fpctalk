@@ -8,7 +8,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { applyRememberMe, REMEMBER_ME_COOKIE } from "@/lib/supabase/server";
 
-const PUBLIC_PATHS = ["/login", "/sign", "/api/sign-files"];
+// /api/cron: Vercel Cron·외부 핑이 세션 없이 호출 → 미들웨어가 /login으로 튕기지 않도록 공개.
+//   (각 cron 라우트가 CRON_SECRET 또는 읽기전용으로 자체 보호)
+const PUBLIC_PATHS = ["/login", "/sign", "/api/sign-files", "/api/cron"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
