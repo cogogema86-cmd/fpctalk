@@ -11,6 +11,7 @@ import {
 import { getLocale, getT } from "@/lib/i18n/server";
 import { DeleteTemplateButton } from "./_delete-template-button";
 import { DeleteCampaignButton } from "./_delete-campaign-button";
+import { CollapsibleSection } from "./_collapsible-section";
 import { PreviewButton } from "./[id]/_preview-button";
 import { DownloadButton } from "./[id]/_download-button";
 
@@ -56,45 +57,40 @@ export default async function DocumentsPage() {
       </div>
 
       {pending.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            {t("documents.myPending")} ({pending.length})
-          </h2>
-          <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
-            {pending.map((p) => (
-              <li
-                key={p.id}
-                className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium truncate">{p.document.title}</div>
-                  {p.document.description && (
-                    <div className="text-xs text-zinc-500 truncate">
-                      {p.document.description}
-                    </div>
-                  )}
-                  <div className="text-xs text-zinc-400 mt-0.5">
-                    {t("documents.requester")}: {p.requester.name}
+        <CollapsibleSection title={t("documents.myPending")}>
+          {pending.map((p) => (
+            <li
+              key={p.id}
+              className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">{p.document.title}</div>
+                {p.document.description && (
+                  <div className="text-xs text-zinc-500 truncate">
+                    {p.document.description}
                   </div>
+                )}
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  {t("documents.requester")}: {p.requester.name}
                 </div>
-                <Link
-                  href={`/documents/sign/${p.id}`}
-                  className="rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-4 py-2 shrink-0"
-                >
-                  {t("documents.signNow")}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+              </div>
+              <Link
+                href={`/documents/sign/${p.id}`}
+                className="rounded-md bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-4 py-2 shrink-0"
+              >
+                {t("documents.signNow")}
+              </Link>
+            </li>
+          ))}
+        </CollapsibleSection>
       )}
 
-      {isAdmin && (
-        <section className="space-y-2">
-          <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            {t("documents.templateBox")} ({templates.length})
-          </h2>
-          {templates.length === 0 ? (
+      {isAdmin &&
+        (templates.length === 0 ? (
+          <section className="space-y-2">
+            <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
+              {t("documents.templateBox")} (0)
+            </h2>
             <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
               {t("documents.templateEmpty")}{" "}
               <Link
@@ -104,56 +100,51 @@ export default async function DocumentsPage() {
                 {t("documents.newTemplate")}
               </Link>
             </div>
-          ) : (
-            <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
-              {templates.map((tpl) => (
-                <li
-                  key={tpl.id}
-                  className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3 flex-wrap"
-                >
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/documents/templates/${tpl.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {tpl.name}
-                    </Link>
-                    {tpl.description && (
-                      <div className="text-xs text-zinc-500 truncate mt-0.5">
-                        {tpl.description}
-                      </div>
-                    )}
-                    <div className="text-[10px] text-zinc-400 mt-1 space-x-2">
-                      <span>🇰🇷 {tpl.koFileName}</span>
-                      {tpl.enFileName && <span>🇺🇸 {tpl.enFileName}</span>}
+          </section>
+        ) : (
+          <CollapsibleSection title={t("documents.templateBox")}>
+            {templates.map((tpl) => (
+              <li
+                key={tpl.id}
+                className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3 flex-wrap"
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/documents/templates/${tpl.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {tpl.name}
+                  </Link>
+                  {tpl.description && (
+                    <div className="text-xs text-zinc-500 truncate mt-0.5">
+                      {tpl.description}
                     </div>
+                  )}
+                  <div className="text-[10px] text-zinc-400 mt-1 space-x-2">
+                    <span>🇰🇷 {tpl.koFileName}</span>
+                    {tpl.enFileName && <span>🇺🇸 {tpl.enFileName}</span>}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Link
-                      href={`/documents/templates/${tpl.id}/request`}
-                      className="text-xs rounded-md bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 font-medium"
-                    >
-                      {t("documents.requestSignatures")}
-                    </Link>
-                    <DeleteTemplateButton
-                      templateId={tpl.id}
-                      templateName={tpl.name}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Link
+                    href={`/documents/templates/${tpl.id}/request`}
+                    className="text-xs rounded-md bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 font-medium"
+                  >
+                    {t("documents.requestSignatures")}
+                  </Link>
+                  <DeleteTemplateButton
+                    templateId={tpl.id}
+                    templateName={tpl.name}
+                  />
+                </div>
+              </li>
+            ))}
+          </CollapsibleSection>
+        ))}
 
       {isAdmin && myDocuments.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            {t("documents.activeCampaigns")} ({myDocuments.length})
-          </h2>
-          <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
-            {myDocuments.map((d) => {
+        <CollapsibleSection title={t("documents.activeCampaigns")}>
+          {myDocuments.map((d) => {
               const total = d._count.signatureRequests;
               const signed = d.signatureRequests.filter(
                 (r) => r.status === "SIGNED",
@@ -227,47 +218,40 @@ export default async function DocumentsPage() {
                 </li>
               );
             })}
-          </ul>
-        </section>
+        </CollapsibleSection>
       )}
 
       {!isAdmin && completed.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            {t("documents.mySigned")}
-          </h2>
-          <ul className="rounded-lg border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden text-sm">
-            {completed.map((c) => (
-              <li
-                key={c.id}
-                className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3 flex-wrap"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium truncate">{c.document.title}</div>
-                  <div className="text-xs text-zinc-400 mt-0.5">
-                    ✓{" "}
-                    {c.signedAt &&
-                      new Date(c.signedAt).toLocaleString(dateLocale)}
-                  </div>
+        <CollapsibleSection title={t("documents.mySigned")} listClassName="text-sm">
+          {completed.map((c) => (
+            <li
+              key={c.id}
+              className="px-4 py-3 bg-white dark:bg-zinc-950 flex items-center justify-between gap-3 flex-wrap"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">{c.document.title}</div>
+                <div className="text-xs text-zinc-400 mt-0.5">
+                  ✓{" "}
+                  {c.signedAt && new Date(c.signedAt).toLocaleString(dateLocale)}
                 </div>
-                <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-                  <PreviewButton
-                    url={`/api/files/${c.document.id}?type=signed`}
-                    title={c.document.title}
-                    label={t("documents.preview")}
-                    compact
-                  />
-                  <DownloadButton
-                    documentId={c.document.id}
-                    type="signed"
-                    label={t("documents.downloadSigned")}
-                    compact
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+              </div>
+              <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+                <PreviewButton
+                  url={`/api/files/${c.document.id}?type=signed`}
+                  title={c.document.title}
+                  label={t("documents.preview")}
+                  compact
+                />
+                <DownloadButton
+                  documentId={c.document.id}
+                  type="signed"
+                  label={t("documents.downloadSigned")}
+                  compact
+                />
+              </div>
+            </li>
+          ))}
+        </CollapsibleSection>
       )}
 
       {!isAdmin && pending.length === 0 && completed.length === 0 && (
