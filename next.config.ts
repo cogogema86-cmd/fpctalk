@@ -9,10 +9,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "20mb",
     },
   },
-  // 사인본/증명서 PDF의 한글 폰트(assets/NotoSansKR-Regular.otf)를
+  // 사인본/증명서 PDF의 한글 폰트(assets/NanumGothic-Regular.ttf)를
   // 모든 서버 함수 번들에 포함 — lib/fonts.ts가 파일시스템에서 읽음.
   outputFileTracingIncludes: {
-    "/**": ["./assets/NotoSansKR-Regular.otf"],
+    "/**": ["./assets/NanumGothic-Regular.ttf"],
   },
 };
 
