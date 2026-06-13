@@ -532,101 +532,78 @@ export async function submitSignature(params: SubmitSignatureParams) {
 
   const sigImage = await pdfDoc.embedPng(sigBuffer);
 
-  // 마지막 페이지 우측 하단 고정 위치에 합성
+  // 마지막 페이지 우측 하단에 [사인 + 서명자·일시·IP] 박스를 직접 합성 (법적 증빙 포함)
   const pages = pdfDoc.getPages();
   const page = pages[pages.length - 1];
   const { width: pw } = page.getSize();
 
-  const rightMargin = 36;
-  const bottomMargin = 28;
-  const capH = 9;
-  const sigDims = sigImage.scale(1);
-  const maxW = Math.min(200, pw * 0.42);
-  const scale = sigDims.width > maxW ? maxW / sigDims.width : 1;
-  const sigW = sigDims.width * scale;
-  const sigH = sigDims.height * scale;
-  const sigX = Math.max(rightMargin, pw - rightMargin - sigW);
-  const sigY = bottomMargin + capH + 3;
+  // 서명 시각 (KST, ASCII ISO 형식: 2026-06-14 22:18:10)
+  const signedAtKst = now.toLocaleString("sv-SE", { timeZone: "Asia/Seoul" });
 
-  // 문서 내용과 겹쳐도 사인이 보이도록 흰 반투명 배경 박스
-  page.drawRectangle({
-    x: sigX - 6,
-    y: bottomMargin - 4,
-    width: sigW + 12,
-    height: sigH + capH + 11,
-    color: rgb(1, 1, 1),
-    opacity: 0.72,
-    borderColor: rgb(0.8, 0.8, 0.8),
-    borderWidth: 0.5,
-  });
-  page.drawImage(sigImage, { x: sigX, y: sigY, width: sigW, height: sigH });
-
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const dateStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-  const caption = safeCap(`${signerLabel} · ${dateStr}`).slice(0, 60);
-  page.drawText(caption, {
-    x: sigX,
-    y: bottomMargin,
-    size: 7,
-    font: capFont,
-    color: rgb(0.25, 0.25, 0.25),
-  });
-
-  // 3-b) 전자서명 정보(감사) 페이지 — 법적 증거력용. 서명자·시각·IP·기기·문서ID 기록.
-  const auditPage = pdfDoc.addPage();
-  const { width: aw, height: ah } = auditPage.getSize();
-  auditPage.drawText(safeCap("전자서명 정보 (Signature Audit)"), {
-    x: 50,
-    y: ah - 70,
-    size: 18,
-    font: capFont,
-    color: rgb(0, 0, 0),
-  });
-  auditPage.drawLine({
-    start: { x: 50, y: ah - 82 },
-    end: { x: aw - 50, y: ah - 82 },
-    thickness: 1,
-    color: rgb(0.8, 0.8, 0.8),
-  });
-  const signedAtKst = now.toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const auditRows: Array<[string, string]> = [
-    ["문서", req.document.title ?? ""],
-    ["문서 ID", req.document.id],
-    ["서명자", signerLabel],
-    ["서명 시각 (KST)", signedAtKst],
+  // 박스에 들어갈 메타 정보 줄 (한글 폰트 내장이라 안정적으로 렌더)
+  const metaLines = [
+    safeCap(`서명자: ${signerLabel}`).slice(0, 48),
+    safeCap(`일시: ${signedAtKst} KST`),
   ];
-  if (ip) auditRows.push(["IP 주소", ip]);
-  if (userAgent) auditRows.push(["접속 기기", userAgent.slice(0, 80)]);
-  let ay = ah - 120;
-  for (const [label, value] of auditRows) {
-    auditPage.drawText(safeCap(label), {
-      x: 50,
-      y: ay,
-      size: 10,
-      font: capFont,
-      color: rgb(0.45, 0.45, 0.45),
-    });
-    auditPage.drawText(safeCap(value).slice(0, 95), {
-      x: 170,
-      y: ay,
-      size: 10,
-      font: capFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-    ay -= 24;
+  if (ip) metaLines.push(safeCap(`IP: ${ip}`));
+
+  const rightMargin = 28;
+  const bottomMargin = 24;
+  const pad = 7;
+  const metaSize = 7.5;
+  const lineGap = 10.5;
+  const sigGap = 5;
+
+  // 사인 이미지 크기 (폭·높이 모두 제한)
+  const maxSigW = Math.min(190, pw * 0.45);
+  const maxSigH = 64;
+  const sigDims = sigImage.scale(1);
+  let sScale = sigDims.width > maxSigW ? maxSigW / sigDims.width : 1;
+  if (sigDims.height * sScale > maxSigH) sScale = maxSigH / sigDims.height;
+  const sigW = sigDims.width * sScale;
+  const sigH = sigDims.height * sScale;
+
+  // 콘텐츠 폭 = max(사인 폭, 가장 긴 메타 텍스트 폭)
+  let maxTextW = 0;
+  for (const line of metaLines) {
+    maxTextW = Math.max(maxTextW, capFont.widthOfTextAtSize(line, metaSize));
   }
-  auditPage.drawText(
-    safeCap("이 페이지는 전자서명의 증빙을 위해 시스템이 자동 생성했습니다."),
-    { x: 50, y: 60, size: 9, font: capFont, color: rgb(0.5, 0.5, 0.5) },
-  );
+  const contentW = Math.max(sigW, maxTextW);
+  const boxW = contentW + pad * 2;
+  const metaBlockH = metaLines.length * lineGap;
+  const boxH = pad + sigH + sigGap + metaBlockH + pad;
+
+  const boxX = Math.max(rightMargin, pw - rightMargin - boxW);
+  const contentX = boxX + pad;
+
+  // 흰 반투명 배경 박스 (문서 내용과 겹쳐도 보이게)
+  page.drawRectangle({
+    x: boxX,
+    y: bottomMargin,
+    width: boxW,
+    height: boxH,
+    color: rgb(1, 1, 1),
+    opacity: 0.82,
+    borderColor: rgb(0.7, 0.7, 0.7),
+    borderWidth: 0.6,
+  });
+
+  // 사인 이미지 (박스 상단)
+  const sigY = bottomMargin + boxH - pad - sigH;
+  page.drawImage(sigImage, { x: contentX, y: sigY, width: sigW, height: sigH });
+
+  // 메타 정보 (사인 아래로): 서명자 / 일시 / IP
+  let textY = sigY - sigGap - metaSize;
+  for (const line of metaLines) {
+    page.drawText(line, {
+      x: contentX,
+      y: textY,
+      size: metaSize,
+      font: capFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    textY -= lineGap;
+  }
 
   // 4) 합성된 PDF 저장 — 부모 문서와 같은 스토리지에 보관
   const signedBytes = await pdfDoc.save();
