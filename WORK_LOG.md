@@ -22,6 +22,12 @@
 - 수정: ① `next.config.ts` `experimental.serverActions.bodySizeLimit="20mb"` ② 업로드 폼(`upload/_form.tsx`)에서 이미지 클라이언트 축소(긴 변 2200px, JPEG 0.85) 후 전송 — 큰 폰 사진도 안전. gif/svg·비이미지·HEIC 디코드 실패는 원본 유지.
 - 교훈: **파일 업로드를 서버 액션으로 받으면 기본 1MB 제한**에 막힌다. 큰 파일은 bodySizeLimit 상향 + 클라 압축, 또는 route handler 사용.
 
+### 후속3: 한글 글자 깨짐/흩어짐 최종 해결 — `6d2824c`
+- 증상(사용자 실폰 크롬 PDF 뷰어): 사인 박스의 날짜·IP·서명자 글자가 흩어지고 깨짐. (pdf.js getTextContent 추출은 정상이었으나 PDFium 시각 렌더가 깨짐 → 글리프 폭 문제)
+- 원인: `pdf-lib`의 **TrueType subset 임베드**가 PDFium/크롬에서 advance width/glyph 매핑이 깨짐.
+- 수정: `embedFont(ko, {subset:true})` → `embedFont(ko)` **전체 임베드** (composite·cert 양쪽). 사인본 PDF +~700KB~1MB(폰트 전체)이나 정확성 우선.
+- **최종 검증 (2026-06-14, pdf.js 캔버스 렌더 크롭)**: 직전 subset은 pdf.js가 아예 못 그렸는데, 전체 임베드 후 정상 렌더 확인 → "서명자: 이학부모 (외부) / 연락처: 010-2222-3333 / 일시: 2026-06-14 02:41:11 KST / IP: 218.38.214.85" 좌측 정렬 한 열로 깔끔히 표시. 크롬 뷰어도 동일 정상. 테스트 데이터·임시파일 정리.
+
 ### 후속2: 외부사인 404 수정 + 연락처 포함 + 한글폰트 나눔고딕 (최종 검증) — `2753109`→`70ae409`
 - **외부 사인 후 404**: 사인 완료 시 accessToken을 null로 지워서, 서버액션 후 자동 RSC 새로고침 때 토큰 조회 null→notFound(404). 수정: 토큰 유지(재사인은 status로 차단) → 링크 재방문 시 "이미 사인 완료" 친절 페이지 정상 표시. (`2753109`)
 - **외부 사인자 연락처**: 사인 박스에 `서명자` + `연락처(전화/이메일)` 줄 추가 (관리자 입력값 기반 식별). `signerContact = [externalPhone, externalEmail]`. (`2753109`)
