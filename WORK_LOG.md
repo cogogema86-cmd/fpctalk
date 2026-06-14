@@ -6,6 +6,11 @@
 
 ---
 
+## ✅ 2026-06-14 — 인프라 정보 앱 내 직접 편집 (`3ed0547`)
+- **요청**: "앱에서 직접 편집하게." → 재배포 없이 편집 가능하게.
+- **구현**: AppSetting `infra.inventory`(JSON)에 저장, 없으면 `lib/infra-info.ts INFRA_SERVICES` 폴백. `getInfraInventory`/`setInfraInventory`(app-settings.ts) + `sanitizeInfra`(길이 클램프 + loginUrl `http(s)://`만 허용=XSS 차단, 최대 40서비스/20식별자/50env). `/admin/infra` 편집 페이지(canViewStorage 게이트) + `_editor.tsx`(서비스 추가/삭제/순서이동, 식별자·env는 textarea 줄단위 파싱). `saveInfraInventoryAction`(canViewStorage 게이트). 대시보드 `InfraCard`는 이제 DB값 prop으로 받음 + '✏️ 편집' 링크. 비밀값 입력금지 경고 배너.
+- **검증**: tsc 0, build 성공(/admin/infra 라우트 생성).
+
 ## ✅ 2026-06-14 — 인프라 정보 카드 + .env.example 보강 (`a402f95`)
 - **요청/제안**: "R2 등 클라우드 로그인 정보를 대시보드에. 계정 변경·판매 대비." → 제안 후 사용자가 A(대시보드 인프라 카드)+C(재현·판매 셋업) 선택. (B 비번관리자는 본인이, D 암호화볼트는 제외.)
 - **🔴 보안 원칙(사용자에 강조)**: 실제 키·비번을 앱 DB/대시보드에 저장·표시 금지(앱 뚫리면 인프라 전체 유출). 안전정보(서비스·URL·식별자·env 이름)만 표시, 비밀값은 비밀번호 관리자(Bitwarden 등) 보관.
