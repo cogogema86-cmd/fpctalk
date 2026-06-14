@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { getUpcomingEventsForUser } from "@/lib/events";
 import { getUpcomingPersonalEvents } from "@/lib/personal-events";
+import { getInfraInventory } from "@/lib/app-settings";
 import { UpcomingEvents } from "./_upcoming-events";
 import { UpcomingPersonal } from "@/app/(main)/attendance/_upcoming-personal";
 import { StorageCard } from "./_storage-card";
@@ -45,6 +46,11 @@ export default async function DashboardPage() {
   const upcomingEvents = user ? await getUpcomingEventsForUser(user.id, 7) : [];
   const unackedCount = upcomingEvents.filter((e) => !e.acked).length;
   const upcomingPersonal = user ? await getUpcomingPersonalEvents(user.id, 7) : [];
+
+  // 인프라 카드 데이터 (DB → 기본값) — 권한 있을 때만 사용
+  const infraServices = user?.role.canViewStorage
+    ? await getInfraInventory()
+    : [];
 
   const unitCases = t("dashboard.unitCases");
   const unitPeople = t("dashboard.unitPeople");
@@ -121,7 +127,7 @@ export default async function DashboardPage() {
       {user?.role.canViewStorage && (
         <>
           <StorageCard />
-          <InfraCard />
+          <InfraCard services={infraServices} />
         </>
       )}
 

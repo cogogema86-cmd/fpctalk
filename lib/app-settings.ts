@@ -4,10 +4,12 @@
  * DB 값이 없으면 환경변수 → 코드 기본값으로 폴백.
  */
 import { prisma } from "@/lib/db";
+import { INFRA_SERVICES, type InfraService } from "@/lib/infra-info";
 
 const KEY_FAST = "ai.modelFast";
 const KEY_PRO = "ai.modelPro";
 const KEY_API = "ai.geminiApiKey";
+const KEY_INFRA = "infra.inventory";
 
 // 코드 기본값 (DB·env 모두 비었을 때)
 export const DEFAULT_AI_MODEL = "gemini-3.1-flash-lite";
@@ -91,6 +93,78 @@ export async function setGeminiApiKey(key: string): Promise<void> {
 /** 저장된 DB 키 삭제 → 환경변수로 복귀. */
 export async function clearGeminiApiKey(): Promise<void> {
   await prisma.appSetting.deleteMany({ where: { key: KEY_API } });
+}
+
+// =====================================================
+// 인프라 인벤토리 (대시보드 인프라 카드) — DB에 저장, 관리자 화면에서 편집(재배포 불필요).
+// 🔴 비밀값(키·비번)은 저장 금지 — 비밀 아닌 정보만. 입력은 검증/클램프한다.
+// =====================================================
+
+/** 들어온 값을 안전한 InfraService[]로 정규화 (길이 제한 + URL 화이트리스트). */
+function sanitizeInfra(input: unknown): InfraService[] {
+  if (!Array.isArray(input)) return [];
+  const str = (v: unknown, max: number) =>
+    typeof v === "string" ? v.slice(0, max).trim() : "";
+  // loginUrl은 http(s)만 허용 (javascript: 등 XSS 차단)
+  const safeUrl = (v: unknown) => {
+    const s = str(v, 300);
+    return /^https?:\/\//i.test(s) ? s : "";
+  };
+  return input
+    .slice(0, 40)
+    .map((raw) => {
+      const o = (raw ?? {}) as Record<string, unknown>;
+      const identifiers = Array.isArray(o.identifiers)
+        ? o.identifiers
+            .slice(0, 20)
+            .map((it) => {
+              const x = (it ?? {}) as Record<string, unknown>;
+              return { label: str(x.label, 60), value: str(x.value, 200) };
+            })
+            .filter((it) => it.label || it.value)
+        : [];
+      const envVars = Array.isArray(o.envVars)
+        ? o.envVars.slice(0, 50).map((e) => str(e, 80)).filter(Boolean)
+        : [];
+      const secretNote = str(o.secretNote, 300);
+      return {
+        name: str(o.name, 60),
+        icon: str(o.icon, 8),
+        purpose: str(o.purpose, 200),
+        loginUrl: safeUrl(o.loginUrl),
+        identifiers,
+        envVars,
+        secretNote: secretNote || undefined,
+      };
+    })
+    .filter((svc) => svc.name); // 이름 없는 항목 제거
+}
+
+/** 인프라 인벤토리 읽기 (DB → 코드 기본값). */
+export async function getInfraInventory(): Promise<InfraService[]> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: KEY_INFRA },
+      select: { value: true },
+    });
+    if (row?.value) {
+      const clean = sanitizeInfra(JSON.parse(row.value));
+      if (clean.length) return clean;
+    }
+  } catch {
+    // 폴백
+  }
+  return INFRA_SERVICES;
+}
+
+/** 인프라 인벤토리 저장 (즉시 반영). 검증 후 저장. */
+export async function setInfraInventory(list: unknown): Promise<void> {
+  const clean = sanitizeInfra(list);
+  await prisma.appSetting.upsert({
+    where: { key: KEY_INFRA },
+    create: { key: KEY_INFRA, value: JSON.stringify(clean) },
+    update: { value: JSON.stringify(clean) },
+  });
 }
 
 /** 관리자가 모델명을 저장 (즉시 반영). */
