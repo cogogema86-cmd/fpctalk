@@ -16,6 +16,7 @@ type Role = {
   canApproveLeave: boolean;
   canManageAttendance: boolean;
   canManageAI: boolean;
+  canViewStorage: boolean;
   isSystem: boolean;
   sortOrder: number;
   _count: { users: number };
@@ -244,6 +245,7 @@ function EditFormRow({ role, onClose }: { role: Role; onClose: () => void }) {
               canApproveLeave: role.canApproveLeave,
               canManageAttendance: role.canManageAttendance,
               canManageAI: role.canManageAI,
+              canViewStorage: role.canViewStorage,
             }}
           />
 

@@ -12,6 +12,8 @@
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
+  type ListObjectsV2CommandOutput,
   PutObjectCommand,
   S3Client,
   type S3ClientConfig,
@@ -97,6 +99,49 @@ export async function getR2SignedUrl(
     }),
     { expiresIn },
   );
+}
+
+export type R2Usage = {
+  totalBytes: number;
+  objectCount: number;
+  /** 최상위 접두사(첫 경로 세그먼트)별 합계 — 종류별 분류용 */
+  byPrefix: Record<string, { bytes: number; count: number }>;
+};
+
+/**
+ * R2 버킷 전체 사용량 집계 — 객체 목록을 페이지네이션하며 Size 합산.
+ * 학원 규모(수백~수천 객체)에선 빠르고 무료(R2 Class B 작업).
+ */
+export async function getR2Usage(): Promise<R2Usage> {
+  const client = getR2();
+  const bucket = getR2Bucket();
+  let totalBytes = 0;
+  let objectCount = 0;
+  const byPrefix: Record<string, { bytes: number; count: number }> = {};
+  let token: string | undefined = undefined;
+
+  do {
+    const res: ListObjectsV2CommandOutput = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        ContinuationToken: token,
+        MaxKeys: 1000,
+      }),
+    );
+    for (const obj of res.Contents ?? []) {
+      const size = obj.Size ?? 0;
+      totalBytes += size;
+      objectCount += 1;
+      const prefix = (obj.Key ?? "").split("/")[0] || "(root)";
+      const slot = byPrefix[prefix] ?? { bytes: 0, count: 0 };
+      slot.bytes += size;
+      slot.count += 1;
+      byPrefix[prefix] = slot;
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+
+  return { totalBytes, objectCount, byPrefix };
 }
 
 /** R2 파일 삭제 (여러 개 batch) */

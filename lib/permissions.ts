@@ -15,7 +15,8 @@ export type AdminFeature =
   | "roles"
   | "leave"
   | "attendance"
-  | "ai";
+  | "ai"
+  | "storage";
 
 export type MyPermissions = {
   userId: string;
@@ -27,7 +28,8 @@ export type MyPermissions = {
   canApproveLeave: boolean;
   canManageAttendance: boolean;
   canManageAI: boolean;
-  /** 위 다섯 중 하나라도 가능하면 true (관리 섹션 표시 여부) */
+  canViewStorage: boolean;
+  /** 메뉴형 기능(직원/역할/연차/근태/AI) 중 하나라도 가능하면 true (관리 섹션 표시 여부) */
   hasAnyAdmin: boolean;
 };
 
@@ -54,6 +56,7 @@ export async function getMyPermissions(): Promise<MyPermissions | null> {
           canApproveLeave: true,
           canManageAttendance: true,
           canManageAI: true,
+          canViewStorage: true,
         },
       },
     },
@@ -71,9 +74,11 @@ export async function getMyPermissions(): Promise<MyPermissions | null> {
     canApproveLeave: admin && r.canApproveLeave,
     canManageAttendance: admin && r.canManageAttendance,
     canManageAI: admin && r.canManageAI,
+    canViewStorage: admin && r.canViewStorage,
   };
   return {
     ...perms,
+    // 사이드바 '관리' 섹션 노출 기준 — 메뉴형 기능만(용량은 대시보드 카드라 제외)
     hasAnyAdmin:
       perms.canManageUsers ||
       perms.canManageRoles ||
@@ -100,5 +105,7 @@ export async function canAccessFeature(feature: AdminFeature): Promise<boolean> 
       return p.canManageAttendance;
     case "ai":
       return p.canManageAI;
+    case "storage":
+      return p.canViewStorage;
   }
 }

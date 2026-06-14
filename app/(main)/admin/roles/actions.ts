@@ -32,6 +32,7 @@ function readFeatureFlags(formData: FormData) {
     canApproveLeave: formData.get("canApproveLeave") === "on",
     canManageAttendance: formData.get("canManageAttendance") === "on",
     canManageAI: formData.get("canManageAI") === "on",
+    canViewStorage: formData.get("canViewStorage") === "on",
   };
 }
 
@@ -80,6 +81,7 @@ export async function createRoleAction(
         canApproveLeave: false,
         canManageAttendance: false,
         canManageAI: false,
+        canViewStorage: false,
       }),
       isSystem: false,
       sortOrder,
@@ -119,6 +121,7 @@ export async function updateRoleAction(
         canApproveLeave: false,
         canManageAttendance: false,
         canManageAI: false,
+        canViewStorage: false,
       };
 
   if (!id || !label) return { error: "필수 정보가 누락되었습니다." };

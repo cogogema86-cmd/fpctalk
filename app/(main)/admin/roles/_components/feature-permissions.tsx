@@ -9,6 +9,7 @@ export const ROLE_FEATURES = [
   { name: "canApproveLeave", key: "admin.roles.field.canApproveLeave" },
   { name: "canManageAttendance", key: "admin.roles.field.canManageAttendance" },
   { name: "canManageAI", key: "admin.roles.field.canManageAI" },
+  { name: "canViewStorage", key: "admin.roles.field.canViewStorage" },
 ] as const;
 
 export type FeatureFlags = Partial<

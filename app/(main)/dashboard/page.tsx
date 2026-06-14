@@ -7,6 +7,7 @@ import { getUpcomingEventsForUser } from "@/lib/events";
 import { getUpcomingPersonalEvents } from "@/lib/personal-events";
 import { UpcomingEvents } from "./_upcoming-events";
 import { UpcomingPersonal } from "@/app/(main)/attendance/_upcoming-personal";
+import { StorageCard } from "./_storage-card";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -114,6 +115,9 @@ export default async function DashboardPage() {
           highlight={pendingSignsCount > 0}
         />
       </div>
+
+      {/* 저장공간 사용량 — canViewStorage 권한(기본 원장만) */}
+      {user?.role.canViewStorage && <StorageCard />}
 
       {/* D-7 행사 카드 */}
       <UpcomingEvents events={upcomingEvents} locale={locale} />

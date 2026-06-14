@@ -32,6 +32,7 @@ model StaffRole {
   canApproveLeave     Boolean @default(true) // 연차 승인 (/admin/leave)
   canManageAttendance Boolean @default(true) // 근태 관리 (/admin/attendance)
   canManageAI         Boolean @default(true) // AI 설정 (/admin/ai) — 민감
+  canViewStorage      Boolean @default(true) // 저장공간 사용량 보기 (대시보드 카드) — 민감
   // 시스템 기본 역할 (수정/삭제 불가)
   isSystem     Boolean  @default(false)
   // 정렬 순서 (오름차순)
