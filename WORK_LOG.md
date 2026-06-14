@@ -6,6 +6,13 @@
 
 ---
 
+## ✅ 2026-06-14 — 대시보드 저장공간(R2) 사용량 카드 (`2bb9a6f`)
+- **요청**: "용량 관리를 admin 계정에서만 대시보드에 용량 표시 가능?" → 가능. 사용자가 권한 매트릭스에 '용량 보기' 추가 선택(기본 원장만).
+- **배경**: 채팅/문서/사인 파일이 R2에 쌓임. 무료 10GB 한도 대비 현황을 원장이 보고싶어함. (현재 실측 3.81MB/10GB, 9개 파일.)
+- **구현**: `StaffRole.canViewStorage`(기본 true, VICE=false→원장만). `lib/storage-r2.ts getR2Usage()`=ListObjectsV2 페이지네이션 합산(총bytes/개수/최상위접두사별). `GET /api/admin/storage`(`canAccessFeature('storage')` 게이트, R2 아니면 400). 대시보드 `_storage-card.tsx`=마운트 시 비동기 fetch(대시보드 로딩 안 막음), `X / 10GB (%)` 막대(70%>amber,90%>red) + 종류별 내역(chat=채팅첨부/templates=양식/signed=사인본/signatures=사인이미지/기타). `dashboard/page.tsx`에서 `user.role.canViewStorage`일 때만 렌더. permissions.ts에 storage 반영(단 hasAnyAdmin엔 미포함 — 메뉴가 아니라 카드라서).
+- **검증**: tsc 0, build 성공, **R2 ListObjects 실측 성공**(권한 OK, 실제 사용량 표시 확인). 역할매트릭스에 '용량 보기' 체크박스 추가됨.
+- **메모**: R2 토큰에 ListObjects 권한 있음 확인. 무료한도 상수 `FREE_LIMIT_BYTES=10GB`는 route.ts에 있음. 알 수 없는 접두사(레거시 cuid 키)는 "기타"로 표시.
+
 ## ✅ 2026-06-14 — 역할 기능별 세부 권한 매트릭스 (`c067b1e`)
 - **요청**: "역할관리에서 admin/관리자가 할 수 있는 기능을 더 디테일하게. 예: AI 설정은 admin만 보이게(민감)." → 사용자가 '기능별 권한 매트릭스' + 민감 기능=AI설정·역할관리 선택.
 - **배경**: 기존엔 `isAdmin` 단일 플래그로 모든 관리기능(직원/역할/연차/근태/AI)이 한꺼번에 열림. 시스템 역할 PRINCIPAL(label "admin", lvl3)·VICE("관리자"=부원장, lvl2) 둘 다 isAdmin=true라 부원장도 AI설정이 보였음.
