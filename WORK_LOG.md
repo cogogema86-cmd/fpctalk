@@ -6,6 +6,13 @@
 
 ---
 
+## ✅ 2026-06-14 — 인프라 정보 카드 + .env.example 보강 (`a402f95`)
+- **요청/제안**: "R2 등 클라우드 로그인 정보를 대시보드에. 계정 변경·판매 대비." → 제안 후 사용자가 A(대시보드 인프라 카드)+C(재현·판매 셋업) 선택. (B 비번관리자는 본인이, D 암호화볼트는 제외.)
+- **🔴 보안 원칙(사용자에 강조)**: 실제 키·비번을 앱 DB/대시보드에 저장·표시 금지(앱 뚫리면 인프라 전체 유출). 안전정보(서비스·URL·식별자·env 이름)만 표시, 비밀값은 비밀번호 관리자(Bitwarden 등) 보관.
+- **A 구현**: `lib/infra-info.ts`(비밀 아닌 인벤토리: Supabase/R2/Vercel/GitHub/Gemini/도메인/VAPID — 로그인URL·식별자·env 이름·시크릿 위치 메모). `dashboard/_infra-card.tsx`(서버 컴포넌트, `<details>` 기본 접힘). 대시보드에서 `canViewStorage`일 때 StorageCard+InfraCard 함께 렌더. **canViewStorage 권한을 '시스템 정보(용량·인프라) 보기'로 확장**(라벨/short 변경, 새 컬럼 안 만듦). 값 바뀌면 infra-info.ts 수정 후 재배포.
+- **C 구현**: `.env.example`를 전체 환경변수로 최신화(R2_*, VAPID_*, STORAGE_PROVIDER, CRON_SECRET, GOOGLE_DRIVE_* 등 + 🔒 비밀표시 + 발급처 주석). `SETUP_GUIDE.md`는 이미 충실(외부계정/코드/env/VAPID/cron 섹션 보유) — 유지.
+- **검증**: tsc 0, build 성공.
+
 ## ✅ 2026-06-14 — 근태 관리 하단 '이번 달 휴가 정리' (`e4ac6f7`)
 - **요청**: "근태관리 하단에 그달 연차 휴가 등 정리해서 보여줘."
 - **구현**: `/admin/attendance` 매트릭스 아래에 섹션 추가. ① 종류별 합계 칩(연차 N일/오전반차 N일/병가/공가/기타/결근=일, 지각·조퇴=건). ② 날짜순 상세 표(기간/직원/종류배지/일수/사유). 여러 달 걸친 휴가는 이 달 범위로 클램프(`clampedDays`), 빈 달은 안내문. 이미 페이지에서 가져온 `monthLeaves`(getMonthlyApprovedLeaves, requester.name 포함) 재사용 — 추가 쿼리 없음.
