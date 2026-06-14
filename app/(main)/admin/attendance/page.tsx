@@ -110,6 +110,65 @@ export default async function AdminAttendancePage({
     }
   }
 
+  // ── 이번 달 휴가 정리 (종류별 합계 + 목록) ──
+  // 일수는 이 달 범위로 클램프(여러 달 걸친 휴가는 이 달 몫만), 지각/조퇴는 건수로 집계.
+  const startDayMs = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const clampedDays = (lvType: string, s: Date, e: Date): number => {
+    if (lvType === "HALF_AM" || lvType === "HALF_PM") return 0.5;
+    const a = Math.max(startDayMs(s), startDayMs(monthStart));
+    const b = Math.min(startDayMs(e), startDayMs(monthEnd));
+    return Math.floor((b - a) / 86_400_000) + 1;
+  };
+  const COUNT_TYPES = new Set(["TARDY", "EARLY_LEAVE"]); // 건수로 표기
+  const TYPE_ORDER = [
+    "ANNUAL",
+    "HALF_AM",
+    "HALF_PM",
+    "SICK",
+    "OFFICIAL",
+    "OTHER",
+    "ABSENT",
+    "TARDY",
+    "EARLY_LEAVE",
+  ] as const;
+  const TYPE_BADGE: Record<string, string> = {
+    ANNUAL: "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-200",
+    HALF_AM: "bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-200",
+    HALF_PM: "bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-200",
+    SICK: "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-200",
+    OFFICIAL: "bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-200",
+    OTHER: "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
+    ABSENT: "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-200",
+    TARDY: "bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-200",
+    EARLY_LEAVE: "bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-200",
+  };
+  const byType: Record<string, { days: number; count: number }> = {};
+  const summaryRows = monthLeaves.map((lv) => {
+    const amount = clampedDays(lv.type, lv.startDate, lv.endDate);
+    const a = byType[lv.type] ?? { days: 0, count: 0 };
+    a.days += amount;
+    a.count += 1;
+    byType[lv.type] = a;
+    return {
+      id: lv.id,
+      name: lv.requester.name,
+      type: lv.type,
+      amount,
+      reason: lv.reason,
+      startDate: lv.startDate,
+      endDate: lv.endDate,
+    };
+  });
+  const summaryChips = TYPE_ORDER.filter((tp) => byType[tp]).map((tp) => ({
+    type: tp,
+    isCount: COUNT_TYPES.has(tp),
+    value: COUNT_TYPES.has(tp) ? byType[tp].count : byType[tp].days,
+  }));
+  const fmtMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const unitDay = t("admin.attendance.summary.unitDay");
+  const unitCount = t("admin.attendance.summary.unitCount");
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4">
       <div>
@@ -141,6 +200,97 @@ export default async function AdminAttendancePage({
           cells: matrix[u.id] ?? {},
         }))}
       />
+
+      {/* 이번 달 휴가 정리 */}
+      <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 space-y-3">
+        <h2 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          📊 {t("admin.attendance.summary.title")}
+        </h2>
+
+        {summaryRows.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {t("admin.attendance.summary.empty")}
+          </p>
+        ) : (
+          <>
+            {/* 종류별 합계 칩 */}
+            <div className="flex flex-wrap gap-2">
+              {summaryChips.map((c) => (
+                <span
+                  key={c.type}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    TYPE_BADGE[c.type] ?? "bg-zinc-100 dark:bg-zinc-800"
+                  }`}
+                >
+                  {t(`leave.type.${c.type}`)}
+                  <span className="font-semibold tabular-nums">
+                    {c.value}
+                    {c.isCount ? unitCount : unitDay}
+                  </span>
+                </span>
+              ))}
+            </div>
+
+            {/* 상세 목록 (날짜순) */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-zinc-500 dark:text-zinc-400">
+                  <tr className="text-left">
+                    <th className="py-1.5 pr-3 font-medium">
+                      {t("admin.attendance.summary.colPeriod")}
+                    </th>
+                    <th className="py-1.5 pr-3 font-medium">
+                      {t("admin.attendance.summary.colStaff")}
+                    </th>
+                    <th className="py-1.5 pr-3 font-medium">
+                      {t("admin.attendance.summary.colType")}
+                    </th>
+                    <th className="py-1.5 pr-3 font-medium text-right">
+                      {t("admin.attendance.summary.colAmount")}
+                    </th>
+                    <th className="py-1.5 font-medium">
+                      {t("admin.attendance.summary.colReason")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summaryRows.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-t border-zinc-100 dark:border-zinc-800/70"
+                    >
+                      <td className="py-1.5 pr-3 whitespace-nowrap tabular-nums">
+                        {fmtMD(r.startDate) === fmtMD(r.endDate)
+                          ? fmtMD(r.startDate)
+                          : `${fmtMD(r.startDate)} ~ ${fmtMD(r.endDate)}`}
+                      </td>
+                      <td className="py-1.5 pr-3 whitespace-nowrap font-medium text-zinc-800 dark:text-zinc-100">
+                        {r.name}
+                      </td>
+                      <td className="py-1.5 pr-3 whitespace-nowrap">
+                        <span
+                          className={`inline-block rounded px-1.5 py-0.5 text-xs ${
+                            TYPE_BADGE[r.type] ?? "bg-zinc-100 dark:bg-zinc-800"
+                          }`}
+                        >
+                          {t(`leave.type.${r.type}`)}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-3 text-right whitespace-nowrap tabular-nums">
+                        {r.amount}
+                        {COUNT_TYPES.has(r.type) ? unitCount : unitDay}
+                      </td>
+                      <td className="py-1.5 text-zinc-500 dark:text-zinc-400">
+                        {r.reason || "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }
