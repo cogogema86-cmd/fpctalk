@@ -8,6 +8,7 @@ import { getUpcomingPersonalEvents } from "@/lib/personal-events";
 import { UpcomingEvents } from "./_upcoming-events";
 import { UpcomingPersonal } from "@/app/(main)/attendance/_upcoming-personal";
 import { StorageCard } from "./_storage-card";
+import { InfraCard } from "./_infra-card";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -116,8 +117,13 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* 저장공간 사용량 — canViewStorage 권한(기본 원장만) */}
-      {user?.role.canViewStorage && <StorageCard />}
+      {/* 시스템 정보(용량·인프라) — canViewStorage 권한(기본 원장만) */}
+      {user?.role.canViewStorage && (
+        <>
+          <StorageCard />
+          <InfraCard />
+        </>
+      )}
 
       {/* D-7 행사 카드 */}
       <UpcomingEvents events={upcomingEvents} locale={locale} />
