@@ -2057,7 +2057,7 @@ function MessageBubble({
         )}
         {!isPending && imageItems.length > 1 && (
           <div
-            className={`mb-1 grid gap-1 ${imageItems.length >= 5 ? "grid-cols-3" : "grid-cols-2"} max-w-[240px] sm:max-w-[320px]`}
+            className={`mb-1 grid items-start gap-1 ${imageItems.length >= 5 ? "grid-cols-3" : "grid-cols-2"} max-w-[240px] sm:max-w-[320px]`}
           >
             {imageItems.map(({ att, idx }) => (
               <button
@@ -2070,7 +2070,7 @@ function MessageBubble({
                 <img
                   src={fileUrlAt(idx)}
                   alt={att.name}
-                  className="rounded-lg w-full aspect-square object-cover bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                  className="rounded-lg w-full h-auto max-h-[300px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
                   loading="lazy"
                 />
               </button>
