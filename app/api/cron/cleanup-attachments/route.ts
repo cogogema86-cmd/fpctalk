@@ -30,6 +30,7 @@ type Att = {
   path?: string;
   expiresAt?: string;
   expired?: boolean;
+  expiredAt?: string;
   name?: string;
 };
 
@@ -53,28 +54,54 @@ export async function GET(req: Request) {
   // 첨부 메시지 후보 수집
   const candidates = await prisma.message.findMany({
     where: { type: { in: ["IMAGE", "FILE"] } },
-    select: { id: true, metadata: true },
+    select: { id: true, metadata: true, content: true },
   });
 
-  type ToDelete = { msgId: string; path: string; name: string; kind: string };
-  const toDelete: ToDelete[] = [];
+  // 만료된 첨부가 하나라도 있어 metadata를 갱신해야 하는 메시지 단위로 모음.
+  // 첨부별 expiresAt이 다를 수 있어(이미지 365일 vs 파일 90일) 부분 만료를 지원한다.
+  type Rebuild = {
+    msgId: string;
+    nextAttachments: Att[];
+    allExpired: boolean;
+  };
+  const rebuilds: Rebuild[] = [];
+  const pathsToDelete: string[] = [];
 
   for (const m of candidates) {
-    const meta = (m.metadata ?? {}) as { attachment?: Att };
-    const a = meta.attachment;
-    if (!a) continue;
-    if (a.expired) continue;
-    if (!a.path || !a.expiresAt) continue;
-    if (a.expiresAt > nowIso) continue;
-    toDelete.push({
-      msgId: m.id,
-      path: a.path,
-      name: a.name ?? "attachment",
-      kind: a.kind ?? "file",
+    const meta = (m.metadata ?? {}) as {
+      attachment?: Att;
+      attachments?: Att[];
+    };
+    // 단일/다중 정규화
+    const list = Array.isArray(meta.attachments)
+      ? meta.attachments
+      : meta.attachment
+        ? [meta.attachment]
+        : [];
+    if (list.length === 0) continue;
+
+    let changed = false;
+    const next: Att[] = list.map((a) => {
+      if (a.expired) return a; // 이미 만료 처리됨
+      if (!a.path || !a.expiresAt) return a;
+      if (a.expiresAt > nowIso) return a; // 아직 유효
+      // 만료 → 삭제 대상 + 만료 마커로 교체
+      changed = true;
+      pathsToDelete.push(a.path);
+      return {
+        kind: a.kind ?? "file",
+        name: a.name ?? "attachment",
+        expired: true,
+        expiredAt: nowIso,
+      } as Att;
     });
+
+    if (!changed) continue;
+    const allExpired = next.every((a) => a.expired);
+    rebuilds.push({ msgId: m.id, nextAttachments: next, allExpired });
   }
 
-  if (toDelete.length === 0) {
+  if (rebuilds.length === 0) {
     return NextResponse.json({
       ok: true,
       ranAt: nowIso,
@@ -85,10 +112,9 @@ export async function GET(req: Request) {
 
   // R2 등에서 파일 삭제 (배치)
   const storageType = getActiveStorageType();
-  const paths = toDelete.map((d) => d.path);
   let storageError: string | null = null;
   try {
-    await deleteFiles(storageType, paths);
+    await deleteFiles(storageType, pathsToDelete);
   } catch (e) {
     storageError = e instanceof Error ? e.message : "삭제 실패";
     // 그래도 DB metadata는 갱신 — orphan 파일은 R2에 남지만 사용자에겐 만료 처리됨
@@ -96,26 +122,20 @@ export async function GET(req: Request) {
 
   // 메시지 metadata 갱신 (메시지 자체는 보존)
   let dbUpdated = 0;
-  for (const d of toDelete) {
+  for (const r of rebuilds) {
     try {
       await prisma.message.update({
-        where: { id: d.msgId },
+        where: { id: r.msgId },
         data: {
-          content: "[만료된 첨부파일]",
-          metadata: {
-            attachment: {
-              kind: d.kind,
-              name: d.name,
-              expired: true,
-              expiredAt: nowIso,
-            },
-          } as object,
+          // 모든 첨부가 만료된 경우에만 본문을 만료 표시로 교체 (부분 만료는 본문 보존)
+          ...(r.allExpired ? { content: "[만료된 첨부파일]" } : {}),
+          metadata: { attachments: r.nextAttachments } as object,
         },
       });
       dbUpdated += 1;
     } catch (e) {
       console.error(
-        `[cron cleanup] DB 업데이트 실패 msgId=${d.msgId}:`,
+        `[cron cleanup] DB 업데이트 실패 msgId=${r.msgId}:`,
         e,
       );
     }
@@ -125,7 +145,7 @@ export async function GET(req: Request) {
     ok: true,
     ranAt: nowIso,
     checked: candidates.length,
-    deleted: toDelete.length,
+    deleted: pathsToDelete.length,
     dbUpdated,
     storageError,
   });

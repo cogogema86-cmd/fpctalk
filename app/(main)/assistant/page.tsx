@@ -24,7 +24,7 @@ export default async function AssistantPage() {
   const t = await getT();
 
   return (
-    <div className="h-[calc(100vh-58px)] flex flex-col">
+    <div className="h-full min-h-0 flex flex-col">
       <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 bg-white dark:bg-black">
         <h1 className="font-semibold text-zinc-900 dark:text-zinc-50">
           {t("nav.assistant")}{" "}

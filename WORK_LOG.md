@@ -6,6 +6,31 @@
 
 ---
 
+## ✅ 2026-06-22 — 채팅 이미지: 앱 내 뷰어(X 닫기 + 공유/저장) (미배포)
+- **증상**: 이미지 '다운로드'를 누르면 iOS 네이티브 다운로드 화면(JPEG 아이콘+미리보기/기타)으로 **현재 화면이 통째로 이동** → 스탠드얼론 PWA라 닫기/뒤로가 없어 갇힘, '미리보기' 누르면 빠져나오려면 사이트 재접속. 사용자: 우측 상단 X로 닫고 싶고 안 갇혔으면.
+- **원인**: 다운로드 링크가 same-frame로 attachment 응답(Content-Disposition: attachment)으로 이동 → PWA의 유일한 뷰를 덮어씀. Apple 네이티브 화면이라 X를 그려넣을 수 없음.
+- **수정**: 이미지 탭 시 iOS로 안 보내고 **앱 내 라이트박스**(`_image-viewer.tsx`)를 띄움. 전체화면 오버레이, 우측상단 ✕/배경탭/Esc로 닫기(body 스크롤 잠금), 하단 '공유 / 저장' 버튼 = **Web Share API**(`navigator.share({files})`)로 iOS 공유시트(카톡·사진저장) 직행. 공유는 사용자 제스처 안에서 동기 호출돼야 해 **마운트 시 blob 미리 fetch**해 File 준비(같은출처 `?download=1` 스트림이라 CORS 무관). Web Share 미지원 시 다운로드 새 탭 폴백. 단일/그리드 이미지 모두 `<a target=_blank>`→`<button onClick=openViewer>`로 교체, iOS로 보내던 '📥 다운로드' 텍스트 링크 제거. i18n `chat.imgClose/imgShare/imgSharePreparing` KO/EN 추가. (동영상·일반파일 다운로드 링크는 `target=_blank`만 적용해 새 탭에서 처리.)
+- **검증**: tsc 0, eslint 신규 0(뷰어 파일 클린, 기존 327/479/553/1402/1441 사전이슈 미수정). ⚠️ Web Share·공유시트는 **실기기(아이폰 HTTPS)**에서만 확인 가능 — 배포 후 폰 테스트 필요.
+
+## ✅ 2026-06-22 — 모바일에서 채팅 입력칸이 화면 밖으로 밀려 사라지던 버그 (미배포)
+- **증상**: iOS에서 채팅방 하단 입력칸(+하단 탭)이 안 보이고, 연필 아이콘을 눌러야 나타남. 항상 고정돼 있어야 함.
+- **근본원인**: 앱 셸 레이아웃 높이 계산 오류. ① `(main)/layout.tsx` 최상위가 `min-h-screen`(불확정 높이) → 자식이 길면 컨테이너가 100vh를 넘겨 하단이 화면 밖으로. ② `chat/[id]/page.tsx`·`assistant/page.tsx`가 `h-[calc(100vh-58px)]` 사용 — 정적 `vh`라 iOS 동적 툴바를 반영 못 하고, 상단 헤더(~58px)+하단 모바일탭(~57px) 중 한 쪽만 빼서 세로 합이 viewport 초과. MobileNav는 `fixed`가 아니라 in-flow 형제라 같이 밀림.
+- **수정**: 레이아웃을 표준 앱셸로. `layout.tsx`: 최상위 `min-h-screen`→`h-dvh`(확정+동적 viewport), body row와 `<main>`에 `min-h-0` 추가(flex 자식 축소 허용). `chat/[id]/page.tsx`·`assistant/page.tsx`: `h-[calc(100vh-58px)]`→`h-full min-h-0`(부모 채움, 매직넘버 제거). 이미 깔려있던 `overflow-hidden`/`overflow-auto` 의도대로 작동 → 헤더·탭 고정, 본문만 내부 스크롤.
+- **영향**: 공유 레이아웃 변경이라 전 페이지 스크롤이 문서→`<main>` 내부로 바뀜(이미 overflow-auto라 의도된 동작). InstallBanner는 `fixed`라 무관.
+- **검증**: tsc 0. ⚠️ CSS 레이아웃이라 실제 확인은 **아이폰 Safari에서 직접** 필요(입력칸 항상 보이는지, 다른 탭 스크롤 정상인지). 아직 커밋·배포 안 됨.
+
+## ✅ 2026-06-22 — 채팅 첨부 여러 장 한 번에 업로드 (미배포)
+- **요청**: "채팅방에서 사진 한 장씩만 올라가는데 여러 장 한 번에 올라가게." → 사용자가 '한 메시지에 묶음(갤러리)' 방식 선택.
+- **구현**: 메시지 metadata에 `attachments[]`(배열)을 새 표준으로 저장. 기존 단일 `attachment`(옛 메시지)는 읽기 시 `[attachment]`로 정규화해 하위호환 — 회귀 없음. 최대 10개/메시지(`MAX_ATTACHMENTS_PER_MESSAGE`).
+  - `lib/chat.ts sendMessage`: `attachments` 옵션, 타입=전부 이미지면 IMAGE 아니면 FILE, content 폴백=`[사진 N장]`/`[첨부 N개]`.
+  - `chat/actions.ts`: formData `attachments`(JSON 배열) 파싱·검증(+ 단일 `attachment` 하위호환).
+  - `_chat-room.tsx`: input `multiple`, `handleFilesSelect`(남은 슬롯만큼 `Promise.allSettled` 병렬 업로드), `pendingAttachments[]` + 칩 N개 개별 삭제, 갤러리 렌더(이미지 1장=크게+다운로드, 2장+=`grid-cols-2`(5장+ `grid-cols-3`) 정사각 썸네일, 동영상/파일은 세로 나열). 드래그앤드롭도 다중.
+  - `api/chat/file/[messageId]/route.ts`: `?i=N` 인덱스로 N번째 첨부 서빙(기본 0, 정규화).
+  - `api/cron/cleanup-attachments`: 배열 전체 경로 수집·삭제, 첨부별 expiresAt 다른 부분만료 지원(전부 만료 시에만 content 교체).
+- **검증**: tsc 0, eslint 신규 경고 0(기존 326/478/552/1401/1440 라인 사전존재 이슈는 미수정). ⚠️ 런타임/브라우저 검증 안 함(DB·R2 필요) — 사용자 폰/PC 실제 확인 필요. 아직 커밋·배포 안 됨.
+
+---
+
 ## ✅ 2026-06-14 — 인프라 정보 앱 내 직접 편집 (`3ed0547`)
 - **요청**: "앱에서 직접 편집하게." → 재배포 없이 편집 가능하게.
 - **구현**: AppSetting `infra.inventory`(JSON)에 저장, 없으면 `lib/infra-info.ts INFRA_SERVICES` 폴백. `getInfraInventory`/`setInfraInventory`(app-settings.ts) + `sanitizeInfra`(길이 클램프 + loginUrl `http(s)://`만 허용=XSS 차단, 최대 40서비스/20식별자/50env). `/admin/infra` 편집 페이지(canViewStorage 게이트) + `_editor.tsx`(서비스 추가/삭제/순서이동, 식별자·env는 textarea 줄단위 파싱). `saveInfraInventoryAction`(canViewStorage 게이트). 대시보드 `InfraCard`는 이제 DB값 prop으로 받음 + '✏️ 편집' 링크. 비밀값 입력금지 경고 배너.

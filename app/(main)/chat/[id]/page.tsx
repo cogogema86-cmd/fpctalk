@@ -47,7 +47,7 @@ export default async function ChatRoomPage({
   // → 입장 시점의 lastReadAt을 그대로 ChatRoom에 전달하고, 클라이언트가 메시지 보고 나서 markAsRead 호출
 
   return (
-    <div className="h-[calc(100vh-58px)] md:h-[calc(100vh-58px)] flex flex-col">
+    <div className="h-full min-h-0 flex flex-col">
       {/* 헤더 */}
       <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center gap-3 bg-white dark:bg-black">
         <Link

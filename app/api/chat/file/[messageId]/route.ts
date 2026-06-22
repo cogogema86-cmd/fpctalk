@@ -64,15 +64,27 @@ export async function GET(
     }
   }
 
-  const meta = (msg.metadata ?? {}) as { attachment?: AttachmentMeta };
-  const a = meta.attachment;
+  // 단일(attachment) / 다중(attachments) 모두 정규화. ?i=N 으로 N번째 첨부 선택 (기본 0).
+  const meta = (msg.metadata ?? {}) as {
+    attachment?: AttachmentMeta;
+    attachments?: AttachmentMeta[];
+  };
+  const list = Array.isArray(meta.attachments)
+    ? meta.attachments
+    : meta.attachment
+      ? [meta.attachment]
+      : [];
+
+  const url = new URL(_req.url);
+  const idxRaw = url.searchParams.get("i");
+  const idx = idxRaw ? parseInt(idxRaw, 10) : 0;
+  const a = Number.isInteger(idx) && idx >= 0 ? list[idx] : undefined;
   if (!a?.path) {
     return NextResponse.json({ error: "첨부 경로 없음" }, { status: 404 });
   }
 
   // R2 등은 signed URL이 있으면 redirect.
   // (Drive 등은 직접 URL이 없어 fallback 스트리밍)
-  const url = new URL(_req.url);
   const isDownload = url.searchParams.get("download") === "1";
   const provider = process.env.STORAGE_PROVIDER || "supabase";
   const storageType = (

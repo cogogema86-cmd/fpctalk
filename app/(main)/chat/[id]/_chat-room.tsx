@@ -30,6 +30,7 @@ import {
   cancelEventProposalAction,
 } from "@/app/(main)/events/actions";
 import { QuickPhrases } from "./_quick-phrases";
+import { ImageViewer } from "./_image-viewer";
 
 // @비서 / @AI / @assistant / @ + 공백 + 텍스트 모두 매칭
 const AI_TRIGGER = /^@(?:비서|ai|assistant)?\s+\S/i;
@@ -458,16 +459,16 @@ export function ChatRoom({
     const raw = formData.get("content") as string;
     const content = (raw ?? "").trim();
     // 본문 또는 첨부 둘 중 하나는 있어야 함
-    if (!content && !pendingAttachment) return;
+    if (!content && pendingAttachments.length === 0) return;
 
     // 답글 대상 attach
     if (replyTo) {
       formData.set("replyTo", JSON.stringify(replyTo));
     }
 
-    // 첨부 attach
-    if (pendingAttachment) {
-      formData.set("attachment", JSON.stringify(pendingAttachment));
+    // 첨부 attach (배열)
+    if (pendingAttachments.length > 0) {
+      formData.set("attachments", JSON.stringify(pendingAttachments));
     }
 
     // 클라이언트가 메시지 ID 미리 생성 → server에 전달 → 임시/실제 ID 동일.
@@ -479,16 +480,22 @@ export function ChatRoom({
     formData.set("clientMessageId", clientId);
 
     // 옵티미스틱 메시지 type/content/metadata 결정
-    const optimisticType: "TEXT" | "IMAGE" | "FILE" = pendingAttachment
-      ? pendingAttachment.kind === "image"
+    const hasAttachment = pendingAttachments.length > 0;
+    const optimisticType: "TEXT" | "IMAGE" | "FILE" = hasAttachment
+      ? pendingAttachments.every((a) => a.kind === "image")
         ? "IMAGE"
         : "FILE"
       : "TEXT";
     const optimisticContent =
-      content || pendingAttachment?.name || "[첨부]";
+      content ||
+      (pendingAttachments.length > 1
+        ? pendingAttachments.every((a) => a.kind === "image")
+          ? `[사진 ${pendingAttachments.length}장]`
+          : `[첨부 ${pendingAttachments.length}개]`
+        : (pendingAttachments[0]?.name ?? "[첨부]"));
     const optimisticMeta: Record<string, unknown> = {};
     if (replyTo) optimisticMeta.replyTo = replyTo;
-    if (pendingAttachment) optimisticMeta.attachment = pendingAttachment;
+    if (hasAttachment) optimisticMeta.attachments = pendingAttachments;
 
     // 낙관적 UI: 임시 메시지 즉시 추가 (Realtime 도착 시 동일 ID로 교체)
     setMessages((prev) => [
@@ -509,7 +516,7 @@ export function ChatRoom({
     formAction(formData);
     if (inputRef.current) inputRef.current.value = "";
     setReplyTo(null);
-    setPendingAttachment(null);
+    setPendingAttachments([]);
     setUploadStatus(null);
 
     // Realtime이 광고 차단/방화벽에 막힌 환경(특히 크롬 확장) 대비 fallback:
@@ -579,9 +586,9 @@ export function ChatRoom({
     name: string;
     expiresAt: string;
   };
-  const [pendingAttachment, setPendingAttachment] = useState<Attach | null>(
-    null,
-  );
+  // 한 메시지에 여러 첨부 가능 — 업로드 완료된 것들을 배열로 모음
+  const MAX_ATTACHMENTS = 10;
+  const [pendingAttachments, setPendingAttachments] = useState<Attach[]>([]);
   const [uploadStatus, setUploadStatus] = useState<{
     isUploading: boolean;
     fileName?: string;
@@ -590,8 +597,8 @@ export function ChatRoom({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = async (file: File) => {
-    setUploadStatus({ isUploading: false, error: undefined, fileName: file.name });
+  // 단일 파일 업로드 — 성공 시 attachment 반환, 실패 시 에러 메시지 throw
+  const uploadOne = async (file: File): Promise<Attach> => {
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type.startsWith("video/");
     // 이미지 10MB / 동영상 30MB / 일반 파일 20MB (서버와 동일 기준)
@@ -602,38 +609,64 @@ export function ChatRoom({
         : 20 * 1024 * 1024;
     if (file.size > maxBytes) {
       const limitMb = Math.round(maxBytes / 1024 / 1024);
+      throw new Error(`${file.name}: 파일이 너무 큽니다 (최대 ${limitMb}MB)`);
+    }
+    const fd = new FormData();
+    fd.set("file", file);
+    const res = await fetch(`/api/chat/${chatId}/upload`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`${file.name}: ${err?.error ?? "업로드 실패"}`);
+    }
+    const data = (await res.json()) as { attachment: Attach };
+    return data.attachment;
+  };
+
+  // 여러 파일 선택 — 남은 슬롯만큼만 병렬 업로드 후 누적
+  const handleFilesSelect = async (files: File[]) => {
+    if (files.length === 0) return;
+    const remaining = MAX_ATTACHMENTS - pendingAttachments.length;
+    if (remaining <= 0) {
       setUploadStatus({
         isUploading: false,
-        error: `파일이 너무 큽니다 (최대 ${limitMb}MB)`,
+        error: `첨부는 최대 ${MAX_ATTACHMENTS}개까지 가능합니다.`,
       });
       return;
     }
-    setUploadStatus({ isUploading: true, fileName: file.name });
-    setPendingAttachment(null);
-    try {
-      const fd = new FormData();
-      fd.set("file", file);
-      const res = await fetch(`/api/chat/${chatId}/upload`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setUploadStatus({
-          isUploading: false,
-          error: err?.error ?? "업로드 실패",
-        });
-        return;
-      }
-      const data = (await res.json()) as { attachment: Attach };
-      setPendingAttachment(data.attachment);
-      setUploadStatus(null);
-    } catch (e) {
-      setUploadStatus({
-        isUploading: false,
-        error: e instanceof Error ? e.message : "업로드 실패",
-      });
+    const picked = files.slice(0, remaining);
+    const overflow = files.length - picked.length;
+    setUploadStatus({
+      isUploading: true,
+      fileName:
+        picked.length > 1 ? `${picked.length}개 파일` : picked[0].name,
+    });
+    const results = await Promise.allSettled(picked.map((f) => uploadOne(f)));
+    const uploaded: Attach[] = [];
+    const errors: string[] = [];
+    for (const r of results) {
+      if (r.status === "fulfilled") uploaded.push(r.value);
+      else errors.push(r.reason?.message ?? "업로드 실패");
     }
+    if (uploaded.length > 0) {
+      setPendingAttachments((prev) =>
+        [...prev, ...uploaded].slice(0, MAX_ATTACHMENTS),
+      );
+    }
+    if (errors.length > 0 || overflow > 0) {
+      const parts = [...errors];
+      if (overflow > 0)
+        parts.push(`${overflow}개는 최대 개수 초과로 제외됨`);
+      setUploadStatus({ isUploading: false, error: parts.join(" / ") });
+    } else {
+      setUploadStatus(null);
+    }
+  };
+
+  const removePendingAttachment = (idx: number) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const startReply = (msg: Message) => {
@@ -1043,35 +1076,43 @@ export function ChatRoom({
           </div>
         )}
 
-        {/* 첨부 미리보기 pill (업로드 완료, 전송 대기) */}
-        {pendingAttachment && (
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 text-xs">
-            <span className="text-base leading-none">
-              {pendingAttachment.kind === "image" ? "🖼" : pendingAttachment.kind === "video" ? "🎬" : "📎"}
-            </span>
-            <span className="truncate max-w-[16rem]">{pendingAttachment.name}</span>
-            <span className="text-zinc-400">
-              {(pendingAttachment.size / 1024).toFixed(0)}KB
-            </span>
-            <button
-              type="button"
-              onClick={() => setPendingAttachment(null)}
-              className="text-zinc-400 hover:text-red-500 ml-1"
-              aria-label="첨부 취소"
-            >
-              ✕
-            </button>
+        {/* 첨부 미리보기 pill (업로드 완료, 전송 대기) — 여러 개 가능 */}
+        {pendingAttachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {pendingAttachments.map((att, idx) => (
+              <div
+                key={`${att.path}-${idx}`}
+                className="inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 text-xs"
+              >
+                <span className="text-base leading-none">
+                  {att.kind === "image" ? "🖼" : att.kind === "video" ? "🎬" : "📎"}
+                </span>
+                <span className="truncate max-w-[12rem]">{att.name}</span>
+                <span className="text-zinc-400">
+                  {(att.size / 1024).toFixed(0)}KB
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removePendingAttachment(idx)}
+                  className="text-zinc-400 hover:text-red-500 ml-1"
+                  aria-label="첨부 취소"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              void handleFileSelect(f);
+            const fs = e.target.files ? Array.from(e.target.files) : [];
+            if (fs.length > 0) {
+              void handleFilesSelect(fs);
               // 동일 파일 재선택 가능하도록 reset
               e.target.value = "";
             }
@@ -1120,15 +1161,17 @@ export function ChatRoom({
           onDrop={(e) => {
             e.preventDefault();
             setIsDragging(false);
-            const f = e.dataTransfer.files?.[0];
-            if (f) void handleFileSelect(f);
+            const fs = e.dataTransfer.files
+              ? Array.from(e.dataTransfer.files)
+              : [];
+            if (fs.length > 0) void handleFilesSelect(fs);
           }}
         >
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isPending || uploadStatus?.isUploading}
-            title="파일 첨부 — 이미지/동영상/문서 (드래그도 가능)"
+            title="파일 첨부 — 이미지/동영상/문서, 여러 개 선택 가능 (드래그도 가능)"
             className="shrink-0 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3 py-2 text-lg disabled:opacity-50"
           >
             📎
@@ -1840,6 +1883,12 @@ function MessageBubble({
   const [isTransPending, startTransTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [isDeleted, setIsDeleted] = useState(false);
+  // 인앱 이미지 뷰어 (열린 이미지의 보기/다운로드 URL + 이름)
+  const [viewer, setViewer] = useState<{
+    viewUrl: string;
+    downloadUrl: string;
+    name: string;
+  } | null>(null);
 
   if (message.type === "AI") {
     return <AiMessageBubble message={message} />;
@@ -1852,28 +1901,53 @@ function MessageBubble({
   }
 
   const isPending = !!message.pending || isDeleting;
+  type AttView = {
+    kind?: "image" | "video" | "file";
+    path?: string;
+    mime?: string;
+    size?: number;
+    name?: string;
+    expiresAt?: string;
+    expired?: boolean;
+  };
   const meta = (message.metadata ?? {}) as {
     replyTo?: { messageId: string; userName: string; contentPreview: string };
-    attachment?: {
-      kind?: "image" | "video" | "file";
-      path?: string;
-      mime?: string;
-      size?: number;
-      name?: string;
-      expiresAt?: string;
-      expired?: boolean;
-    };
+    attachment?: AttView;
+    attachments?: AttView[];
   };
-  const attachment = meta.attachment;
-  const isExpired = !!attachment?.expired;
-  const fileSrc =
-    attachment && !isExpired ? `/api/chat/file/${message.id}` : null;
-  const downloadHref =
-    attachment && !isExpired ? `/api/chat/file/${message.id}?download=1` : null;
-  // 첨부 메시지인데 본문이 파일명과 같으면 본문 텍스트는 숨김 (파일명은 첨부 영역에 자동 표시)
+  // 단일(attachment) / 다중(attachments) 정규화
+  const attachments: AttView[] = Array.isArray(meta.attachments)
+    ? meta.attachments
+    : meta.attachment
+      ? [meta.attachment]
+      : [];
+  const hasAttachment = attachments.length > 0;
+  // 첨부 영역에 파일명이 자동 노출되므로, 본문이 단일 첨부 파일명과 같으면 본문 텍스트 숨김
   const showContentText =
-    !attachment ||
-    (message.content && message.content !== attachment.name);
+    !hasAttachment ||
+    (message.content &&
+      !(
+        attachments.length === 1 && message.content === attachments[0].name
+      ));
+
+  // 인덱스별 첨부 URL (?i=N) — 메시지 단위로 N번째 첨부를 서빙
+  const fileUrlAt = (idx: number, download = false) =>
+    `/api/chat/file/${message.id}?i=${idx}${download ? "&download=1" : ""}`;
+  // 이미지 탭 → 앱 내 뷰어 열기
+  const openViewer = (idx: number, name?: string) =>
+    setViewer({
+      viewUrl: fileUrlAt(idx),
+      downloadUrl: fileUrlAt(idx, true),
+      name: name ?? "image.jpg",
+    });
+  const indexed = attachments.map((att, idx) => ({ att, idx }));
+  const expiredItems = indexed.filter((x) => x.att.expired);
+  const imageItems = indexed.filter(
+    (x) => !x.att.expired && x.att.kind === "image",
+  );
+  const otherItems = indexed.filter(
+    (x) => !x.att.expired && x.att.kind !== "image",
+  );
 
   const handleDelete = () => {
     if (!confirm(t("chat.deleteConfirm"))) return;
@@ -1907,6 +1981,14 @@ function MessageBubble({
 
   return (
     <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+      {viewer && (
+        <ImageViewer
+          viewUrl={viewer.viewUrl}
+          downloadUrl={viewer.downloadUrl}
+          name={viewer.name}
+          onClose={() => setViewer(null)}
+        />
+      )}
       <div
         className={`max-w-[75%] ${isMine ? "items-end" : "items-start"} flex flex-col transition-opacity ${
           isPending ? "opacity-60" : ""
@@ -1936,66 +2018,114 @@ function MessageBubble({
             </div>
           </div>
         )}
-        {/* 만료된 첨부 — 회색 placeholder */}
-        {attachment && isExpired && (
-          <div className="mb-1 rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs text-zinc-500 inline-flex items-center gap-2">
-            <span>{attachment.kind === "image" ? "🖼" : attachment.kind === "video" ? "🎬" : "📎"}</span>
-            <span className="truncate max-w-[14rem]">{attachment.name ?? "첨부"}</span>
-            <span className="text-zinc-400">· 만료됨</span>
+        {/* 만료된 첨부 — 회색 placeholder (각각) */}
+        {!isPending &&
+          expiredItems.map(({ att, idx }) => (
+            <div
+              key={`exp-${idx}`}
+              className="mb-1 rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-xs text-zinc-500 inline-flex items-center gap-2"
+            >
+              <span>{att.kind === "image" ? "🖼" : att.kind === "video" ? "🎬" : "📎"}</span>
+              <span className="truncate max-w-[14rem]">{att.name ?? "첨부"}</span>
+              <span className="text-zinc-400">· 만료됨</span>
+            </div>
+          ))}
+
+        {/* 이미지 첨부 — 1장은 크게, 여러 장은 그리드(갤러리). 탭하면 앱 내 뷰어 */}
+        {!isPending && imageItems.length === 1 && (
+          <div className="mb-1 max-w-full">
+            <button
+              type="button"
+              onClick={() => openViewer(imageItems[0].idx, imageItems[0].att.name)}
+              className="block p-0"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={fileUrlAt(imageItems[0].idx)}
+                alt={imageItems[0].att.name}
+                className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                loading="lazy"
+              />
+            </button>
+            {typeof imageItems[0].att.size === "number" &&
+              imageItems[0].att.size > 0 && (
+                <div className="text-[10px] text-zinc-400 mt-0.5 px-1">
+                  {(imageItems[0].att.size / 1024).toFixed(0)}KB
+                </div>
+              )}
           </div>
         )}
-
-        {/* 첨부 미디어 (이미지·동영상) — 본문 위에 노출 */}
-        {attachment && fileSrc && !isPending && (
-          <div className="mb-1 max-w-full">
-            {attachment.kind === "image" ? (
-              <a
-                href={fileSrc}
-                target="_blank"
-                rel="noreferrer"
-                className="block"
+        {!isPending && imageItems.length > 1 && (
+          <div
+            className={`mb-1 grid gap-1 ${imageItems.length >= 5 ? "grid-cols-3" : "grid-cols-2"} max-w-[240px] sm:max-w-[320px]`}
+          >
+            {imageItems.map(({ att, idx }) => (
+              <button
+                type="button"
+                key={`img-${idx}`}
+                onClick={() => openViewer(idx, att.name)}
+                className="block p-0 w-full"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={fileSrc}
-                  alt={attachment.name}
-                  className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                  src={fileUrlAt(idx)}
+                  alt={att.name}
+                  className="rounded-lg w-full aspect-square object-cover bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
                   loading="lazy"
                 />
-              </a>
-            ) : attachment.kind === "video" ? (
-              <video
-                src={fileSrc}
-                controls
-                preload="metadata"
-                className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] bg-black border border-zinc-200 dark:border-zinc-800"
-              >
-                {attachment.name}
-              </video>
-            ) : (
-              <a
-                href={downloadHref ?? "#"}
-                className="inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              >
-                📎 {attachment.name}
-              </a>
-            )}
-            <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
-              {typeof attachment.size === "number" && attachment.size > 0 && (
-                <span>{(attachment.size / 1024).toFixed(0)}KB</span>
-              )}
-              {downloadHref && (
-                <a href={downloadHref} className="hover:underline">
-                  📥 다운로드
-                </a>
-              )}
-            </div>
+              </button>
+            ))}
           </div>
         )}
-        {attachment && isPending && (
+
+        {/* 동영상·일반 파일 첨부 — 각각 세로로 나열 */}
+        {!isPending &&
+          otherItems.map(({ att, idx }) => (
+            <div key={`oth-${idx}`} className="mb-1 max-w-full">
+              {att.kind === "video" ? (
+                <video
+                  src={fileUrlAt(idx)}
+                  controls
+                  preload="metadata"
+                  className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] bg-black border border-zinc-200 dark:border-zinc-800"
+                >
+                  {att.name}
+                </video>
+              ) : (
+                <a
+                  href={fileUrlAt(idx, true)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                >
+                  📎 {att.name}
+                </a>
+              )}
+              <div className="text-[10px] text-zinc-400 mt-0.5 px-1 flex items-center gap-2">
+                {typeof att.size === "number" && att.size > 0 && (
+                  <span>{(att.size / 1024).toFixed(0)}KB</span>
+                )}
+                <a
+                  href={fileUrlAt(idx, true)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  📥 다운로드
+                </a>
+              </div>
+            </div>
+          ))}
+
+        {/* 전송 중(옵티미스틱) — 첨부 placeholder */}
+        {isPending && hasAttachment && (
           <div className="mb-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-3 text-xs text-zinc-500 inline-flex items-center gap-2">
-            <span>{attachment.kind === "image" ? "🖼" : "🎬"}</span>
-            <span>{attachment.name}</span>
+            <span>{attachments[0].kind === "image" ? "🖼" : attachments[0].kind === "video" ? "🎬" : "📎"}</span>
+            <span>
+              {attachments.length > 1
+                ? `${attachments.length}개 첨부`
+                : attachments[0].name}
+            </span>
             <span className="text-zinc-400">{t("chat.sending")}</span>
           </div>
         )}

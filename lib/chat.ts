@@ -494,9 +494,12 @@ export type SendMessageOptions = {
   replyTo?: ReplyToMeta;
   /** 클라이언트가 미리 생성한 ID — 임시/실제 메시지 ID 동일하게 만들어 React key 안정화용 */
   clientMessageId?: string;
-  /** 첨부 파일 (이미지/동영상/일반 파일) */
-  attachment?: AttachmentMeta;
+  /** 첨부 파일 (이미지/동영상/일반 파일) — 한 메시지에 여러 개 첨부 가능 */
+  attachments?: AttachmentMeta[];
 };
+
+/** 한 메시지에 묶을 수 있는 첨부 최대 개수 */
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 /**
  * 메시지 텍스트에서 @이름 멘션을 찾아 userId 배열 반환.
@@ -556,8 +559,14 @@ export async function sendMessage(
   }
 
   const trimmed = content.trim();
+  // 첨부 정규화 — 최대 개수로 제한
+  const attachments = (options.attachments ?? []).slice(
+    0,
+    MAX_ATTACHMENTS_PER_MESSAGE,
+  );
+  const hasAttachment = attachments.length > 0;
   // 첨부가 있으면 빈 본문도 허용 (캡션 없이 미디어만 보내는 케이스)
-  if (!trimmed && !options.attachment) {
+  if (!trimmed && !hasAttachment) {
     throw new Error("메시지가 비어있습니다.");
   }
   if (trimmed.length > 4000)
@@ -571,16 +580,16 @@ export async function sendMessage(
   const meta: {
     mentions?: string[];
     replyTo?: ReplyToMeta;
-    attachment?: AttachmentMeta;
+    attachments?: AttachmentMeta[];
   } = {};
   if (mentions.length > 0) meta.mentions = mentions;
   if (options.replyTo) meta.replyTo = options.replyTo;
-  if (options.attachment) meta.attachment = options.attachment;
+  if (hasAttachment) meta.attachments = attachments;
   const hasMeta = Object.keys(meta).length > 0;
 
-  // 첨부 종류에 맞춰 MessageType 결정
-  const messageType: "TEXT" | "IMAGE" | "FILE" = options.attachment
-    ? options.attachment.kind === "image"
+  // 첨부 종류에 맞춰 MessageType 결정 — 전부 이미지면 IMAGE, 하나라도 아니면 FILE
+  const messageType: "TEXT" | "IMAGE" | "FILE" = hasAttachment
+    ? attachments.every((a) => a.kind === "image")
       ? "IMAGE"
       : "FILE"
     : "TEXT";
@@ -598,8 +607,14 @@ export async function sendMessage(
       chatId,
       userId,
       type: messageType,
-      // 본문 비어 있고 첨부만 있는 경우 파일명을 content로 (검색·푸시 텍스트용)
-      content: trimmed || (options.attachment?.name ?? "[첨부]"),
+      // 본문 비어 있고 첨부만 있는 경우 — 검색·푸시 텍스트용 content 생성
+      content:
+        trimmed ||
+        (attachments.length > 1
+          ? attachments.every((a) => a.kind === "image")
+            ? `[사진 ${attachments.length}장]`
+            : `[첨부 ${attachments.length}개]`
+          : (attachments[0]?.name ?? "[첨부]")),
       ...(hasMeta ? { metadata: meta } : {}),
     },
     include: {

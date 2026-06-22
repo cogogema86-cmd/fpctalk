@@ -84,7 +84,7 @@ export default async function MainLayout({
   ]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-black">
+    <div className="h-dvh flex flex-col bg-white dark:bg-black">
       <header className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center justify-between bg-white dark:bg-black shrink-0">
         <Link
           href={isAdmin ? "/dashboard" : "/chat"}
@@ -110,7 +110,7 @@ export default async function MainLayout({
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         <Sidebar
           isAdmin={isAdmin}
           adminPerms={adminPerms}
@@ -119,7 +119,7 @@ export default async function MainLayout({
           pendingSignsCount={pendingSignsCount}
           chatUnreadCount={chatUnreadCount}
         />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto min-h-0">{children}</main>
       </div>
 
       <MobileNav

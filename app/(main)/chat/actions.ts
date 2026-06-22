@@ -392,45 +392,68 @@ export async function sendMessageAction(
   const chatId = formData.get("chatId") as string;
   const content = (formData.get("content") as string) ?? "";
 
-  // 첨부 (이미지/동영상) — 업로드 endpoint 응답을 JSON으로 받아 그대로 전달
-  const attachmentRaw = formData.get("attachment") as string | null;
-  let attachment:
-    | {
-        kind: "image" | "video" | "file";
-        path: string;
-        mime: string;
-        size: number;
-        name: string;
-        expiresAt: string;
-      }
-    | undefined;
-  if (attachmentRaw) {
+  // 첨부 (이미지/동영상/파일) — 업로드 endpoint 응답 JSON 배열을 받아 검증 후 전달.
+  // 하위호환: 단일 attachment(JSON 객체) 필드도 함께 허용.
+  type Att = {
+    kind: "image" | "video" | "file";
+    path: string;
+    mime: string;
+    size: number;
+    name: string;
+    expiresAt: string;
+  };
+  const validateAttachment = (parsed: unknown): Att | null => {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof (parsed as Att).path === "string" &&
+      typeof (parsed as Att).kind === "string" &&
+      typeof (parsed as Att).mime === "string" &&
+      typeof (parsed as Att).expiresAt === "string"
+    ) {
+      const p = parsed as Att;
+      return {
+        kind: p.kind,
+        path: p.path,
+        mime: p.mime,
+        size: typeof p.size === "number" ? p.size : 0,
+        name: typeof p.name === "string" ? p.name : "attachment",
+        expiresAt: p.expiresAt,
+      };
+    }
+    return null;
+  };
+
+  const attachments: Att[] = [];
+  const attachmentsRaw = formData.get("attachments") as string | null;
+  if (attachmentsRaw) {
     try {
-      const parsed = JSON.parse(attachmentRaw);
-      if (
-        parsed &&
-        typeof parsed.path === "string" &&
-        typeof parsed.kind === "string" &&
-        typeof parsed.mime === "string" &&
-        typeof parsed.expiresAt === "string"
-      ) {
-        attachment = {
-          kind: parsed.kind,
-          path: parsed.path,
-          mime: parsed.mime,
-          size: typeof parsed.size === "number" ? parsed.size : 0,
-          name: typeof parsed.name === "string" ? parsed.name : "attachment",
-          expiresAt: parsed.expiresAt,
-        };
+      const parsed = JSON.parse(attachmentsRaw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const a = validateAttachment(item);
+          if (a) attachments.push(a);
+        }
       }
     } catch {
       // ignore
+    }
+  } else {
+    // 하위호환: 단일 attachment 필드
+    const attachmentRaw = formData.get("attachment") as string | null;
+    if (attachmentRaw) {
+      try {
+        const a = validateAttachment(JSON.parse(attachmentRaw));
+        if (a) attachments.push(a);
+      } catch {
+        // ignore
+      }
     }
   }
 
   // 본문 또는 첨부 둘 중 하나는 있어야 함
   if (!chatId) return {};
-  if (!content.trim() && !attachment) return {};
+  if (!content.trim() && attachments.length === 0) return {};
 
   // 답글 메타 (옵션)
   const replyToRaw = formData.get("replyTo") as string | null;
@@ -459,7 +482,7 @@ export async function sendMessageAction(
     const created = await sendMessage(chatId, me.id, content, {
       replyTo,
       clientMessageId,
-      attachment,
+      attachments,
     });
     await markAsRead(chatId, me.id);
 
