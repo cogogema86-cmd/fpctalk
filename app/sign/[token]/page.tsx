@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSignatureRequestByToken } from "@/lib/documents";
 import { ExternalSignCanvas } from "./_canvas";
+import { PdfViewer } from "./_pdf-viewer";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { LocaleToggle } from "@/app/(main)/_components/locale-toggle";
 
@@ -149,12 +150,10 @@ function SignFileViewer({
         </a>
       )}
       {isPdf ? (
-        // A4 세로 비율 — 문서 한 페이지 전체가 잘리지 않고 보이도록 (확대는 사용자가)
-        <iframe
-          src={url}
-          className="w-full aspect-[210/297] border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
-          title="document"
-        />
+        // pdf.js 폭맞춤 렌더링 — iOS 사파리 iframe은 PDF를 원본 크기로 잘라
+        // 보여주기 때문에 페이지를 직접 그려서 전체가 보이게 함 (확대는 핀치줌)
+        // stream=1: 스토리지 리다이렉트 대신 same-origin 스트리밍 (CORS 회피)
+        <PdfViewer url={`${url}&stream=1`} />
       ) : isImage ? (
         // 이미지 전체 표시 — 높이 제한 없음 (확대는 사용자가)
         // eslint-disable-next-line @next/next/no-img-element
