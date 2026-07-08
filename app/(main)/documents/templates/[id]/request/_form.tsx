@@ -37,6 +37,8 @@ export function RequestSignaturesForm({
     initialState,
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // 직원 목록 접기 — 직원이 많으면 지저분해서 기본은 접힌 상태
+  const [staffOpen, setStaffOpen] = useState(false);
   const [externals, setExternals] = useState<ExternalSigner[]>([]);
   const [extName, setExtName] = useState("");
   const [extContact, setExtContact] = useState("");
@@ -89,12 +91,22 @@ export function RequestSignaturesForm({
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="templateId" value={templateId} />
 
-      {/* 직원 */}
+      {/* 직원 — 기본 접힘 (목록이 길어지면 지저분해서). 접혀 있어도 선택 상태는 유지됨 */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <button
+            type="button"
+            onClick={() => setStaffOpen((o) => !o)}
+            aria-expanded={staffOpen}
+            className="flex items-center gap-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            <span
+              className={`inline-block transition-transform text-xs text-zinc-400 ${staffOpen ? "rotate-90" : ""}`}
+            >
+              ▶
+            </span>
             🧑‍💼 직원 (선택됨 {selected.size}명)
-          </label>
+          </button>
           <button
             type="button"
             onClick={toggleAll}
@@ -103,7 +115,10 @@ export function RequestSignaturesForm({
             {selected.size === candidates.length ? "전체 해제" : "전체 선택"}
           </button>
         </div>
-        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 max-h-64 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900">
+        {/* 접힘 = display:none — 체크박스가 DOM에 남아 있어야 폼 제출에 포함됨 */}
+        <div
+          className={`rounded-md border border-zinc-200 dark:border-zinc-800 max-h-64 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-900 ${staffOpen ? "" : "hidden"}`}
+        >
           {candidates.length === 0 && (
             <div className="px-4 py-4 text-sm text-zinc-500 text-center">
               직원이 없습니다.
