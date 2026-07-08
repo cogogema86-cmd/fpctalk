@@ -45,9 +45,14 @@ export async function GET(
     mime = sigReq.document.mimeType;
   }
 
-  const signedUrl = await getDirectSignedUrl(storageType, path, 600).catch(
-    () => null,
-  );
+  // stream=1 — 리다이렉트 없이 서버가 직접 스트리밍.
+  // 스토리지(R2 등) 직행 URL은 CORS 헤더가 없어서 pdf.js 같은
+  // same-origin fetch 소비자는 리다이렉트를 따라가지 못함.
+  const wantStream = url.searchParams.get("stream") === "1";
+
+  const signedUrl = wantStream
+    ? null
+    : await getDirectSignedUrl(storageType, path, 600).catch(() => null);
   if (signedUrl) {
     return NextResponse.redirect(signedUrl);
   }
