@@ -756,6 +756,51 @@ export async function saveTemplate(input: SaveTemplateInput) {
   return tpl;
 }
 
+// =====================================================
+// 양식 수정 (관리자) — 이름/설명 변경, 파일은 새로 첨부한 경우에만 교체
+// =====================================================
+export async function updateTemplate(input: {
+  uploaderId: string;
+  templateId: string;
+  name: string;
+  description?: string;
+  koFile?: File | null;
+  enFile?: File | null;
+}) {
+  if (!(await isUserAdmin(input.uploaderId))) {
+    throw new Error("관리자만 양식을 수정할 수 있습니다.");
+  }
+  if (!input.name?.trim()) throw new Error("양식 이름을 입력해주세요.");
+
+  const tpl = await prisma.documentTemplate.findUnique({
+    where: { id: input.templateId },
+  });
+  if (!tpl) throw new Error("양식을 찾을 수 없습니다.");
+  if (tpl.uploaderId !== input.uploaderId) {
+    throw new Error("본인이 만든 양식만 수정할 수 있습니다.");
+  }
+
+  // 파일 교체 시 양식의 기존 storageType 유지 (ko/en이 다른 저장소로 흩어지지 않도록).
+  // 기존 파일은 삭제하지 않음 — 이미 보낸 사인 요청(캠페인)이 같은 경로를 참조함.
+  const storageType = (tpl.storageType ?? "supabase") as StorageType;
+  const ko = input.koFile
+    ? await uploadOneTemplateFile(input.uploaderId, input.koFile, "ko", storageType)
+    : null;
+  const en = input.enFile
+    ? await uploadOneTemplateFile(input.uploaderId, input.enFile, "en", storageType)
+    : null;
+
+  return prisma.documentTemplate.update({
+    where: { id: tpl.id },
+    data: {
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      ...(ko ? { koPath: ko.path, koMime: ko.mime, koFileName: ko.fileName } : {}),
+      ...(en ? { enPath: en.path, enMime: en.mime, enFileName: en.fileName } : {}),
+    },
+  });
+}
+
 export async function listTemplates(uploaderId: string) {
   if (!(await isUserAdmin(uploaderId))) {
     throw new Error("관리자만 양식 목록을 볼 수 있습니다.");

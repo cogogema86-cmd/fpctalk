@@ -132,6 +132,12 @@ export default async function DocumentsPage() {
                   >
                     {t("documents.requestSignatures")}
                   </Link>
+                  <Link
+                    href={`/documents/templates/${tpl.id}/edit`}
+                    className="text-xs rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                  >
+                    ✏️ {t("documents.editTemplate")}
+                  </Link>
                   <DeleteTemplateButton
                     templateId={tpl.id}
                     templateName={tpl.name}

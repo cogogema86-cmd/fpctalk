@@ -9,6 +9,7 @@ import {
   createSignatureRequests,
   deleteTemplate,
   saveTemplate,
+  updateTemplate,
   type ExternalSignerInput,
 } from "@/lib/documents";
 import { sendPushToUsers } from "@/lib/push";
@@ -63,6 +64,42 @@ export async function saveTemplateAction(
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "양식 저장 실패" };
+  }
+}
+
+// =====================================================
+// 양식 수정 — 이름/설명 변경, 파일은 새로 첨부한 경우에만 교체
+// =====================================================
+export async function updateTemplateAction(
+  _prev: SaveTemplateState,
+  formData: FormData,
+): Promise<SaveTemplateState> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { error: guard.error };
+
+  const templateId = (formData.get("templateId") as string) ?? "";
+  const name = (formData.get("name") as string)?.trim();
+  const description = (formData.get("description") as string)?.trim();
+  const koFile = formData.get("koFile") as File | null;
+  const enFile = formData.get("enFile") as File | null;
+
+  if (!templateId) return { error: "양식 ID가 없습니다." };
+  if (!name) return { error: "양식 이름을 입력해주세요." };
+
+  try {
+    await updateTemplate({
+      uploaderId: guard.meId,
+      templateId,
+      name,
+      description: description || undefined,
+      koFile: koFile && koFile.size > 0 ? koFile : null,
+      enFile: enFile && enFile.size > 0 ? enFile : null,
+    });
+    revalidatePath("/documents");
+    revalidatePath(`/documents/templates/${templateId}`);
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "양식 수정 실패" };
   }
 }
 
