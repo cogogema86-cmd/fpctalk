@@ -200,7 +200,7 @@ export async function requestSignaturesFromTemplateAction(
         .map(async (r) => {
           const result = await sendSms(
             r.phone!,
-            `[FPCTalk] ${r.name}님, '${tpl.name}' 서명 요청이 도착했습니다.\n아래 링크에서 내용 확인 후 서명해 주세요. (30일간 유효)\n${baseUrl}/sign/${r.token}`,
+            `[FPCTalk] ${r.name}님, '${tpl.name}' 서명 요청이 도착했습니다.\n아래 링크에서 내용 확인 후 서명해 주세요. (30일간 유효)\nA signature request has arrived. Please review and sign at the link below. (Valid for 30 days)\n${baseUrl}/sign/${r.token}`,
           );
           if (!result.ok) {
             console.error(`[sign SMS] ${r.name}(${r.phone}) 발송 실패:`, result.error);
@@ -216,4 +216,54 @@ export async function requestSignaturesFromTemplateAction(
     campaignId: doc.id,
     signersCount: signerIdsRaw.length + externals.length,
   };
+}
+
+// =====================================================
+// 외부 사인자 즐겨찾기 (학원 공용 주소록)
+// =====================================================
+export type ExternalContactView = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+};
+
+/** 즐겨찾기 등록 — 같은 이름+연락처면 기존 항목 반환 (중복 없음) */
+export async function addExternalContactAction(input: {
+  name: string;
+  email?: string;
+  phone?: string;
+}): Promise<
+  { ok: true; contact: ExternalContactView } | { ok: false; error: string }
+> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const name = input.name?.trim();
+  if (!name) return { ok: false, error: "이름을 입력해주세요." };
+  const email = input.email?.trim() ?? "";
+  const phone = input.phone?.trim() ?? "";
+  const contact = await prisma.externalContact.upsert({
+    where: { name_email_phone: { name, email, phone } },
+    create: { name, email, phone },
+    update: {},
+  });
+  return {
+    ok: true,
+    contact: {
+      id: contact.id,
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+    },
+  };
+}
+
+/** 즐겨찾기 삭제 */
+export async function deleteExternalContactAction(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  await prisma.externalContact.delete({ where: { id } }).catch(() => {});
+  return { ok: true };
 }
