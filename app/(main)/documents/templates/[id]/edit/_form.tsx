@@ -1,40 +1,37 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+/**
+ * 양식 편집 폼 — 이름/설명 수정, 파일은 새로 첨부한 경우에만 교체.
+ * 기존 파일을 유지하려면 파일 입력을 비워두면 됨.
+ */
+
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  saveTemplateAction,
+  updateTemplateAction,
   type SaveTemplateState,
-} from "../template-actions";
-import { maybeCompressImage } from "../_image-compress";
+} from "../../../template-actions";
+import { maybeCompressImage } from "../../../_image-compress";
 import { useT } from "@/lib/i18n/client";
 
 const initialState: SaveTemplateState = {};
 
-export function TemplateUploadForm() {
-  const router = useRouter();
-  const [resetKey, setResetKey] = useState(0);
-
-  return (
-    <FormInstance
-      key={resetKey}
-      onReset={() => setResetKey((k) => k + 1)}
-      onDone={() => router.push("/documents")}
-    />
-  );
-}
-
-function FormInstance({
-  onReset,
-  onDone,
+export function TemplateEditForm({
+  template,
 }: {
-  onReset: () => void;
-  onDone: () => void;
+  template: {
+    id: string;
+    name: string;
+    description: string;
+    koFileName: string;
+    enFileName: string | null;
+  };
 }) {
   const t = useT();
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
-    saveTemplateAction,
+    updateTemplateAction,
     initialState,
   );
 
@@ -51,30 +48,26 @@ function FormInstance({
 
   useEffect(() => {
     if (state.ok) {
-      const tm = setTimeout(onDone, 800);
+      const tm = setTimeout(() => {
+        router.push("/documents");
+        router.refresh();
+      }, 800);
       return () => clearTimeout(tm);
     }
-  }, [state.ok, onDone]);
+  }, [state.ok, router]);
 
   if (state.ok) {
     return (
-      <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 p-4 text-sm text-green-800 dark:text-green-200 space-y-2">
+      <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 p-4 text-sm text-green-800 dark:text-green-200">
         {t("upload.savedRedirect")}
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onReset}
-            className="text-xs rounded-md border border-green-700 px-3 py-1"
-          >
-            {t("upload.addAnother")}
-          </button>
-        </div>
       </div>
     );
   }
 
   return (
     <form action={handleSubmit} className="space-y-4">
+      <input type="hidden" name="templateId" value={template.id} />
+
       <Field label={t("upload.name")} required>
         <input
           name="name"
@@ -82,7 +75,7 @@ function FormInstance({
           required
           maxLength={100}
           disabled={isPending}
-          placeholder={t("upload.namePh2")}
+          defaultValue={template.name}
           className="tpl-input"
         />
       </Field>
@@ -92,22 +85,27 @@ function FormInstance({
           name="description"
           rows={2}
           disabled={isPending}
-          placeholder={t("upload.descriptionPh2")}
+          defaultValue={template.description}
           className="tpl-input"
         />
       </Field>
 
-      <Field label={t("upload.koFile2")} required>
+      <Field label={`${t("upload.koFile2")} — ${t("tpl.currentFile")}: ${template.koFileName}`}>
         <input
           name="koFile"
           type="file"
-          required
           disabled={isPending}
           className="block w-full text-sm border border-zinc-300 dark:border-zinc-700 rounded-md p-2 bg-white dark:bg-zinc-900"
         />
       </Field>
 
-      <Field label={t("upload.enFile2")}>
+      <Field
+        label={
+          template.enFileName
+            ? `${t("upload.enFile2")} — ${t("tpl.currentFile")}: ${template.enFileName}`
+            : t("upload.enFile2")
+        }
+      >
         <input
           name="enFile"
           type="file"
@@ -116,11 +114,7 @@ function FormInstance({
         />
       </Field>
 
-      <p className="text-xs text-zinc-500">
-        {t("upload.fileHint2Line1")}
-        <br />
-        {t("upload.fileHint2Line2")}
-      </p>
+      <p className="text-xs text-zinc-500">{t("tpl.editFileHint")}</p>
 
       {state.error && (
         <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-700 dark:text-red-300">
@@ -134,7 +128,7 @@ function FormInstance({
           disabled={isPending}
           className="rounded-md bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-sm font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50"
         >
-          {isPending ? t("upload.submitting") : t("upload.saveBtn")}
+          {isPending ? t("upload.submitting") : t("common.save")}
         </button>
         <Link
           href="/documents"
