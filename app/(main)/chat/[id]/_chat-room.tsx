@@ -184,7 +184,9 @@ export function ChatRoom({
   useEffect(() => {
     if (initialScrollDoneRef.current) return;
     initialScrollDoneRef.current = true;
-    setTimeout(() => {
+    const el = scrollRef.current;
+
+    const applyScroll = () => {
       if (firstUnreadIdx >= 0 && dividerRef.current && scrollRef.current) {
         // 구분선이 화면 상단에 가깝게 오도록
         dividerRef.current.scrollIntoView({ block: "start" });
@@ -196,11 +198,37 @@ export function ChatRoom({
       } else {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
       }
-      // 진입 후 markAsRead (조금 늦게 호출 — 사용자가 화면 본 후)
-      setTimeout(() => {
-        markAsReadAction(chatId).catch(() => {});
-      }, 1500);
-    }, 50);
+    };
+
+    // 이미지가 늦게 로드되면 위쪽 내용 높이가 커져 스크롤 위치가 위로 밀림
+    // → 초기 5초 동안 이미지 로드마다 목표 위치 재적용.
+    //   사용자가 직접 스크롤(터치/휠)하기 시작하면 즉시 중단.
+    let pinning = true;
+    const onImgLoad = () => {
+      if (pinning) applyScroll();
+    };
+    const stopPinning = () => {
+      pinning = false;
+      el?.removeEventListener("load", onImgLoad, true); // load는 버블 안 됨 — capture
+      el?.removeEventListener("touchstart", stopPinning);
+      el?.removeEventListener("wheel", stopPinning);
+    };
+    el?.addEventListener("load", onImgLoad, true);
+    el?.addEventListener("touchstart", stopPinning, { passive: true });
+    el?.addEventListener("wheel", stopPinning, { passive: true });
+    const pinTimer = setTimeout(stopPinning, 5000);
+
+    setTimeout(applyScroll, 50);
+    // 진입 후 markAsRead (조금 늦게 호출 — 사용자가 화면 본 후)
+    const readTimer = setTimeout(() => {
+      markAsReadAction(chatId).catch(() => {});
+    }, 1550);
+
+    return () => {
+      clearTimeout(pinTimer);
+      clearTimeout(readTimer);
+      stopPinning();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -212,6 +240,19 @@ export function ChatRoom({
       behavior: "smooth",
     });
   }, [messages.length]);
+
+  // 방에 머무는 동안 도착한 메시지도 읽음 처리.
+  // (원래 markAsRead가 입장 시 1회만 호출돼서, 대화 중 받은 메시지가
+  //  "안 읽음"으로 남아 재입장 시 이미 본 위치에 구분선이 생기고
+  //  그 위치에서 열리는 문제가 있었음)
+  useEffect(() => {
+    if (!initialScrollDoneRef.current) return;
+    // 마지막 메시지 도착 1.5초 후 갱신 (연속 도착 시 디바운스)
+    const tm = setTimeout(() => {
+      markAsReadAction(chatId).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(tm);
+  }, [messages.length, chatId]);
 
   // ORDER 메시지 metadata 폴링 (Realtime UPDATE가 metadata를 못 보내는 경우 백업)
   // 구조적으로 동일한 데이터면 reference 유지 — 번역 등 자식 state 보존.
