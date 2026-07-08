@@ -12,6 +12,7 @@ import {
   type ExternalSignerInput,
 } from "@/lib/documents";
 import { sendPushToUsers } from "@/lib/push";
+import { sendSms } from "@/lib/sms";
 
 async function requireAdmin(): Promise<
   { ok: true; meId: string } | { ok: false; error: string }
@@ -182,7 +183,30 @@ export async function requestSignaturesFromTemplateAction(
 
   // 외부 사인 요청
   if (externals.length > 0) {
-    await createExternalSignatureRequests(doc.id, guard.meId, externals, 30);
+    const created = await createExternalSignatureRequests(
+      doc.id,
+      guard.meId,
+      externals,
+      30,
+    );
+    // 전화번호가 입력된 외부 사인자에게 사인 링크 문자 자동 발송.
+    // 실패해도 요청 자체는 유지 (링크는 문서 상세에서 복사 가능) — 결과만 로그.
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
+      "https://www.fpctalk.com";
+    await Promise.allSettled(
+      created
+        .filter((r) => r.phone)
+        .map(async (r) => {
+          const result = await sendSms(
+            r.phone!,
+            `[FPCTalk] ${r.name}님, '${tpl.name}' 서명 요청이 도착했습니다.\n아래 링크에서 내용 확인 후 서명해 주세요. (30일간 유효)\n${baseUrl}/sign/${r.token}`,
+          );
+          if (!result.ok) {
+            console.error(`[sign SMS] ${r.name}(${r.phone}) 발송 실패:`, result.error);
+          }
+        }),
+    );
   }
 
   revalidatePath("/documents");
