@@ -115,6 +115,13 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=...   # PUBLIC_KEY 와 동일
 
 # ── Cron 보안 (선택) ──
 CRON_SECRET=<openssl rand -hex 32 결과>
+
+# ── 솔라피 문자 발송 (선택) — https://console.solapi.com ──
+# 외부 사인 요청에 전화번호를 입력하면 사인 링크를 문자로 자동 발송.
+# 없으면 문자만 건너뛰고 나머지는 정상 동작 (링크 수동 복사 방식).
+SOLAPI_API_KEY=...        # 콘솔 → API Key 관리
+SOLAPI_API_SECRET=...     # 생성 시 1회만 노출 — 즉시 저장
+SOLAPI_SENDER=01012345678 # 솔라피에 사전 등록(본인인증)한 발신번호
 ```
 
 ### VAPID 키 발급

@@ -164,7 +164,7 @@ export async function createExternalSignatureRequests(
   requesterId: string,
   externals: ExternalSignerInput[],
   expireDays = 30,
-): Promise<{ id: string; token: string; name: string }[]> {
+): Promise<{ id: string; token: string; name: string; phone: string | null }[]> {
   if (!(await isUserAdmin(requesterId))) {
     throw new Error("관리자만 사인을 요청할 수 있습니다.");
   }
@@ -187,12 +187,18 @@ export async function createExternalSignatureRequests(
           accessToken: token,
           tokenExpiresAt: expiresAt,
         },
-        select: { id: true, accessToken: true, externalName: true },
+        select: {
+          id: true,
+          accessToken: true,
+          externalName: true,
+          externalPhone: true,
+        },
       });
       return {
         id: r.id,
         token: r.accessToken!,
         name: r.externalName!,
+        phone: r.externalPhone,
       };
     }),
   );
