@@ -149,17 +149,19 @@ function SignFileViewer({
         </a>
       )}
       {isPdf ? (
+        // A4 세로 비율 — 문서 한 페이지 전체가 잘리지 않고 보이도록 (확대는 사용자가)
         <iframe
           src={url}
-          className="w-full h-72 md:h-96 border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
+          className="w-full aspect-[210/297] border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
           title="document"
         />
       ) : isImage ? (
+        // 이미지 전체 표시 — 높이 제한 없음 (확대는 사용자가)
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
           alt="document"
-          className="w-full max-h-[32rem] object-contain border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
+          className="w-full h-auto border border-zinc-200 dark:border-zinc-800 rounded-md bg-white"
         />
       ) : (
         <div className="rounded-md border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-900">

@@ -48,25 +48,11 @@ export default async function RequestSignaturesPage({
     orderBy: [{ role: { sortOrder: "asc" } }, { name: "asc" }],
   });
 
-  // 외부 사인자 즐겨찾기 — 과거 외부 요청에서 이름+연락처 추출 (최근순, 중복 제거)
-  const pastExternals = await prisma.signatureRequest.findMany({
-    where: { signerId: null, externalName: { not: null } },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    select: { externalName: true, externalEmail: true, externalPhone: true },
+  // 외부 사인자 즐겨찾기 (학원 공용 주소록) — 이름순
+  const favorites = await prisma.externalContact.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true, phone: true },
   });
-  const seen = new Set<string>();
-  const recentExternals: { name: string; email: string; phone: string }[] = [];
-  for (const r of pastExternals) {
-    const name = r.externalName!.trim();
-    const email = r.externalEmail?.trim() ?? "";
-    const phone = r.externalPhone?.trim() ?? "";
-    const key = `${name}|${email}|${phone}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    recentExternals.push({ name, email, phone });
-    if (recentExternals.length >= 12) break;
-  }
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
@@ -93,7 +79,7 @@ export default async function RequestSignaturesPage({
           username: u.username,
           roleLabel: u.role.label,
         }))}
-        recentExternals={recentExternals}
+        initialFavorites={favorites}
       />
     </div>
   );
