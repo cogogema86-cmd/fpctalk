@@ -48,24 +48,25 @@ export default async function ChatRoomPage({
 
   return (
     <div className="h-full min-h-0 flex flex-col">
-      {/* 헤더 */}
-      <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center gap-3 bg-white dark:bg-black">
+      {/* 헤더 — 좁은 화면(갤럭시 등)에서 버튼들이 제목을 짜부라뜨리지 않도록
+          flex-wrap: 공간 부족 시 버튼들이 다음 줄로 내려가고 제목은 최소 폭 확보 */}
+      <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-2 bg-white dark:bg-black">
         <Link
           href="/chat"
           className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
         >
           ←
         </Link>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[10rem] flex-1">
           <div className="font-semibold truncate flex items-center gap-2">
             {info.title}
             {info.isLevelChat && (
-              <span className="text-xs rounded bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 text-amber-800 dark:text-amber-200 font-normal">
+              <span className="text-xs rounded bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 text-amber-800 dark:text-amber-200 font-normal whitespace-nowrap shrink-0">
                 ⭐ {t("chat.levelTag")} {info.levelRequired}+
               </span>
             )}
           </div>
-          <div className="text-xs text-zinc-500">
+          <div className="text-xs text-zinc-500 truncate">
             {info.type === "DM"
               ? t("chat.dmType")
               : info.isLevelChat

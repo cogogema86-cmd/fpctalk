@@ -101,6 +101,30 @@ type Member = {
   name: string;
 };
 
+/** 메시지 metadata의 첨부 항목 (서버 저장 형식) */
+type AttView = {
+  kind?: "image" | "video" | "file";
+  path?: string;
+  mime?: string;
+  size?: number;
+  name?: string;
+  expiresAt?: string;
+  expired?: boolean;
+};
+
+/** 메시지 metadata에서 첨부 배열 정규화 (단일 attachment / 다중 attachments) */
+function attachmentsOf(metadata: unknown): AttView[] {
+  const meta = (metadata ?? {}) as {
+    attachment?: AttView;
+    attachments?: AttView[];
+  };
+  return Array.isArray(meta.attachments)
+    ? meta.attachments
+    : meta.attachment
+      ? [meta.attachment]
+      : [];
+}
+
 const initialState: SendMessageState = {};
 
 export function ChatRoom({
@@ -725,6 +749,32 @@ export function ChatRoom({
     ? messages.filter((m) => m.id !== activeOrder.id)
     : messages;
 
+  // 채팅방 전체 이미지 갤러리 (시간순) — 뷰어에서 좌우 스와이프로 넘겨봄 (카카오톡 방식)
+  const galleryItems = visibleMessages.flatMap((m) => {
+    if (m.pending) return [];
+    return attachmentsOf(m.metadata).flatMap((att, idx) =>
+      att.kind === "image" && !att.expired
+        ? [
+            {
+              messageId: m.id,
+              attIdx: idx,
+              viewUrl: `/api/chat/file/${m.id}?i=${idx}`,
+              downloadUrl: `/api/chat/file/${m.id}?i=${idx}&download=1`,
+              name: att.name ?? "image.jpg",
+            },
+          ]
+        : [],
+    );
+  });
+  // 열려 있는 뷰어의 갤러리 인덱스 (null = 닫힘)
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const openImageViewer = (messageId: string, attIdx: number) => {
+    const i = galleryItems.findIndex(
+      (g) => g.messageId === messageId && g.attIdx === attIdx,
+    );
+    if (i >= 0) setViewerIndex(i);
+  };
+
   // 스크롤 중 우측 상단에 현재 보이는 메시지의 날짜 표시 (카카오톡 스타일)
   // 스크롤이 멈추면 1.2초 후 사라짐
   const [floatingDate, setFloatingDate] = useState<string | null>(null);
@@ -793,6 +843,14 @@ export function ChatRoom({
 
   return (
     <>
+      {/* 인앱 이미지 뷰어 — 채팅방 전체 사진을 스와이프로 탐색 */}
+      {viewerIndex !== null && galleryItems[viewerIndex] && (
+        <ImageViewer
+          items={galleryItems}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
       {aiAutoReply && (
         <div className="px-4 py-2 text-[11px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border-b border-emerald-200 dark:border-emerald-900">
           🤖 {t("chat.aiAutoReply.banner")}
@@ -942,6 +1000,7 @@ export function ChatRoom({
                     isMine={isMine}
                     showAuthor={showAuthor}
                     onReply={startReply}
+                    onOpenImage={openImageViewer}
                   />
                 </div>
               </Fragment>
@@ -1871,11 +1930,14 @@ function MessageBubble({
   isMine,
   showAuthor,
   onReply,
+  onOpenImage,
 }: {
   message: Message;
   isMine: boolean;
   showAuthor: boolean;
   onReply: (m: Message) => void;
+  /** 이미지 탭 → ChatRoom 레벨 갤러리 뷰어 열기 (메시지 ID + 몇 번째 첨부) */
+  onOpenImage: (messageId: string, attIdx: number) => void;
 }) {
   const t = useT();
   const [translation, setTranslation] = useState<string | null>(null);
@@ -1883,12 +1945,6 @@ function MessageBubble({
   const [isTransPending, startTransTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [isDeleted, setIsDeleted] = useState(false);
-  // 인앱 이미지 뷰어 (열린 이미지의 보기/다운로드 URL + 이름)
-  const [viewer, setViewer] = useState<{
-    viewUrl: string;
-    downloadUrl: string;
-    name: string;
-  } | null>(null);
 
   if (message.type === "AI") {
     return <AiMessageBubble message={message} />;
@@ -1901,45 +1957,29 @@ function MessageBubble({
   }
 
   const isPending = !!message.pending || isDeleting;
-  type AttView = {
-    kind?: "image" | "video" | "file";
-    path?: string;
-    mime?: string;
-    size?: number;
-    name?: string;
-    expiresAt?: string;
-    expired?: boolean;
-  };
   const meta = (message.metadata ?? {}) as {
     replyTo?: { messageId: string; userName: string; contentPreview: string };
-    attachment?: AttView;
-    attachments?: AttView[];
   };
   // 단일(attachment) / 다중(attachments) 정규화
-  const attachments: AttView[] = Array.isArray(meta.attachments)
-    ? meta.attachments
-    : meta.attachment
-      ? [meta.attachment]
-      : [];
+  const attachments: AttView[] = attachmentsOf(message.metadata);
   const hasAttachment = attachments.length > 0;
-  // 첨부 영역에 파일명이 자동 노출되므로, 본문이 단일 첨부 파일명과 같으면 본문 텍스트 숨김
+  // 첨부만 있는 메시지는 서버가 검색·푸시용 본문을 자동 생성함
+  // (파일명 / "[사진 N장]" / "[첨부 N개]" / "[첨부]" — lib/chat.ts sendMessage와 동일 규칙)
+  // 첨부 자체가 화면에 보이므로 이 자동 문구는 말풍선에서 숨김
+  const autoContent =
+    attachments.length > 1
+      ? attachments.every((a) => a.kind === "image")
+        ? `[사진 ${attachments.length}장]`
+        : `[첨부 ${attachments.length}개]`
+      : (attachments[0]?.name ?? "[첨부]");
   const showContentText =
-    !hasAttachment ||
-    (message.content &&
-      !(
-        attachments.length === 1 && message.content === attachments[0].name
-      ));
+    !hasAttachment || (message.content && message.content !== autoContent);
 
   // 인덱스별 첨부 URL (?i=N) — 메시지 단위로 N번째 첨부를 서빙
   const fileUrlAt = (idx: number, download = false) =>
     `/api/chat/file/${message.id}?i=${idx}${download ? "&download=1" : ""}`;
-  // 이미지 탭 → 앱 내 뷰어 열기
-  const openViewer = (idx: number, name?: string) =>
-    setViewer({
-      viewUrl: fileUrlAt(idx),
-      downloadUrl: fileUrlAt(idx, true),
-      name: name ?? "image.jpg",
-    });
+  // 이미지 탭 → ChatRoom 레벨 갤러리 뷰어 열기
+  const openViewer = (idx: number) => onOpenImage(message.id, idx);
   const indexed = attachments.map((att, idx) => ({ att, idx }));
   const expiredItems = indexed.filter((x) => x.att.expired);
   const imageItems = indexed.filter(
@@ -1981,14 +2021,6 @@ function MessageBubble({
 
   return (
     <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-      {viewer && (
-        <ImageViewer
-          viewUrl={viewer.viewUrl}
-          downloadUrl={viewer.downloadUrl}
-          name={viewer.name}
-          onClose={() => setViewer(null)}
-        />
-      )}
       <div
         className={`max-w-[75%] ${isMine ? "items-end" : "items-start"} flex flex-col transition-opacity ${
           isPending ? "opacity-60" : ""
@@ -2036,7 +2068,7 @@ function MessageBubble({
           <div className="mb-1 max-w-full">
             <button
               type="button"
-              onClick={() => openViewer(imageItems[0].idx, imageItems[0].att.name)}
+              onClick={() => openViewer(imageItems[0].idx)}
               className="block p-0"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2063,7 +2095,7 @@ function MessageBubble({
               <button
                 type="button"
                 key={`img-${idx}`}
-                onClick={() => openViewer(idx, att.name)}
+                onClick={() => openViewer(idx)}
                 className="block p-0 w-full"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}

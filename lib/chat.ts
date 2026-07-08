@@ -351,15 +351,18 @@ export async function getChatMessages(chatId: string, userId: string) {
     await ensureMembership(chatId, userId);
   }
 
+  // 최신 200개를 가져와 시간순으로 반환.
+  // (asc + take는 "가장 오래된 200개"를 가져와서, 200개 초과 방에서
+  //  최근 메시지·안읽음 구분선이 로드 범위 밖으로 밀리는 버그가 있었음)
   const messages = await prisma.message.findMany({
     where: { chatId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, username: true, name: true } },
     },
     take: 200,
   });
-  return messages;
+  return messages.reverse();
 }
 
 /**
