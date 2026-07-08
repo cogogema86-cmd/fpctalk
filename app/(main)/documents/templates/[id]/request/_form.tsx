@@ -27,9 +27,12 @@ type ExternalSigner = {
 export function RequestSignaturesForm({
   templateId,
   candidates,
+  recentExternals,
 }: {
   templateId: string;
   candidates: Candidate[];
+  /** 즐겨찾기 — 과거 외부 사인 요청에서 추출한 최근 사인자 (중복 제거됨) */
+  recentExternals: { name: string; email: string; phone: string }[];
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(
@@ -83,6 +86,24 @@ export function RequestSignaturesForm({
 
   const removeExternal = (id: string) => {
     setExternals((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  // 즐겨찾기 탭 → 목록에 바로 추가 (이미 추가된 사람이면 무시)
+  const isAdded = (fav: { name: string; email: string; phone: string }) =>
+    externals.some(
+      (e) => e.name === fav.name && e.email === fav.email && e.phone === fav.phone,
+    );
+  const addFavorite = (fav: { name: string; email: string; phone: string }) => {
+    if (isAdded(fav)) return;
+    setExternals((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: fav.name,
+        email: fav.email,
+        phone: fav.phone,
+      },
+    ]);
   };
 
   const totalCount = selected.size + externals.length;
@@ -154,8 +175,44 @@ export function RequestSignaturesForm({
           👨‍👩‍👧 외부 사인자 (학부모 등, 선택됨 {externals.length}명)
         </label>
         <p className="text-xs text-zinc-500 mb-2">
-          로그인 없이 링크 한 번에 사인 가능. 추가 후 진행 페이지에서 링크 복사 → 카톡/문자로 전달.
+          로그인 없이 링크 한 번에 사인 가능. 전화번호를 입력하면 사인 링크가 문자로 자동 발송됩니다.
         </p>
+
+        {/* 즐겨찾기 — 최근 보낸 사람 탭 한 번으로 추가 */}
+        {recentExternals.length > 0 && (
+          <div className="mb-2">
+            <div className="text-xs text-zinc-500 mb-1">
+              ⭐ 즐겨찾기 (최근 보낸 사람 — 탭하면 추가)
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {recentExternals.map((fav, i) => {
+                const added = isAdded(fav);
+                return (
+                  <button
+                    key={`fav-${i}`}
+                    type="button"
+                    onClick={() => addFavorite(fav)}
+                    disabled={isPending || added}
+                    title={fav.phone || fav.email || undefined}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                      added
+                        ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 cursor-default"
+                        : "border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                    } disabled:opacity-70`}
+                  >
+                    {added ? "✓ " : "+ "}
+                    {fav.name}
+                    {fav.phone && (
+                      <span className="text-zinc-400 ml-1">
+                        {fav.phone.slice(-4)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
           <input
