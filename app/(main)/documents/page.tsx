@@ -24,6 +24,8 @@ export default async function DocumentsPage() {
     include: { role: true },
   });
   const isAdmin = !!meWithRole?.role.isAdmin;
+  // 캠페인 삭제는 admin(원장, PRINCIPAL) 계정만 — 부원장 등은 버튼 자체를 숨김
+  const isPrincipal = meWithRole?.role.code === "PRINCIPAL";
 
   const pending = await getMyPendingSignatures(me.id);
   const completed = await getMyCompletedSignatures(me.id);
@@ -217,10 +219,12 @@ export default async function DocumentsPage() {
                       </div>
                     </div>
                   </Link>
-                  <DeleteCampaignButton
-                    documentId={d.id}
-                    campaignTitle={d.title}
-                  />
+                  {isPrincipal && (
+                    <DeleteCampaignButton
+                      documentId={d.id}
+                      campaignTitle={d.title}
+                    />
+                  )}
                 </li>
               );
             })}

@@ -87,7 +87,8 @@ export async function cancelSignatureRequestAction(
 }
 
 // =====================================================
-// 관리자: 사인 캠페인(Document) 삭제 — 본인이 만든 캠페인만
+// admin(원장) 전용: 사인 캠페인(Document) 삭제
+// 부원장 등 다른 계정은 삭제 불가 (권한 체크는 deleteCampaign 내부).
 // SignatureRequest는 Cascade. 사인 결과물 파일은 함께 정리.
 // 양식 원본(DocumentTemplate)은 보존됨.
 // =====================================================

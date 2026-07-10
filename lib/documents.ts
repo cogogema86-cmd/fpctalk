@@ -35,6 +35,15 @@ async function isUserAdmin(userId: string): Promise<boolean> {
   return !!u?.role.isAdmin;
 }
 
+/** admin(원장, PRINCIPAL 역할) 계정인지 — 캠페인 삭제 등 최상위 권한 전용 */
+async function isUserPrincipal(userId: string): Promise<boolean> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { role: true },
+  });
+  return u?.role.code === "PRINCIPAL";
+}
+
 // =====================================================
 // 1. 문서 업로드 (관리자) — 다중 포맷 지원
 // =====================================================
@@ -830,7 +839,9 @@ export async function deleteTemplate(uploaderId: string, templateId: string) {
 }
 
 /**
- * 사인 캠페인(Document) 삭제 — 관리자가 본인이 만든 캠페인만 삭제 가능.
+ * 사인 캠페인(Document) 삭제 — admin(원장, PRINCIPAL) 계정만 가능.
+ * 부원장 등 다른 관리자 계정은 삭제 불가. 대신 어느 캠페인이든(작성자 무관) 삭제 가능 —
+ * 부원장이 만든 캠페인이 영구히 못 지우는 상태가 되지 않도록.
  *
  * 함께 정리되는 것:
  * - 사인 결과 PDF (signedPdfPath) — 사인본은 캠페인 단위 결과물이라 같이 삭제
@@ -843,9 +854,9 @@ export async function deleteTemplate(uploaderId: string, templateId: string) {
  *
  * 실패 시: 일부 파일 삭제 실패해도 DB는 삭제 진행 (orphan 파일은 R2/Supabase에 남음).
  */
-export async function deleteCampaign(uploaderId: string, documentId: string) {
-  if (!(await isUserAdmin(uploaderId))) {
-    throw new Error("관리자만 캠페인을 삭제할 수 있습니다.");
+export async function deleteCampaign(userId: string, documentId: string) {
+  if (!(await isUserPrincipal(userId))) {
+    throw new Error("admin 계정만 캠페인을 삭제할 수 있습니다.");
   }
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
@@ -856,9 +867,6 @@ export async function deleteCampaign(uploaderId: string, documentId: string) {
     },
   });
   if (!doc) throw new Error("캠페인을 찾을 수 없습니다.");
-  if (doc.uploaderId !== uploaderId) {
-    throw new Error("본인이 만든 캠페인만 삭제할 수 있습니다.");
-  }
 
   const storageType = (doc.storageType ?? "supabase") as StorageType;
   const paths: string[] = [];
