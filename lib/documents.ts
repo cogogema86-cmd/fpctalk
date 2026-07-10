@@ -785,9 +785,6 @@ export async function updateTemplate(input: {
     where: { id: input.templateId },
   });
   if (!tpl) throw new Error("양식을 찾을 수 없습니다.");
-  if (tpl.uploaderId !== input.uploaderId) {
-    throw new Error("본인이 만든 양식만 수정할 수 있습니다.");
-  }
 
   // 파일 교체 시 양식의 기존 storageType 유지 (ko/en이 다른 저장소로 흩어지지 않도록).
   // 기존 파일은 삭제하지 않음 — 이미 보낸 사인 요청(캠페인)이 같은 경로를 참조함.
@@ -810,24 +807,24 @@ export async function updateTemplate(input: {
   });
 }
 
-export async function listTemplates(uploaderId: string) {
-  if (!(await isUserAdmin(uploaderId))) {
+// 양식 보관함은 관리자 공용 — 누가 올렸든 관리자 권한이면 전체 목록이 보임
+export async function listTemplates(userId: string) {
+  if (!(await isUserAdmin(userId))) {
     throw new Error("관리자만 양식 목록을 볼 수 있습니다.");
   }
   return prisma.documentTemplate.findMany({
-    where: { uploaderId },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export async function deleteTemplate(uploaderId: string, templateId: string) {
-  if (!(await isUserAdmin(uploaderId))) {
+export async function deleteTemplate(userId: string, templateId: string) {
+  if (!(await isUserAdmin(userId))) {
     throw new Error("관리자만 양식을 삭제할 수 있습니다.");
   }
   const tpl = await prisma.documentTemplate.findUnique({
     where: { id: templateId },
   });
-  if (!tpl || tpl.uploaderId !== uploaderId) {
+  if (!tpl) {
     throw new Error("양식을 찾을 수 없습니다.");
   }
   const storageType = (tpl.storageType ?? "supabase") as StorageType;
@@ -892,7 +889,7 @@ export async function requestSignaturesFromTemplate(
   const tpl = await prisma.documentTemplate.findUnique({
     where: { id: templateId },
   });
-  if (!tpl || tpl.uploaderId !== uploaderId) {
+  if (!tpl) {
     throw new Error("양식을 찾을 수 없습니다.");
   }
 
@@ -973,9 +970,12 @@ export async function getMyCompletedSignatures(signerId: string) {
   });
 }
 
-export async function getDocumentsByUploader(uploaderId: string) {
+// 진행 캠페인 목록은 관리자 공용 — 누가 만들었든 관리자 권한이면 전체가 보임
+export async function getAllCampaigns(userId: string) {
+  if (!(await isUserAdmin(userId))) {
+    throw new Error("관리자만 캠페인 목록을 볼 수 있습니다.");
+  }
   return prisma.document.findMany({
-    where: { uploaderId },
     include: {
       _count: { select: { signatureRequests: true } },
       signatureRequests: {
@@ -1040,12 +1040,8 @@ export async function cancelSignatureRequest(
   }
   const req = await prisma.signatureRequest.findUnique({
     where: { id: requestId },
-    include: { document: { select: { uploaderId: true } } },
   });
   if (!req) throw new Error("요청을 찾을 수 없습니다.");
-  if (req.document.uploaderId !== adminId) {
-    throw new Error("본인이 보낸 요청만 취소할 수 있습니다.");
-  }
   if (req.status !== "PENDING") {
     throw new Error("이미 처리된 요청은 취소할 수 없습니다.");
   }

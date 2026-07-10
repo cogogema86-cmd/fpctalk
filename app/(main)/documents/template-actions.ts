@@ -170,9 +170,6 @@ export async function requestSignaturesFromTemplateAction(
     where: { id: templateId },
   });
   if (!tpl) return { error: "양식을 찾을 수 없습니다." };
-  if (tpl.uploaderId !== guard.meId) {
-    return { error: "본인이 만든 양식만 사용할 수 있습니다." };
-  }
 
   // PDF 페이지 수 (가능하면)
   const { PDFDocument } = await import("pdf-lib");

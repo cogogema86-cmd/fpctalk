@@ -15,6 +15,15 @@ import {
   type StorageType,
 } from "@/lib/storage";
 
+// 양식·캠페인 파일은 관리자 공용 — 업로더가 아니어도 관리자 권한이면 접근 가능
+async function isAdminUser(userId: string): Promise<boolean> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: { select: { isAdmin: true } } },
+  });
+  return !!u?.role.isAdmin;
+}
+
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -31,7 +40,7 @@ export async function GET(
   if (type === "template") {
     const tpl = await prisma.documentTemplate.findUnique({ where: { id } });
     if (!tpl) return new NextResponse("Not Found", { status: 404 });
-    if (tpl.uploaderId !== me.id) {
+    if (!(await isAdminUser(me.id))) {
       return new NextResponse("Forbidden", { status: 403 });
     }
     const isEn = lang === "en";
@@ -54,9 +63,10 @@ export async function GET(
   });
   if (!doc) return new NextResponse("Not Found", { status: 404 });
 
-  const isUploader = doc.uploaderId === me.id;
   const isSigner = doc.signatureRequests.length > 0;
-  if (!isUploader && !isSigner) {
+  const canManage =
+    doc.uploaderId === me.id || (await isAdminUser(me.id));
+  if (!canManage && !isSigner) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
@@ -76,7 +86,7 @@ export async function GET(
     const SIGNED_MIME = "application/pdf";
     const myReq = doc.signatureRequests[0];
     if (!myReq?.signedPdfPath) {
-      if (isUploader) {
+      if (canManage) {
         const sigReqId = url.searchParams.get("signRequestId");
         if (!sigReqId) return new NextResponse("signRequestId 필요", { status: 400 });
         const sr = await prisma.signatureRequest.findUnique({

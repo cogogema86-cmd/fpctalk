@@ -33,13 +33,6 @@ export default async function RequestSignaturesPage({
     where: { id },
   });
   if (!tpl) notFound();
-  if (tpl.uploaderId !== me.id) {
-    return (
-      <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        본인이 만든 양식만 사용할 수 있습니다.
-      </div>
-    );
-  }
 
   // 본인 제외 모든 활성 직원 (대상자 후보)
   const others = await prisma.user.findMany({

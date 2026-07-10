@@ -3,7 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getMe } from "@/lib/chat";
 import {
-  getDocumentsByUploader,
+  getAllCampaigns,
   getMyCompletedSignatures,
   getMyPendingSignatures,
   listTemplates,
@@ -30,8 +30,9 @@ export default async function DocumentsPage() {
   const pending = await getMyPendingSignatures(me.id);
   const completed = await getMyCompletedSignatures(me.id);
 
+  // 양식·캠페인은 관리자 공용 — 누가 만들었든 관리자 권한 계정 전체에 보임
   const templates = isAdmin ? await listTemplates(me.id) : [];
-  const myDocuments = isAdmin ? await getDocumentsByUploader(me.id) : [];
+  const myDocuments = isAdmin ? await getAllCampaigns(me.id) : [];
 
   const t = await getT();
   const locale = await getLocale();

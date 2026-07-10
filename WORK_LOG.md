@@ -6,6 +6,20 @@
 
 ---
 
+## ✅ 2026-07-11 — 양식·캠페인을 관리자 공용으로 (fp01 등 관리자 계정에도 표시)
+> 피드백: "fp01 계정에서 양식 보관함·진행 캠페인이 안 보임. 삭제만 admin 전용이고, 관리자 권한 계정에는 목록이 보여야 함."
+
+- **원인**: 조회가 전부 `uploaderId` 필터 — `listTemplates`/`getDocumentsByUploader`가 **본인이 올린 것만** 반환 (07-10 변경 이전부터의 구조). fp01은 올린 게 없어 빈 목록.
+- **수정 — 본인 것만 → 관리자 공용** (`isAdmin`이면 작성자 무관 전체 표시·사용):
+  - `lib/documents.ts`: `listTemplates` uploaderId 필터 제거. `getDocumentsByUploader` → **`getAllCampaigns`**(isAdmin 게이트 추가, 전체 캠페인). `updateTemplate`/`deleteTemplate`/`requestSignaturesFromTemplate`/`cancelSignatureRequest`의 "본인 것만" 소유자 체크 제거.
+  - `templates/[id]`(상세)·`edit`·`request` 페이지의 소유자 체크 제거 (isAdmin 가드는 기존 유지).
+  - `template-actions.ts` requestSignaturesFromTemplateAction의 소유자 체크 제거.
+  - `api/files/[id]/route.ts`: template 타입 다운로드를 업로더 본인 → **관리자면 허용**. document도 `canManage = 업로더 or 관리자`로 확장 (signed + signRequestId 조회 포함). 직원(사인자) 접근 로직은 무변경.
+- **권한 정리 (현재 상태)**: 양식 보기·업로드·편집·사인요청·삭제 + 캠페인 보기·개별요청 취소 = **관리자 권한(isAdmin) 전원** / 캠페인 삭제 = **admin(PRINCIPAL)만** (07-10 결정 유지).
+- **검증**: tsc 0, 변경 파일 eslint 에러 0(warning 1은 기존 headers 미사용), build 성공. ⚠️ fp01 실기기 확인 필요 — 양식·캠페인 목록 표시, 캠페인 삭제 버튼은 admin에만.
+
+---
+
 ## ✅ 2026-07-10 — 사인 캠페인 삭제 admin(원장) 전용 제한 + 10개 페이지네이션 확인
 > 요청: "admin 계정만 캠페인 삭제 가능, 그 외 계정 불가. 사인·양식 보관함 10개 단위 페이지."
 

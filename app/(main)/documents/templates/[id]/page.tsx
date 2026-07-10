@@ -37,13 +37,6 @@ export default async function TemplateDetailPage({
     where: { id },
   });
   if (!tpl) notFound();
-  if (tpl.uploaderId !== me.id) {
-    return (
-      <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        {t("tpl.notMine")}
-      </div>
-    );
-  }
 
   // 이 양식으로 만들어진 캠페인들
   const campaigns = await prisma.document.findMany({

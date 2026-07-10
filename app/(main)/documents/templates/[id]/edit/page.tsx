@@ -32,13 +32,6 @@ export default async function TemplateEditPage({
 
   const tpl = await prisma.documentTemplate.findUnique({ where: { id } });
   if (!tpl) notFound();
-  if (tpl.uploaderId !== me.id) {
-    return (
-      <div className="max-w-md mx-auto p-6 text-center text-zinc-500">
-        본인이 만든 양식만 수정할 수 있습니다.
-      </div>
-    );
-  }
 
   const t = await getT();
 
