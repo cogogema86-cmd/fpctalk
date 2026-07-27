@@ -3,6 +3,7 @@
 import {
   Fragment,
   useActionState,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -36,6 +37,25 @@ import { ImageViewer } from "./_image-viewer";
 const AI_TRIGGER = /^@(?:비서|ai|assistant)?\s+\S/i;
 // 사용자 입력에서 @ 트리거 부분 제거하는 정규식 (시작에 @[키워드?]+공백)
 const AI_TRIGGER_STRIP = /^@(?:비서|ai|assistant)?\s+/i;
+
+/** 세션 만료 시 사용자에게 보여줄 안내 (업로드·전송 공통) */
+const SESSION_EXPIRED_MSG = "로그인이 만료되었습니다. 다시 로그인해주세요.";
+/** sendMessageAction이 미인증일 때 반환하는 문구 (actions.ts와 동일해야 함) */
+const ACTION_AUTH_ERROR = "로그인이 필요합니다.";
+
+/**
+ * 응답이 "세션 만료" 때문인지 판별.
+ * middleware.ts가 미인증 요청을 /login으로 리다이렉트하므로 실제로는
+ * API의 401보다 "리다이렉트되어 최종 URL이 /login"인 경우가 더 흔하다. 둘 다 본다.
+ */
+function isAuthExpired(res: Response): boolean {
+  if (res.status === 401) return true;
+  try {
+    return res.redirected && new URL(res.url).pathname.startsWith("/login");
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 메시지가 질문형인지 — AI 자동 응답 모드용 휴리스틱.
@@ -165,6 +185,17 @@ export function ChatRoom({
   const scrollRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
   const initialScrollDoneRef = useRef(false);
+
+  // 세션 만료 감지 → 안내를 읽을 시간을 준 뒤 로그인 페이지로 이동.
+  // router.push가 아닌 전체 로드로 보내 만료된 세션에 물린 클라이언트 상태를 초기화한다.
+  const loginRedirectRef = useRef(false);
+  const goToLoginAfterNotice = useCallback(() => {
+    if (loginRedirectRef.current) return; // 중복 예약 방지
+    loginRedirectRef.current = true;
+    setTimeout(() => {
+      window.location.href = "/login";
+    }, 2000);
+  }, []);
 
   // "여기서부터 안 읽음" 구분선이 들어갈 첫 메시지 인덱스
   // 본인 메시지가 아니면서 lastReadAt 이후인 첫 메시지
@@ -616,8 +647,10 @@ export function ChatRoom({
   useEffect(() => {
     if (state.error) {
       setMessages((prev) => prev.filter((m) => !m.pending));
+      // 세션 만료로 전송이 거부된 경우 — 업로드와 동일하게 로그인으로 안내
+      if (state.error === ACTION_AUTH_ERROR) goToLoginAfterNotice();
     }
-  }, [state.error]);
+  }, [state.error, goToLoginAfterNotice]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 픽커 열려있을 때 Esc로 닫기
@@ -682,6 +715,8 @@ export function ChatRoom({
       method: "POST",
       body: fd,
     });
+    // 세션 만료는 파일별 오류가 아니므로 파일명 접두사 없이 그대로 던진다
+    if (isAuthExpired(res)) throw new Error(SESSION_EXPIRED_MSG);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(`${file.name}: ${err?.error ?? "업로드 실패"}`);
@@ -719,6 +754,12 @@ export function ChatRoom({
       setPendingAttachments((prev) =>
         [...prev, ...uploaded].slice(0, MAX_ATTACHMENTS),
       );
+    }
+    // 세션 만료면 파일별 오류를 나열하지 않고 안내 하나만 띄운 뒤 로그인으로 이동
+    if (errors.includes(SESSION_EXPIRED_MSG)) {
+      setUploadStatus({ isUploading: false, error: SESSION_EXPIRED_MSG });
+      goToLoginAfterNotice();
+      return;
     }
     if (errors.length > 0 || overflow > 0) {
       const parts = [...errors];
