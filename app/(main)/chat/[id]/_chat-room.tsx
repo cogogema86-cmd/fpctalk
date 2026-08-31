@@ -184,6 +184,10 @@ export function ChatRoom({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
+  // 초기 스크롤이 "끝났는가" — 뒤의 자동 스크롤·읽음처리 effect가 이걸 보고 갈린다.
+  // 반드시 위치를 다 잡은 뒤에 true가 되어야 한다. 예전엔 초기 effect 첫 줄에서
+  // 곧바로 true로 만들었는데, effect는 선언 순서대로 같은 마운트에서 실행되므로
+  // 뒤 effect들이 "이미 끝났다"고 오판해 진입 시 smooth 스크롤이 발사됐다.
   const initialScrollDoneRef = useRef(false);
   // 초기 스크롤 위치를 잡기 전까지 목록을 감춰 둔다 (자리 찾아가는 과정 은폐)
   const [scrollReady, setScrollReady] = useState(false);
@@ -216,9 +220,6 @@ export function ChatRoom({
   // 이미 최종값 — 로드를 기다리며 재고정할 필요가 없다. 위치를 잡은 뒤에 목록을
   // 노출해서, 자리를 찾아가는 과정 자체가 화면에 보이지 않게 한다.
   useEffect(() => {
-    if (initialScrollDoneRef.current) return;
-    initialScrollDoneRef.current = true;
-
     const applyScroll = () => {
       if (firstUnreadIdx >= 0 && dividerRef.current && scrollRef.current) {
         // 구분선이 화면 상단에 가깝게 오도록
@@ -239,6 +240,8 @@ export function ChatRoom({
       applyScroll();
       raf = requestAnimationFrame(() => {
         applyScroll();
+        // 여기서부터가 "초기 스크롤 끝" — 이제야 새 메시지 자동 스크롤을 허용한다
+        initialScrollDoneRef.current = true;
         setScrollReady(true);
       });
     });
