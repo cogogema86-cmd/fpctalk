@@ -185,6 +185,8 @@ export function ChatRoom({
   const scrollRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
   const initialScrollDoneRef = useRef(false);
+  // 초기 스크롤 위치를 잡기 전까지 목록을 감춰 둔다 (자리 찾아가는 과정 은폐)
+  const [scrollReady, setScrollReady] = useState(false);
 
   // 세션 만료 감지 → 안내를 읽을 시간을 준 뒤 로그인 페이지로 이동.
   // router.push가 아닌 전체 로드로 보내 만료된 세션에 물린 클라이언트 상태를 초기화한다.
@@ -201,21 +203,21 @@ export function ChatRoom({
   // 본인 메시지가 아니면서 lastReadAt 이후인 첫 메시지
   const lastReadTime = myLastReadAt ? new Date(myLastReadAt).getTime() : 0;
   const firstUnreadIdx = (() => {
-    if (!myLastReadAt) {
-      // 처음 진입 (멤버십도 없거나 lastReadAt 없음) — 메시지 있으면 첫 unread는 본인 아닌 첫 메시지
-      const idx = initialMessages.findIndex((m) => m.userId !== meId);
-      return idx >= 0 ? idx : -1;
-    }
+    // 읽은 기록이 아예 없는 첫 입장 — 카톡처럼 맨 아래(최신)에서 시작.
+    // (히스토리 최상단에 떨어뜨리면 매번 끝까지 스크롤해 내려와야 한다)
+    if (!myLastReadAt) return -1;
     return initialMessages.findIndex(
       (m) => m.userId !== meId && new Date(m.createdAt).getTime() > lastReadTime,
     );
   })();
 
-  // 진입 시 초기 스크롤: 미읽 메시지 있으면 구분선으로, 없으면 맨 아래
+  // 진입 시 초기 스크롤: 미읽 메시지 있으면 구분선으로, 없으면 맨 아래.
+  // 첨부(이미지·동영상) 높이를 CSS로 예약해 뒀으므로 첫 레이아웃의 scrollHeight가
+  // 이미 최종값 — 로드를 기다리며 재고정할 필요가 없다. 위치를 잡은 뒤에 목록을
+  // 노출해서, 자리를 찾아가는 과정 자체가 화면에 보이지 않게 한다.
   useEffect(() => {
     if (initialScrollDoneRef.current) return;
     initialScrollDoneRef.current = true;
-    const el = scrollRef.current;
 
     const applyScroll = () => {
       if (firstUnreadIdx >= 0 && dividerRef.current && scrollRef.current) {
@@ -231,34 +233,24 @@ export function ChatRoom({
       }
     };
 
-    // 이미지가 늦게 로드되면 위쪽 내용 높이가 커져 스크롤 위치가 위로 밀림
-    // → 초기 5초 동안 이미지 로드마다 목표 위치 재적용.
-    //   사용자가 직접 스크롤(터치/휠)하기 시작하면 즉시 중단.
-    let pinning = true;
-    const onImgLoad = () => {
-      if (pinning) applyScroll();
-    };
-    const stopPinning = () => {
-      pinning = false;
-      el?.removeEventListener("load", onImgLoad, true); // load는 버블 안 됨 — capture
-      el?.removeEventListener("touchstart", stopPinning);
-      el?.removeEventListener("wheel", stopPinning);
-    };
-    el?.addEventListener("load", onImgLoad, true);
-    el?.addEventListener("touchstart", stopPinning, { passive: true });
-    el?.addEventListener("wheel", stopPinning, { passive: true });
-    const pinTimer = setTimeout(stopPinning, 5000);
+    // rAF 두 번 — 첫 레이아웃 확정 후 위치를 잡고, 다음 프레임에서 한 번 더
+    // 확인한 뒤 노출한다.
+    let raf = requestAnimationFrame(() => {
+      applyScroll();
+      raf = requestAnimationFrame(() => {
+        applyScroll();
+        setScrollReady(true);
+      });
+    });
 
-    setTimeout(applyScroll, 50);
     // 진입 후 markAsRead (조금 늦게 호출 — 사용자가 화면 본 후)
     const readTimer = setTimeout(() => {
       markAsReadAction(chatId).catch(() => {});
     }, 1550);
 
     return () => {
-      clearTimeout(pinTimer);
+      cancelAnimationFrame(raf);
       clearTimeout(readTimer);
-      stopPinning();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1035,7 +1027,9 @@ export function ChatRoom({
       <div
         ref={scrollRef}
         onScroll={handleFloatingDateScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
+        className={`flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950 transition-opacity duration-150 ${
+          scrollReady ? "opacity-100" : "opacity-0"
+        }`}
       >
         {/* 스크롤 중 우측 상단 떠다니는 날짜 (h-0 sticky — 레이아웃 영향 없음)
             items-start 필수: 없으면 flex stretch로 칩 높이가 0으로 짜부라져 글자가 배경 밖으로 넘침 */}
@@ -2148,16 +2142,18 @@ function MessageBubble({
         {/* 이미지 첨부 — 1장은 크게, 여러 장은 그리드(갤러리). 탭하면 앱 내 뷰어 */}
         {!isPending && imageItems.length === 1 && (
           <div className="mb-1 max-w-full">
+            {/* 정사각 고정 틀 — 이미지 로드 전에도 높이가 확정돼야 진입 스크롤이 안 밀린다.
+                (첨부에 원본 크기가 없어 CSS로만 예약 가능) */}
             <button
               type="button"
               onClick={() => openViewer(imageItems[0].idx)}
-              className="block p-0"
+              className="block p-0 w-[240px] sm:w-[320px] aspect-square max-w-full rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={fileUrlAt(imageItems[0].idx)}
                 alt={imageItems[0].att.name}
-                className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                className="w-full h-full object-contain"
                 loading="lazy"
               />
             </button>
@@ -2178,13 +2174,13 @@ function MessageBubble({
                 type="button"
                 key={`img-${idx}`}
                 onClick={() => openViewer(idx)}
-                className="block p-0 w-full"
+                className="block p-0 w-full aspect-square rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={fileUrlAt(idx)}
                   alt={att.name}
-                  className="rounded-lg w-full h-auto max-h-[300px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                  className="w-full h-full object-cover"
                   loading="lazy"
                 />
               </button>
@@ -2201,7 +2197,7 @@ function MessageBubble({
                   src={fileUrlAt(idx)}
                   controls
                   preload="metadata"
-                  className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] bg-black border border-zinc-200 dark:border-zinc-800"
+                  className="rounded-xl w-[240px] sm:w-[320px] aspect-square max-w-full object-contain bg-black border border-zinc-200 dark:border-zinc-800"
                 >
                   {att.name}
                 </video>
