@@ -184,7 +184,13 @@ export function ChatRoom({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
+  // 초기 스크롤이 "끝났는가" — 뒤의 자동 스크롤·읽음처리 effect가 이걸 보고 갈린다.
+  // 반드시 위치를 다 잡은 뒤에 true가 되어야 한다. 예전엔 초기 effect 첫 줄에서
+  // 곧바로 true로 만들었는데, effect는 선언 순서대로 같은 마운트에서 실행되므로
+  // 뒤 effect들이 "이미 끝났다"고 오판해 진입 시 smooth 스크롤이 발사됐다.
   const initialScrollDoneRef = useRef(false);
+  // 초기 스크롤 위치를 잡기 전까지 목록을 감춰 둔다 (자리 찾아가는 과정 은폐)
+  const [scrollReady, setScrollReady] = useState(false);
 
   // 세션 만료 감지 → 안내를 읽을 시간을 준 뒤 로그인 페이지로 이동.
   // router.push가 아닌 전체 로드로 보내 만료된 세션에 물린 클라이언트 상태를 초기화한다.
@@ -197,28 +203,39 @@ export function ChatRoom({
     }, 2000);
   }, []);
 
-  // "여기서부터 안 읽음" 구분선이 들어갈 첫 메시지 인덱스
-  // 본인 메시지가 아니면서 lastReadAt 이후인 첫 메시지
+  // "여기서부터 안 읽음" 구분선이 붙을 메시지. 본인 메시지가 아니면서
+  // lastReadAt 이후인 첫 메시지.
+  // 인덱스가 아니라 id로 잡는다 — 계산은 initialMessages 기준인데 렌더는
+  // visibleMessages(진행중 ORDER 제외) 기준이라, 인덱스로 비교하면 ORDER가
+  // 있을 때 구분선이 엉뚱한 메시지에 붙고 초기 스크롤도 그리로 간다.
   const lastReadTime = myLastReadAt ? new Date(myLastReadAt).getTime() : 0;
-  const firstUnreadIdx = (() => {
-    if (!myLastReadAt) {
-      // 처음 진입 (멤버십도 없거나 lastReadAt 없음) — 메시지 있으면 첫 unread는 본인 아닌 첫 메시지
-      const idx = initialMessages.findIndex((m) => m.userId !== meId);
-      return idx >= 0 ? idx : -1;
-    }
-    return initialMessages.findIndex(
-      (m) => m.userId !== meId && new Date(m.createdAt).getTime() > lastReadTime,
+  const firstUnreadId = (() => {
+    // 읽은 기록이 아예 없는 첫 입장 — 카톡처럼 맨 아래(최신)에서 시작.
+    // (히스토리 최상단에 떨어뜨리면 매번 끝까지 스크롤해 내려와야 한다)
+    if (!myLastReadAt) return null;
+    return (
+      initialMessages.find(
+        (m) =>
+          m.userId !== meId &&
+          new Date(m.createdAt).getTime() > lastReadTime,
+      )?.id ?? null
     );
   })();
 
-  // 진입 시 초기 스크롤: 미읽 메시지 있으면 구분선으로, 없으면 맨 아래
+  // 진입 시 초기 스크롤: 미읽 메시지 있으면 구분선으로, 없으면 맨 아래.
+  //
+  // 이게 왜 어려운가 — 진입 직후 콘텐츠 높이가 계속 자란다. 첨부 높이는 CSS로
+  // 예약해 뒀지만(아래 MessageBubble) 웹폰트 스왑 등 남는 변수가 있다.
+  // Chrome은 scroll anchoring으로 알아서 보정해 주지만 **iOS Safari는 지원하지
+  // 않아** 자란 만큼 바닥에서 밀려난다. 데스크톱에서만 보면 절대 안 보이는 버그다.
+  //
+  // 그래서 무엇이 자라는지 추측하지 않고 ResizeObserver로 관측해서, 자라는 동안
+  // 목표 위치로 계속 재고정한다. 예전 구현은 이미지 load 이벤트만 봤고 화면을
+  // 한 번 탭(touchstart)하기만 해도 죽어서 폰에서는 사실상 동작하지 않았다.
+  // 여기서는 실제로 끌었을 때(touchmove/wheel/사용자 스크롤)만 중단한다.
   useEffect(() => {
-    if (initialScrollDoneRef.current) return;
-    initialScrollDoneRef.current = true;
-    const el = scrollRef.current;
-
     const applyScroll = () => {
-      if (firstUnreadIdx >= 0 && dividerRef.current && scrollRef.current) {
+      if (firstUnreadId && dividerRef.current && scrollRef.current) {
         // 구분선이 화면 상단에 가깝게 오도록
         dividerRef.current.scrollIntoView({ block: "start" });
         // 약간 위로 여백 (구분선 위 메시지 한두 개도 보이게)
@@ -231,31 +248,60 @@ export function ChatRoom({
       }
     };
 
-    // 이미지가 늦게 로드되면 위쪽 내용 높이가 커져 스크롤 위치가 위로 밀림
-    // → 초기 5초 동안 이미지 로드마다 목표 위치 재적용.
-    //   사용자가 직접 스크롤(터치/휠)하기 시작하면 즉시 중단.
+    const el = scrollRef.current;
     let pinning = true;
-    const onImgLoad = () => {
-      if (pinning) applyScroll();
-    };
-    const stopPinning = () => {
-      pinning = false;
-      el?.removeEventListener("load", onImgLoad, true); // load는 버블 안 됨 — capture
-      el?.removeEventListener("touchstart", stopPinning);
-      el?.removeEventListener("wheel", stopPinning);
-    };
-    el?.addEventListener("load", onImgLoad, true);
-    el?.addEventListener("touchstart", stopPinning, { passive: true });
-    el?.addEventListener("wheel", stopPinning, { passive: true });
-    const pinTimer = setTimeout(stopPinning, 5000);
+    // 우리가 옮겨 놓은 위치. 실제 scrollTop이 여기서 벗어나면 사용자가 스크롤한 것.
+    let lastPinnedTop = -1;
 
-    setTimeout(applyScroll, 50);
+    const pin = () => {
+      if (!pinning || !scrollRef.current) return;
+      applyScroll();
+      lastPinnedTop = scrollRef.current.scrollTop;
+    };
+
+    const observer = new ResizeObserver(pin);
+    const stopPinning = () => {
+      if (!pinning) return;
+      pinning = false;
+      observer.disconnect();
+      el?.removeEventListener("touchmove", stopPinning);
+      el?.removeEventListener("wheel", stopPinning);
+      el?.removeEventListener("scroll", onScroll);
+    };
+    // 탭(touchstart)이 아니라 실제로 끌었을 때만 중단 — 예전 구현의 실수
+    const onScroll = () => {
+      if (lastPinnedTop >= 0 && Math.abs((el?.scrollTop ?? 0) - lastPinnedTop) > 4) {
+        stopPinning();
+      }
+    };
+
+    // rAF 두 번 — 첫 레이아웃 확정 후 위치를 잡고, 다음 프레임에서 한 번 더
+    // 확인한 뒤 노출한다. 그 다음부터는 높이가 변할 때마다 재고정.
+    let raf = requestAnimationFrame(() => {
+      pin();
+      raf = requestAnimationFrame(() => {
+        pin();
+        // 여기서부터가 "초기 스크롤 끝" — 이제야 새 메시지 자동 스크롤을 허용한다
+        initialScrollDoneRef.current = true;
+        setScrollReady(true);
+        if (el) {
+          for (const child of el.children) observer.observe(child);
+          el.addEventListener("touchmove", stopPinning, { passive: true });
+          el.addEventListener("wheel", stopPinning, { passive: true });
+          el.addEventListener("scroll", onScroll, { passive: true });
+        }
+      });
+    });
+    // 무한정 붙들지 않는다 — 이 안에 안정되지 않으면 포기하고 사용자에게 넘긴다
+    const pinTimer = setTimeout(stopPinning, 4000);
+
     // 진입 후 markAsRead (조금 늦게 호출 — 사용자가 화면 본 후)
     const readTimer = setTimeout(() => {
       markAsReadAction(chatId).catch(() => {});
     }, 1550);
 
     return () => {
+      cancelAnimationFrame(raf);
       clearTimeout(pinTimer);
       clearTimeout(readTimer);
       stopPinning();
@@ -1035,7 +1081,9 @@ export function ChatRoom({
       <div
         ref={scrollRef}
         onScroll={handleFloatingDateScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950"
+        className={`flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-zinc-50 dark:bg-zinc-950 transition-opacity duration-150 ${
+          scrollReady ? "opacity-100" : "opacity-0"
+        }`}
       >
         {/* 스크롤 중 우측 상단 떠다니는 날짜 (h-0 sticky — 레이아웃 영향 없음)
             items-start 필수: 없으면 flex stretch로 칩 높이가 0으로 짜부라져 글자가 배경 밖으로 넘침 */}
@@ -1058,7 +1106,7 @@ export function ChatRoom({
             const prev = visibleMessages[i - 1];
             const showAuthor =
               !isMine && (!prev || prev.userId !== m.userId);
-            const showDivider = i === firstUnreadIdx;
+            const showDivider = m.id === firstUnreadId;
             // 날짜가 바뀌는 첫 메시지(맨 첫 메시지 포함) 위에 날짜 구분선
             const showDateDivider =
               !prev || !isSameLocalDay(prev.createdAt, m.createdAt);
@@ -2148,16 +2196,18 @@ function MessageBubble({
         {/* 이미지 첨부 — 1장은 크게, 여러 장은 그리드(갤러리). 탭하면 앱 내 뷰어 */}
         {!isPending && imageItems.length === 1 && (
           <div className="mb-1 max-w-full">
+            {/* 정사각 고정 틀 — 이미지 로드 전에도 높이가 확정돼야 진입 스크롤이 안 밀린다.
+                (첨부에 원본 크기가 없어 CSS로만 예약 가능) */}
             <button
               type="button"
               onClick={() => openViewer(imageItems[0].idx)}
-              className="block p-0"
+              className="block p-0 w-[240px] sm:w-[320px] aspect-square max-w-full rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={fileUrlAt(imageItems[0].idx)}
                 alt={imageItems[0].att.name}
-                className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                className="w-full h-full object-contain"
                 loading="lazy"
               />
             </button>
@@ -2178,13 +2228,13 @@ function MessageBubble({
                 type="button"
                 key={`img-${idx}`}
                 onClick={() => openViewer(idx)}
-                className="block p-0 w-full"
+                className="block p-0 w-full aspect-square rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={fileUrlAt(idx)}
                   alt={att.name}
-                  className="rounded-lg w-full h-auto max-h-[300px] object-contain bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                  className="w-full h-full object-cover"
                   loading="lazy"
                 />
               </button>
@@ -2201,7 +2251,7 @@ function MessageBubble({
                   src={fileUrlAt(idx)}
                   controls
                   preload="metadata"
-                  className="rounded-xl max-w-[240px] sm:max-w-[320px] max-h-[320px] bg-black border border-zinc-200 dark:border-zinc-800"
+                  className="rounded-xl w-[240px] sm:w-[320px] aspect-square max-w-full object-contain bg-black border border-zinc-200 dark:border-zinc-800"
                 >
                   {att.name}
                 </video>
